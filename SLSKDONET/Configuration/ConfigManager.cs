@@ -1,0 +1,111 @@
+using Microsoft.Extensions.Configuration;
+using System.IO;
+
+namespace SLSKDONET.Configuration;
+
+/// <summary>
+/// Manages configuration loading and saving.
+/// </summary>
+public class ConfigManager
+{
+    private readonly string _configPath;
+    private AppConfig _config = null!;
+
+    public ConfigManager(string? configPath = null)
+    {
+        _configPath = configPath ?? GetDefaultConfigPath();
+    }
+
+    /// <summary>
+    /// Gets the default configuration file path.
+    /// </summary>
+    public static string GetDefaultConfigPath()
+    {
+        // Prioritize config.ini in the application's root directory for portability.
+        var localPath = Path.Combine(AppContext.BaseDirectory, "config.ini");
+        if (File.Exists(localPath))
+        {
+            return localPath;
+        }
+
+        // Fallback to AppData for a more traditional installation.
+        var appDataPath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+        var configDir = Path.Combine(appDataPath, "SLSKDONET");
+        Directory.CreateDirectory(configDir);
+        return Path.Combine(configDir, "config.ini");
+    }
+
+    /// <summary>
+    /// Loads configuration from file or creates default.
+    /// </summary>
+    public AppConfig Load()
+    {
+        if (File.Exists(_configPath))
+        {
+            var config = new ConfigurationBuilder()
+                .AddIniFile(_configPath, optional: true, reloadOnChange: false)
+                .Build();
+
+            _config = new AppConfig
+            {
+                Username = config["Soulseek:Username"],
+                Password = config["Soulseek:Password"],
+                ListenPort = int.TryParse(config["Soulseek:ListenPort"], out var port) ? port : 49998,
+                UseUPnP = bool.TryParse(config["Soulseek:UseUPnP"], out var upnp) && upnp,
+                ConnectTimeout = int.TryParse(config["Soulseek:ConnectTimeout"], out var ct) ? ct : 20000,
+                SearchTimeout = int.TryParse(config["Soulseek:SearchTimeout"], out var st) ? st : 6000,
+                DownloadDirectory = config["Download:Directory"],
+                MaxConcurrentDownloads = int.TryParse(config["Download:MaxConcurrent"], out var mcd) ? mcd : 2,
+                NameFormat = config["Download:NameFormat"] ?? "{artist} - {title}",
+                RememberPassword = bool.TryParse(config["Soulseek:RememberPassword"], out var remember) && remember,
+                CheckForDuplicates = !bool.TryParse(config["Download:CheckForDuplicates"], out var check) || check, // Default to true
+                SpotifyClientId = config["Soulseek:SpotifyClientId"],
+                SpotifyClientSecret = config["Soulseek:SpotifyClientSecret"],
+            };
+        }
+        else
+        {
+            _config = new AppConfig();
+        }
+
+        return _config;
+    }
+
+    /// <summary>
+    /// Saves configuration to file.
+    /// </summary>
+    public void Save(AppConfig config)
+    {
+        var directory = Path.GetDirectoryName(_configPath);
+        if (directory != null)
+            Directory.CreateDirectory(directory);
+
+        var iniContent = new System.Text.StringBuilder();
+        iniContent.AppendLine("[Soulseek]");
+        iniContent.AppendLine($"Username = {config.Username}");
+        iniContent.AppendLine($"Password = {(config.RememberPassword ? config.Password : "")}"); // Only save if Remember is true
+        iniContent.AppendLine($"ListenPort = {config.ListenPort}");
+        iniContent.AppendLine($"UseUPnP = {config.UseUPnP}");
+        iniContent.AppendLine($"ConnectTimeout = {config.ConnectTimeout}");
+        iniContent.AppendLine($"SearchTimeout = {config.SearchTimeout}");
+        iniContent.AppendLine($"RememberPassword = {config.RememberPassword}");
+        iniContent.AppendLine($"SpotifyClientId = {config.SpotifyClientId}");
+        iniContent.AppendLine($"SpotifyClientSecret = {config.SpotifyClientSecret}");
+
+        iniContent.AppendLine();
+        iniContent.AppendLine("[Download]");
+        iniContent.AppendLine($"Directory = {config.DownloadDirectory}");
+        iniContent.AppendLine($"MaxConcurrent = {config.MaxConcurrentDownloads}");
+        iniContent.AppendLine($"NameFormat = {config.NameFormat}");
+        iniContent.AppendLine($"CheckForDuplicates = {config.CheckForDuplicates}");
+        
+        // This setting belongs in the [Soulseek] section.
+        // It was misplaced under [Download].
+        // iniContent.AppendLine($"RememberPassword = {config.RememberPassword}");
+
+        File.WriteAllText(_configPath, iniContent.ToString());
+        _config = config;
+    }
+
+    public AppConfig GetCurrent() => _config;
+}
