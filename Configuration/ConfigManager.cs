@@ -21,6 +21,13 @@ public class ConfigManager
     /// </summary>
     public static string GetDefaultConfigPath()
     {
+        // Optional dev override: look for config.ini in C:\temp first.
+        var devPath = "C:/temp/config.ini";
+        if (File.Exists(devPath))
+        {
+            return devPath;
+        }
+
         // Prioritize config.ini in the application's root directory for portability.
         var localPath = Path.Combine(AppContext.BaseDirectory, "config.ini");
         if (File.Exists(localPath))
@@ -59,7 +66,9 @@ public class ConfigManager
                 NameFormat = config["Download:NameFormat"] ?? "{artist} - {title}",
                 RememberPassword = bool.TryParse(config["Soulseek:RememberPassword"], out var remember) && remember,
                 CheckForDuplicates = !bool.TryParse(config["Download:CheckForDuplicates"], out var check) || check, // Default to true
-                SpotifyUsePublicOnly = !bool.TryParse(config["Soulseek:SpotifyUsePublicOnly"], out var supo) || supo,
+                SpotifyUsePublicOnly = !bool.TryParse(config["Spotify:SpotifyUsePublicOnly"], out var supo) || supo,
+                SpotifyClientId = config["Spotify:SpotifyClientId"],
+                SpotifyClientSecret = config["Spotify:SpotifyClientSecret"],
                 SearchLengthToleranceSeconds = int.TryParse(config["Download:SearchLengthToleranceSeconds"], out var tol) ? tol : 3,
                 FuzzyMatchEnabled = !bool.TryParse(config["Download:FuzzyMatchEnabled"], out var fz) || fz,
                 MaxSearchAttempts = int.TryParse(config["Download:MaxSearchAttempts"], out var msa) ? msa : 3,
@@ -93,6 +102,11 @@ public class ConfigManager
         iniContent.AppendLine($"ConnectTimeout = {config.ConnectTimeout}");
         iniContent.AppendLine($"SearchTimeout = {config.SearchTimeout}");
         iniContent.AppendLine($"RememberPassword = {config.RememberPassword}");
+
+        iniContent.AppendLine();
+        iniContent.AppendLine("[Spotify]");
+        iniContent.AppendLine($"SpotifyClientId = {config.SpotifyClientId}");
+        iniContent.AppendLine($"SpotifyClientSecret = {config.SpotifyClientSecret}");
         iniContent.AppendLine($"SpotifyUsePublicOnly = {config.SpotifyUsePublicOnly}");
 
         iniContent.AppendLine();

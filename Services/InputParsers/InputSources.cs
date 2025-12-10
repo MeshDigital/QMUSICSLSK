@@ -106,7 +106,9 @@ public class CsvInputSource : IInputSource
     {
         try
         {
-            var dict = (IDictionary<string, object>)record;
+            // Normalize to case-insensitive lookup so headers like "Song"/"Artist" work.
+            var original = (IDictionary<string, object>)record;
+            var dict = new Dictionary<string, object>(original, StringComparer.OrdinalIgnoreCase);
 
             var title = GetValue(dict, _titleCol);
             var artist = GetValue(dict, _artistCol);

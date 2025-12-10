@@ -25,6 +25,7 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
     private readonly ILibraryService _libraryService;
     private readonly ITaggerService _taggerService;
     private readonly SpotifyScraperInputSource _spotifyScraperInputSource;
+    private readonly SpotifyInputSource _spotifyApiInputSource;
     private readonly CsvInputSource _csvInputSource;
     private readonly ConcurrentDictionary<string, DownloadJob> _jobs = new();
     private readonly SemaphoreSlim _concurrencySemaphore;
@@ -50,6 +51,7 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
         ILibraryService libraryService,
         ITaggerService taggerService,
         SpotifyScraperInputSource spotifyScraperInputSource,
+        SpotifyInputSource spotifyApiInputSource,
         CsvInputSource csvInputSource)
     {
         _logger = logger;
@@ -59,6 +61,7 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
         _libraryService = libraryService;
         _taggerService = taggerService;
         _spotifyScraperInputSource = spotifyScraperInputSource;
+        _spotifyApiInputSource = spotifyApiInputSource;
         _csvInputSource = csvInputSource;
         _concurrencySemaphore = new SemaphoreSlim(_config.MaxConcurrentDownloads);
         _jobChannel = Channel.CreateUnbounded<DownloadJob>();
@@ -84,12 +87,21 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
                 {
                     _logger.LogInformation("Fetching tracks from Spotify: {Url}", inputUrl);
 
-                    _logger.LogDebug("Attempting to scrape Spotify content (public access)");
-                    var queries = await _spotifyScraperInputSource.ParseAsync(inputUrl);
+                    List<SearchQuery> queries;
+                    if (_spotifyApiInputSource.IsConfigured && !_config.SpotifyUsePublicOnly)
+                    {
+                        _logger.LogDebug("Using Spotify API input source");
+                        queries = await _spotifyApiInputSource.ParseAsync(inputUrl);
+                    }
+                    else
+                    {
+                        _logger.LogDebug("Attempting to scrape Spotify content (public access)");
+                        queries = await _spotifyScraperInputSource.ParseAsync(inputUrl);
+                    }
                     
                     if (!queries.Any())
                     {
-                        _logger.LogWarning("Spotify scraping returned no tracks for URL: {Url}", inputUrl);
+                        _logger.LogWarning("Spotify import returned no tracks for URL: {Url}", inputUrl);
                         throw new InvalidOperationException("No tracks found in the Spotify source. The playlist might be private, empty, or the page structure may have changed.");
                     }
                     
@@ -106,8 +118,8 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Failed to fetch Spotify tracks via public scraping");
-                    throw new InvalidOperationException($"Spotify scraping error: {ex.Message}");
+                    _logger.LogError(ex, "Failed to fetch Spotify tracks");
+                    throw new InvalidOperationException($"Spotify import error: {ex.Message}");
                 }
             }
             else if (sourceType == InputSourceType.CSV)

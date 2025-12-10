@@ -36,7 +36,7 @@ public class SpotifyScraperInputSource
     /// </summary>
     public static string? ExtractPlaylistId(string url)
     {
-        if (url.Contains("open.spotify.com/playlist/"))
+        if (url.Contains("spotify.com") && url.Contains("/playlist/"))
         {
             var parts = url.Split('/');
             if (parts.Contains("playlist"))
@@ -61,7 +61,7 @@ public class SpotifyScraperInputSource
     /// </summary>
     public static string? ExtractAlbumId(string url)
     {
-        if (url.Contains("open.spotify.com/album/"))
+        if (url.Contains("spotify.com") && url.Contains("/album/"))
         {
             var parts = url.Split('/');
             if (parts.Contains("album"))
@@ -103,7 +103,10 @@ public class SpotifyScraperInputSource
             var tracks = await TryScrapeHtmlAsync(canonicalUrl);
             
             if (!tracks.Any())
-                throw new InvalidOperationException("Unable to extract tracks. The playlist may be private, deleted, or the URL may be invalid.");
+            {
+                _logger.LogWarning("Spotify scrape returned zero tracks for canonical URL: {Url}", canonicalUrl);
+                throw new InvalidOperationException("Unable to extract tracks. The playlist may be private, deleted, or the URL may be invalid (or consent wall detected).");
+            }
 
             // Enrich with OEmbed title if available
             if (!string.IsNullOrEmpty(oembedTitle) && tracks.Any())
@@ -166,7 +169,7 @@ public class SpotifyScraperInputSource
         {
             _logger.LogDebug("Attempting OEmbed extraction");
             
-            var oembedUrl = $"https://open.spotify.com/oembed?url={Uri.EscapeDataString(url)}";
+            var oembedUrl = $"https://embed.spotify.com/oembed?url={Uri.EscapeDataString(url)}";
             var response = await _httpClient.GetAsync(oembedUrl);
             
             if (!response.IsSuccessStatusCode)
@@ -203,15 +206,27 @@ public class SpotifyScraperInputSource
 
             var html = await _httpClient.GetStringAsync(url);
 
+            if (string.IsNullOrWhiteSpace(html))
+            {
+                _logger.LogWarning("Spotify scrape: empty HTML for {Url}", url);
+                return new List<SearchQuery>();
+            }
+
+            _logger.LogDebug("Spotify scrape: fetched HTML length {Length}", html.Length);
+
             // Try __NEXT_DATA__ first
             var tracks = ExtractTracksFromHtml(html, url);
             if (tracks.Any())
                 return tracks;
 
+            _logger.LogDebug("Spotify scrape: __NEXT_DATA__ yielded 0 tracks");
+
             // Try JSON-LD as fallback
             tracks = ExtractTracksFromJsonLd(html, url);
             if (tracks.Any())
                 return tracks;
+
+            _logger.LogDebug("Spotify scrape: JSON-LD yielded 0 tracks");
 
             return new List<SearchQuery>();
         }
@@ -317,7 +332,10 @@ public class SpotifyScraperInputSource
             {
                 var inner = (node.InnerText ?? string.Empty).Trim();
                 if (!string.IsNullOrEmpty(inner))
+                {
+                    _logger.LogDebug("Spotify scrape: found __NEXT_DATA__ via HtmlAgilityPack (length {Length})", inner.Length);
                     return inner;
+                }
             }
         }
         catch (Exception ex)
@@ -328,14 +346,21 @@ public class SpotifyScraperInputSource
         // Fallback: manual string search
         var scriptStart = html.IndexOf("id=\"__NEXT_DATA__\"", StringComparison.OrdinalIgnoreCase);
         if (scriptStart == -1)
+        {
+            _logger.LogDebug("Spotify scrape: __NEXT_DATA__ not found via fallback search");
             return null;
+        }
 
         var contentStart = html.IndexOf(">", scriptStart);
         var contentEnd = html.IndexOf("</script>", contentStart);
         if (contentStart == -1 || contentEnd == -1)
+        {
+            _logger.LogDebug("Spotify scrape: __NEXT_DATA__ boundaries not found (start {Start}, end {End})", contentStart, contentEnd);
             return null;
+        }
 
         var jsonContent = html.Substring(contentStart + 1, contentEnd - contentStart - 1).Trim();
+        _logger.LogDebug("Spotify scrape: __NEXT_DATA__ fallback length {Length}", jsonContent.Length);
         return string.IsNullOrEmpty(jsonContent) ? null : jsonContent;
     }
 

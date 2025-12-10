@@ -44,6 +44,9 @@
 
     <!-- Modern Windows 11 UI Controls -->
     <PackageReference Include="WPF-UI" Version="4.1.0" />
+    
+      <!-- Spotify API client -->
+      <PackageReference Include="SpotifyAPI.Web" Version="7.2.1" />
 
     <!-- HTML parsing for Spotify scraping -->
     <PackageReference Include="HtmlAgilityPack" Version="1.11.60" />

@@ -96,6 +96,7 @@ public class MainViewModel : INotifyPropertyChanged
     public ICommand ShowPauseComingSoonCommand { get; }
     public ICommand SearchAllImportedCommand { get; }
     public ICommand SaveSettingsCommand { get; }
+    public ICommand CancelSearchCommand { get; }
     public ICommand NavigateSearchCommand { get; }
     public ICommand NavigateLibraryCommand { get; }
     public ICommand NavigateDownloadsCommand { get; }
@@ -111,6 +112,7 @@ public class MainViewModel : INotifyPropertyChanged
         SoulseekAdapter soulseek,
         DownloadManager downloadManager,
         SpotifyScraperInputSource spotifyScraperInputSource,
+        SpotifyInputSource spotifyInputSource,
         SearchQueryNormalizer searchQueryNormalizer,
         ConfigManager configManager,
         INavigationService navigationService,
@@ -131,9 +133,12 @@ public class MainViewModel : INotifyPropertyChanged
         _downloadManager = downloadManager;
         _csvInputSource = csvInputSource;
         _spotifyScraperInputSource = spotifyScraperInputSource;
+        _spotifyInputSource = spotifyInputSource;
         _protectedDataService = protectedDataService;
         _userInputService = userInputService;
         _searchQueryNormalizer = searchQueryNormalizer; // Store it
+        SpotifyClientId = _config.SpotifyClientId;
+        SpotifyClientSecret = _config.SpotifyClientSecret;
         
         _logger.LogInformation("Dependencies injected successfully");
 
@@ -146,6 +151,7 @@ public class MainViewModel : INotifyPropertyChanged
         PreferredFormats = string.Join(",", _config.PreferredFormats ?? new List<string> { "mp3", "flac" });
         CheckForDuplicates = _config.CheckForDuplicates;
         RememberPassword = _config.RememberPassword;
+        UseSpotifyApi = !_config.SpotifyUsePublicOnly;
         MinBitrate = _config.PreferredMinBitrate;
         MaxBitrate = _config.PreferredMaxBitrate;
 
@@ -166,6 +172,8 @@ public class MainViewModel : INotifyPropertyChanged
         BrowseSharedFolderCommand = new RelayCommand(BrowseSharedFolder);
         SearchAllImportedCommand = new AsyncRelayCommand(SearchAllImportedAsync, () => ImportedQueries.Any() && !IsSearching);
         ShowPauseComingSoonCommand = new RelayCommand(() => StatusText = "Pause functionality is planned for a future update!");
+        CancelSearchCommand = new RelayCommand(CancelSearch, () => IsSearching);
+        ChangeViewModeCommand = new RelayCommand<string?>(mode => { if (!string.IsNullOrEmpty(mode)) CurrentViewMode = mode; });
         ClearSearchHistoryCommand = new RelayCommand(ClearSearchHistory);
         SaveSettingsCommand = new RelayCommand(() =>
         {
@@ -368,6 +376,15 @@ public class MainViewModel : INotifyPropertyChanged
         set => SetProperty(ref _isFiltersPanelVisible, value);
     }
 
+    private string _currentViewMode = "Albums";
+    public string CurrentViewMode
+    {
+        get => _currentViewMode;
+        set => SetProperty(ref _currentViewMode, value);
+    }
+
+    public ICommand ChangeViewModeCommand { get; }
+
     /// <summary>
     /// Input source type selector (Spotify URL, Plain Text, CSV, Auto-Detect)
     /// </summary>
@@ -387,6 +404,27 @@ public class MainViewModel : INotifyPropertyChanged
     }
 
     public string QueryInputPlaceholder => "Search tracks, import Spotify/CSV - Auto-detects format";
+
+    private string? _spotifyClientId;
+    public string? SpotifyClientId
+    {
+        get => _spotifyClientId;
+        set => SetProperty(ref _spotifyClientId, value);
+    }
+
+    private string? _spotifyClientSecret;
+    public string? SpotifyClientSecret
+    {
+        get => _spotifyClientSecret;
+        set => SetProperty(ref _spotifyClientSecret, value);
+    }
+
+    private bool _useSpotifyApi;
+    public bool UseSpotifyApi
+    {
+        get => _useSpotifyApi;
+        set => SetProperty(ref _useSpotifyApi, value);
+    }
 
     /// <summary>
     /// Search history for recall (last 20 queries)
@@ -529,6 +567,12 @@ public class MainViewModel : INotifyPropertyChanged
             return;
         }
 
+        // Reset cancellation token for a fresh search run
+        _searchCts.Cancel();
+        _searchCts.Dispose();
+        _searchCts = new CancellationTokenSource();
+        var searchToken = _searchCts.Token;
+
         IsSearching = true;
         StatusText = $"Searching for '{SearchQuery}'...";
         _logger.LogInformation("Search started for: {Query}", SearchQuery);
@@ -551,7 +595,7 @@ public class MainViewModel : INotifyPropertyChanged
             using var timer = new PeriodicTimer(TimeSpan.FromMilliseconds(250));
             var batchUpdateTask = Task.Run(async () =>
             {
-                while (await timer.WaitForNextTickAsync(_searchCts.Token))
+                while (await timer.WaitForNextTickAsync(searchToken))
                 {
                     if (!resultsBuffer.IsEmpty)
                     {
@@ -575,7 +619,7 @@ public class MainViewModel : INotifyPropertyChanged
                         }
                     }
                 }
-            }, _searchCts.Token);
+            }, searchToken);
 
             var actualCount = await _soulseek.SearchAsync(normalizedQuery, formatFilter, (MinBitrate, MaxBitrate), DownloadMode.Normal, tracks =>
             {
@@ -586,7 +630,7 @@ public class MainViewModel : INotifyPropertyChanged
                     // Collect for final ranking to ensure all results are ranked
                     allResults.Add(track);
                 }
-            }, _searchCts.Token);
+            }, searchToken);
             
             // Rank results before displaying
             if (allResults.Count > 0)
@@ -654,6 +698,16 @@ public class MainViewModel : INotifyPropertyChanged
         {
             IsSearching = false;
             _logger.LogInformation("=== SearchAsync completed, IsSearching set to false ===");
+        }
+    }
+
+    private void CancelSearch()
+    {
+        if (!_searchCts.IsCancellationRequested)
+        {
+            _searchCts.Cancel();
+            StatusText = "Cancelling search...";
+            _logger.LogInformation("Search cancellation requested by user");
         }
     }
 
@@ -774,7 +828,20 @@ public class MainViewModel : INotifyPropertyChanged
         try
         {
             StatusText = "Importing from Spotify...";
-            var queries = await _spotifyScraperInputSource.ParseAsync(playlistUrl);
+
+            List<SearchQuery> queries;
+            var useApi = !string.IsNullOrWhiteSpace(SpotifyClientId) && !string.IsNullOrWhiteSpace(SpotifyClientSecret) && !_config.SpotifyUsePublicOnly;
+
+            if (useApi)
+            {
+                _logger.LogInformation("Using Spotify API for import");
+                queries = await _spotifyInputSource.ParseAsync(playlistUrl);
+            }
+            else
+            {
+                _logger.LogInformation("Using Spotify public scraping for import");
+                queries = await _spotifyScraperInputSource.ParseAsync(playlistUrl);
+            }
 
             _notificationService.Show("Spotify Import Complete",
                 $"Imported {queries.Count} tracks from the playlist.", NotificationType.Success, TimeSpan.FromSeconds(5));
@@ -787,12 +854,47 @@ public class MainViewModel : INotifyPropertyChanged
                     ImportedQueries.Add(query);
                 }
             });
-            StatusText = $"Imported {queries.Count} tracks from Spotify. Go to the 'Imported' tab to search for them.";
+            
+            StatusText = $"Imported {queries.Count} tracks from Spotify. Starting batch search and download...";
+            _logger.LogInformation("Starting batch search for {Count} Spotify tracks", queries.Count);
+
+            // Auto-search and download all imported tracks
+            await SearchAllImportedAsync();
         }
         catch (Exception ex)
         {
             StatusText = $"Spotify import failed: {ex.Message}";
             _logger.LogError(ex, "Spotify import failed");
+        }
+    }
+
+    /// <summary>
+    /// Dev helper to scrape a Spotify playlist/album URL and log a short preview for troubleshooting.
+    /// </summary>
+    public async Task<List<SearchQuery>> DevFetchSpotifyAsync(string url, int previewCount = 5)
+    {
+        if (string.IsNullOrWhiteSpace(url))
+            throw new ArgumentException("URL cannot be empty", nameof(url));
+
+        try
+        {
+            var queries = await _spotifyScraperInputSource.ParseAsync(url);
+
+            var preview = queries
+                .Take(previewCount)
+                .Select(q => $"{q.Artist} - {q.Title}")
+                .ToList();
+
+            _logger.LogInformation("DevSpotify: extracted {Count} track(s). Preview: {Preview}", queries.Count, string.Join(" | ", preview));
+            StatusText = $"DevSpotify: {queries.Count} track(s) parsed (showing {Math.Min(previewCount, queries.Count)} preview).";
+
+            return queries;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "DevSpotify scrape failed for {Url}", url);
+            StatusText = $"DevSpotify failed: {ex.Message}";
+            return new List<SearchQuery>();
         }
     }
 
@@ -855,6 +957,25 @@ public class MainViewModel : INotifyPropertyChanged
 
             StatusText = $"Found {totalFound} total results from {ImportedQueries.Count} imported queries.";
             await batchUpdateTask; // Allow any final batch to complete
+
+            // Auto-add all found results to downloads
+            if (SearchResults.Count > 0)
+            {
+                System.Windows.Application.Current.Dispatcher.Invoke(() =>
+                {
+                    var tracksToAdd = SearchResults.ToList();
+                    foreach (var track in tracksToAdd)
+                    {
+                        var job = _downloadManager.EnqueueDownload(track);
+                        Downloads.Add(job);
+                    }
+                    StatusText = $"Added {tracksToAdd.Count} tracks to downloads. Starting batch download...";
+                    _logger.LogInformation("Auto-queued {Count} tracks for download from Spotify import", tracksToAdd.Count);
+                });
+
+                // Auto-start downloads
+                await StartDownloadsAsync();
+            }
         }
         catch (Exception ex)
         {
@@ -1001,6 +1122,10 @@ public class MainViewModel : INotifyPropertyChanged
         _config.CheckForDuplicates = CheckForDuplicates;
         _config.RememberPassword = RememberPassword;
 
+        _config.SpotifyClientId = SpotifyClientId;
+        _config.SpotifyClientSecret = SpotifyClientSecret;
+        _config.SpotifyUsePublicOnly = !UseSpotifyApi;
+
         _config.PreferredMinBitrate = MinBitrate ?? _config.PreferredMinBitrate;
         _config.PreferredMaxBitrate = MaxBitrate ?? _config.PreferredMaxBitrate;
     }
@@ -1039,6 +1164,7 @@ public class MainViewModel : INotifyPropertyChanged
 
     private readonly SearchQueryNormalizer _searchQueryNormalizer;
     private readonly SpotifyScraperInputSource _spotifyScraperInputSource;
+    private readonly SpotifyInputSource _spotifyInputSource;
     private readonly CsvInputSource _csvInputSource;
     private readonly DownloadLogService _downloadLogService;
     private readonly ProtectedDataService _protectedDataService;

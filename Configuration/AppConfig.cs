@@ -26,7 +26,9 @@ public class AppConfig
     public int PreferredMaxSampleRate { get; set; } = 48000; // Hz
     public string? PreferredLengthTolerance { get; set; } = "3"; // seconds
     
-    // Spotify source preference - public scraping only, no API credentials needed
+    // Spotify integration
+    public string? SpotifyClientId { get; set; }
+    public string? SpotifyClientSecret { get; set; }
     public bool SpotifyUsePublicOnly { get; set; } = true; // Default to public scraping only
     
     // Search and download preferences

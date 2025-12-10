@@ -24,6 +24,7 @@
             <!-- Add library view mode converters -->
             <converters:ViewModeToggleConverter x:Key="ViewModeToggleConverter"/>
             <converters:ViewModeToVisibilityConverter x:Key="ViewModeToVisibilityConverter"/>
+            <converters:StringToVisibilityConverter x:Key="StringToVisibilityConverter"/>
             
             <!-- Add connection status converters -->
             <converters:ConnectionStatusColorConverter x:Key="ConnectionStatusColorConverter"/>

@@ -3,135 +3,52 @@
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
       xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
       xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
-      xmlns:local="clr-namespace:SLSKDONET.Views"
-      xmlns:models="clr-namespace:SLSKDONET.Models"
-      xmlns:converters="clr-namespace:SLSKDONET.Converters"
-      xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
       mc:Ignorable="d" 
       d:DesignHeight="600" d:DesignWidth="800"
       Title="DownloadsPage">
 
-    <Page.Resources>
-        <converters:StatusToBrushConverter x:Key="StatusToBrushConverter"/>
-    </Page.Resources>
-
-    <Grid Margin="20">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-        </Grid.RowDefinitions>
-
-        <!-- Current Playlist Import Summary -->
-        <Border Grid.Row="0" Background="{StaticResource SurfaceBrush}" CornerRadius="8" Padding="16"
-                BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Margin="0,0,0,16"
-                Visibility="{Binding CurrentPlaylistJob, Converter={StaticResource BooleanToVisibilityConverter}, FallbackValue=Collapsed}">
-            <Grid>
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
-                </Grid.RowDefinitions>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
-
-                <TextBlock Grid.Row="0" Grid.Column="0" FontSize="{StaticResource FontSizeLarge}" FontWeight="Bold" Foreground="{StaticResource TextBrush}"
-                           Text="{Binding CurrentPlaylistJob.SourceTitle, FallbackValue='Playlist Name'}" Margin="0,0,0,8"/>
-
-                <StackPanel Grid.Row="1" Grid.Column="0" Orientation="Vertical" Margin="0,0,0,8">
-                    <TextBlock Foreground="{StaticResource TextSecondaryBrush}">
-                        <Run Text="Found"/>
-                        <Run Text="{Binding CurrentPlaylistJob.TotalTracks, FallbackValue=0}" FontWeight="Bold"/>
-                        <Run Text="songs"/>
-                    </TextBlock>
-                    <TextBlock Foreground="{StaticResource TextSecondaryBrush}">
-                        <Run Text="Destination:"/>
-                        <Run Text="{Binding CurrentPlaylistJob.DestinationFolder, FallbackValue='Not set'}" FontWeight="Bold"/>
-                    </TextBlock>
-                </StackPanel>
-
-                <StackPanel Grid.Row="2" Grid.Column="0" Orientation="Horizontal">
-                    <StackPanel.Resources>
-                        <Style TargetType="TextBlock">
-                            <Setter Property="Margin" Value="0,0,20,0"/>
-                            <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
-                        </Style>
-                    </StackPanel.Resources>
-                    <TextBlock>
-                        <Run Text="Success:"/>
-                        <Run Text="{Binding CurrentPlaylistJob.SuccessfulCount, FallbackValue=0}" FontWeight="Bold" Foreground="#4CAF50"/>
-                    </TextBlock>
-                    <TextBlock>
-                        <Run Text="Failed:"/>
-                        <Run Text="{Binding CurrentPlaylistJob.FailedCount, FallbackValue=0}" FontWeight="Bold" Foreground="#F44336"/>
-                    </TextBlock>
-                    <TextBlock>
-                        <Run Text="To-Do:"/>
-                        <Run Text="{Binding CurrentPlaylistJob.MissingCount, FallbackValue=0}" FontWeight="Bold" Foreground="#2196F3"/>
-                    </TextBlock>
-                </StackPanel>
-
-                <ProgressBar Grid.Row="0" Grid.Column="1" Grid.RowSpan="3" VerticalAlignment="Center"
-                             Width="200" Height="10"
-                             Value="{Binding CurrentPlaylistJob.SuccessfulCount}" Maximum="{Binding CurrentPlaylistJob.TotalTracks}"
-                             Foreground="#4CAF50" Background="{StaticResource TertiaryBackgroundBrush}"/>
-            </Grid>
-        </Border>
-
-        <!-- Downloads DataGrid -->
-        <ui:DataGrid Grid.Row="1" ItemsSource="{Binding Downloads}" Style="{StaticResource ModernDataGridStyle}"
-                     ColumnHeaderStyle="{StaticResource ModernColumnHeaderStyle}"
-                     CellStyle="{StaticResource ModernCellStyle}"
-                     RowStyle="{StaticResource ModernRowStyle}">
-            <ui:DataGrid.Columns>
+    <Grid Background="{StaticResource BackgroundBrush}" Margin="20">
+        <!-- Simple DataGrid with minimal bindings to avoid BAML errors -->
+        <DataGrid ItemsSource="{Binding Downloads}"
+                  AutoGenerateColumns="False"
+                  IsReadOnly="True"
+                  Foreground="{StaticResource TextBrush}"
+                  RowBackground="{StaticResource SecondaryBackgroundBrush}">
+            <DataGrid.ColumnHeaderStyle>
+                <Style TargetType="DataGridColumnHeader">
+                    <Setter Property="Background" Value="{StaticResource SurfaceBrush}"/>
+                    <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+                    <Setter Property="Padding" Value="8"/>
+                </Style>
+            </DataGrid.ColumnHeaderStyle>
+            
+            <DataGrid.Columns>
                 <!-- Status -->
-                <DataGridTemplateColumn Header="Status" Width="120">
-                    <DataGridTemplateColumn.CellTemplate>
-                        <DataTemplate>
-                            <Border Background="{Binding State, Converter={StaticResource StatusToBrushConverter}}"
-                                    CornerRadius="4" Padding="8,4" HorizontalAlignment="Center" VerticalAlignment="Center">
-                                <TextBlock Text="{Binding State}" Foreground="White" FontWeight="SemiBold" FontSize="12"/>
-                            </Border>
-                        </DataTemplate>
-                    </DataGridTemplateColumn.CellTemplate>
-                </DataGridTemplateColumn>
+                <DataGridTextColumn Header="Status" 
+                                    Binding="{Binding State}" 
+                                    Width="100"/>
 
-                <!-- Track Info -->
-                <DataGridTextColumn Header="Artist" Binding="{Binding Track.Artist}" Width="*"/>
-                <DataGridTextColumn Header="Title" Binding="{Binding Track.Title}" Width="2*"/>
+                <!-- Artist -->
+                <DataGridTextColumn Header="Artist" 
+                                    Binding="{Binding Track.Artist}" 
+                                    Width="150"/>
+
+                <!-- Title -->
+                <DataGridTextColumn Header="Title" 
+                                    Binding="{Binding Track.Title}" 
+                                    Width="*" 
+                                    MinWidth="200"/>
 
                 <!-- Progress -->
-                <DataGridTemplateColumn Header="Progress" Width="150">
-                    <DataGridTemplateColumn.CellTemplate>
-                        <DataTemplate>
-                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                <ProgressBar Value="{Binding Progress}" Maximum="1.0" Height="18" Width="110"/>
-                                <TextBlock Text="{Binding Progress, StringFormat={}{0:P0}}" Width="40" HorizontalAlignment="Right" Margin="8,0,0,0"/>
-                            </StackPanel>
-                        </DataTemplate>
-                    </DataGridTemplateColumn.CellTemplate>
-                </DataGridTemplateColumn>
-
-                <!-- Size -->
-                <DataGridTextColumn Header="Size" Binding="{Binding Track.Size}" Width="100"/>
+                <DataGridTextColumn Header="Progress" 
+                                    Binding="{Binding Progress, StringFormat={}{0:P0}}" 
+                                    Width="100"/>
 
                 <!-- Speed -->
-                <DataGridTextColumn Header="Speed" Binding="{Binding SpeedBps, StringFormat={}{0:N0} bps}" Width="100"/>
-
-                <!-- Actions -->
-                <DataGridTemplateColumn Header="Actions" Width="160">
-                    <DataGridTemplateColumn.CellTemplate>
-                        <DataTemplate>
-                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                                <ui:Button Width="36" Height="32" Appearance="Subtle" Icon="{ui:SymbolIcon Play24}" Command="{Binding StartCommand}" Margin="0,0,6,0"/>
-                                <ui:Button Width="36" Height="32" Appearance="Subtle" Icon="{ui:SymbolIcon Dismiss24}" Command="{Binding StopCommand}" Margin="0,0,6,0"/>
-                                <ui:Button Width="36" Height="32" Appearance="Subtle" Icon="{ui:SymbolIcon Folder24}" Command="{Binding OpenFolderCommand}"/>
-                            </StackPanel>
-                        </DataTemplate>
-                    </DataGridTemplateColumn.CellTemplate>
-                </DataGridTemplateColumn>
-            </ui:DataGrid.Columns>
-        </ui:DataGrid>
+                <DataGridTextColumn Header="Speed (bps)" 
+                                    Binding="{Binding SpeedBps, StringFormat={}{0:N0}}" 
+                                    Width="120"/>
+            </DataGrid.Columns>
+        </DataGrid>
     </Grid>
 </Page>

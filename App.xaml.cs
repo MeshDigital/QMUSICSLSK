@@ -125,8 +125,8 @@ public partial class App : System.Windows.Application
         services.AddSingleton<FileNameFormatter>();
         services.AddSingleton<ProtectedDataService>();
 
-        // Register Spotify services
-        // Use public scraping only for Spotify integration
+        // Register Spotify services (API + public scraping fallback)
+        services.AddSingleton<SpotifyInputSource>();
         services.AddSingleton<SpotifyScraperInputSource>();
 
         // Input parsers
