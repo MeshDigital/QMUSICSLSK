@@ -193,7 +193,13 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
     public void PauseTrack(string globalId)
     {
         var vm = AllGlobalTracks.FirstOrDefault(t => t.GlobalId == globalId);
-        vm?.Pause();
+        if (vm != null)
+        {
+            // Cancel the download but keep the partial file
+            vm.CancellationTokenSource?.Cancel();
+            vm.State = PlaylistTrackState.Paused;
+            _logger.LogInformation("Paused track: {Artist} - {Title}", vm.Artist, vm.Title);
+        }
     }
 
     public void ResumeTrack(string globalId)
@@ -249,6 +255,59 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
         
         // Force DB deletion or update? 
         // Reset sets state to Pending, so OnTrackPropertyChanged will fire and update DB to Pending. Correct.
+    }
+
+    /// <summary>
+    /// Cancels a track download and cleans up files, but keeps track in the list with Cancelled state.
+    /// Track remains visible so user can retry or manually delete later.
+    /// </summary>
+    public void CancelTrack(string globalId)
+    {
+        var vm = AllGlobalTracks.FirstOrDefault(t => t.GlobalId == globalId);
+        if (vm == null)
+        {
+            _logger.LogWarning("Cancel: Track not found: {GlobalId}", globalId);
+            return;
+        }
+
+        _logger.LogInformation("Cancelling track: {Artist} - {Title}", vm.Artist, vm.Title);
+
+        // 1. Cancel any active download
+        vm.CancellationTokenSource?.Cancel();
+        vm.CancellationTokenSource?.Dispose();
+        vm.CancellationTokenSource = null;
+        
+        // 2. Set cancelled state (track remains in list!)
+        vm.State = PlaylistTrackState.Cancelled;
+
+        // 3. Delete all associated files
+        try
+        {
+            var path = vm.Model?.ResolvedFilePath;
+            if (!string.IsNullOrEmpty(path))
+            {
+                // Delete completed file if exists
+                if (File.Exists(path))
+                {
+                    File.Delete(path);
+                    _logger.LogInformation("Deleted file: {Path}", path);
+                }
+                
+                // Delete partial file if exists
+                var partFile = path + ".part";
+                if (File.Exists(partFile))
+                {
+                    File.Delete(partFile);
+                    _logger.LogInformation("Deleted partial file: {Path}", partFile);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to delete files during cancel");
+        }
+
+        _logger.LogInformation("Track cancelled - remains in list with Cancelled state");
     }
 
     /// <summary>

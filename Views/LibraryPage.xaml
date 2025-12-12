@@ -266,6 +266,31 @@
                                 <Setter Property="BorderThickness" Value="0"/>
                                 <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
                             </Style>
+                            <Style TargetType="DataGridRow">
+                                <Setter Property="AllowDrop" Value="True"/>
+                                <EventSetter Event="PreviewMouseLeftButtonDown" Handler="DataGridRow_PreviewMouseLeftButtonDown"/>
+                                <EventSetter Event="Drop" Handler="DataGridRow_Drop"/>
+                                <EventSetter Event="PreviewDragOver" Handler="OnPreviewDragOver"/>
+                                <Setter Property="ContextMenu">
+                                    <Setter.Value>
+                                        <ContextMenu>
+                                            <MenuItem Header="▶️ Resume" 
+                                                      Command="{Binding DataContext.ResumeCommand, RelativeSource={RelativeSource AncestorType=Page}}"
+                                                      CommandParameter="{Binding}"/>
+                                            <MenuItem Header="⏸️ Pause" 
+                                                      Command="{Binding DataContext.PauseCommand, RelativeSource={RelativeSource AncestorType=Page}}"
+                                                      CommandParameter="{Binding}"/>
+                                            <MenuItem Header="🔄 Hard Retry" 
+                                                      Command="{Binding DataContext.HardRetryCommand, RelativeSource={RelativeSource AncestorType=Page}}"
+                                                      CommandParameter="{Binding}"/>
+                                            <Separator/>
+                                            <MenuItem Header="❌ Cancel" 
+                                                      Command="{Binding DataContext.CancelCommand, RelativeSource={RelativeSource AncestorType=Page}}"
+                                                      CommandParameter="{Binding}"/>
+                                        </ContextMenu>
+                                    </Setter.Value>
+                                </Setter>
+                            </Style>
                         </DataGrid.Resources>
                         <DataGrid.Columns>
                             <DataGridTextColumn Header="Artist" Binding="{Binding Artist}" Width="*"/>

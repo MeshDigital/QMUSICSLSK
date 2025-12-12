@@ -1,15 +1,15 @@
-
+using System;
+using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Threading.Tasks;
 using System.Windows.Data;
 using System.Windows.Input;
-using System.Linq;
-using System.Threading.Tasks;
-using System.Collections.ObjectModel;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Services;
 using SLSKDONET.Models;
-using SLSKDONET.Views; // For RelayCommand if needed, or stick to CommunityToolkit if avail? Using RelayCommand from Views based on existing code.
+using SLSKDONET.Services;
+using SLSKDONET.Views;
 
 namespace SLSKDONET.ViewModels;
 
@@ -31,6 +31,9 @@ public class LibraryViewModel : INotifyPropertyChanged
     public ICollectionView WarehouseTracksView => WarehouseTracksInit.View;
 
     public ICommand HardRetryCommand { get; }
+    public ICommand PauseCommand { get; }
+    public ICommand ResumeCommand { get; }
+    public ICommand CancelCommand { get; }
     public ICommand OpenProjectCommand { get; }
     
     // Master List: All import jobs/projects
@@ -101,8 +104,12 @@ public class LibraryViewModel : INotifyPropertyChanged
         WarehouseTracksInit.Filter += WarehouseTracks_Filter;
         WarehouseTracksInit.SortDescriptions.Add(new SortDescription("SortOrder", ListSortDirection.Ascending)); 
         
+        // Commands
         HardRetryCommand = new RelayCommand<PlaylistTrackViewModel>(ExecuteHardRetry);
-        OpenProjectCommand = new RelayCommand<PlaylistJob>(job => SelectedProject = job);
+        PauseCommand = new RelayCommand<PlaylistTrackViewModel>(ExecutePause);
+        ResumeCommand = new RelayCommand<PlaylistTrackViewModel>(ExecuteResume);
+        CancelCommand = new RelayCommand<PlaylistTrackViewModel>(ExecuteCancel);
+        OpenProjectCommand = new RelayCommand<PlaylistJob>(project => SelectedProject = project);
         
         // Subscribe to global track updates for live progress
         _downloadManager.TrackUpdated += OnGlobalTrackUpdated;
@@ -190,6 +197,30 @@ public class LibraryViewModel : INotifyPropertyChanged
         
         _logger.LogInformation("Hard Retry requested for {Artist} - {Title}", vm.Artist, vm.Title);
         _downloadManager.HardRetryTrack(vm.GlobalId);
+    }
+
+    private void ExecutePause(PlaylistTrackViewModel? vm)
+    {
+        if (vm == null) return;
+        
+        _logger.LogInformation("Pause requested for {Artist} - {Title}", vm.Artist, vm.Title);
+        _downloadManager.PauseTrack(vm.GlobalId);
+    }
+
+    private void ExecuteResume(PlaylistTrackViewModel? vm)
+    {
+        if (vm == null) return;
+        
+        _logger.LogInformation("Resume requested for {Artist} - {Title}", vm.Artist, vm.Title);
+        _downloadManager.ResumeTrack(vm.GlobalId);
+    }
+
+    private void ExecuteCancel(PlaylistTrackViewModel? vm)
+    {
+        if (vm == null) return;
+        
+        _logger.LogInformation("Cancel requested for {Artist} - {Title}", vm.Artist, vm.Title);
+        _downloadManager.CancelTrack(vm.GlobalId);
     }
 
     private async void LoadProjectTracks(PlaylistJob job)
