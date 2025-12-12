@@ -7,6 +7,7 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using SLSKDONET.Configuration;
+using SLSKDONET.Data;
 using SLSKDONET.Models;
 
 namespace SLSKDONET.Services;
@@ -15,71 +16,54 @@ namespace SLSKDONET.Services;
 /// Concrete implementation of ILibraryService.
 /// Manages three persistent indexes:
 /// 1. LibraryEntry (main global index of unique files)
-/// 2. PlaylistJob (playlist headers)
-/// 3. PlaylistTrack (relational index linking playlists to tracks)
-/// Currently uses JSON files as backing store; ready for database upgrade.
+/// 2. PlaylistJob (playlist headers) - Database backed
+/// 3. PlaylistTrack (relational index linking playlists to tracks) - Database backed
 /// </summary>
 public class LibraryService : ILibraryService
 {
     private readonly ILogger<LibraryService> _logger;
     private readonly DownloadLogService _downloadLogService;
+    private readonly DatabaseService _databaseService;
     private readonly string _libraryIndexPath;
-    private readonly string _playlistJobsPath;
-    private readonly string _playlistTracksPath;
 
-    // In-memory caches (for performance)
+    // In-memory cache (for performance)
     private List<LibraryEntry> _libraryCache = new();
-    private List<PlaylistJob> _playlistJobsCache = new();
-    private List<PlaylistTrack> _playlistTracksCache = new();
     private DateTime _lastLibraryCacheTime = DateTime.MinValue;
 
-    public LibraryService(ILogger<LibraryService> logger, DownloadLogService downloadLogService)
+    public LibraryService(ILogger<LibraryService> logger, DownloadLogService downloadLogService, DatabaseService databaseService)
     {
         _logger = logger;
         _downloadLogService = downloadLogService;
+        _databaseService = databaseService;
         
         var configDir = Path.GetDirectoryName(ConfigManager.GetDefaultConfigPath());
         var dataDir = Path.Combine(configDir ?? AppContext.BaseDirectory, "library_data");
         Directory.CreateDirectory(dataDir);
 
         _libraryIndexPath = Path.Combine(dataDir, "library_entries.json");
-        _playlistJobsPath = Path.Combine(dataDir, "playlist_jobs.json");
-        _playlistTracksPath = Path.Combine(dataDir, "playlist_tracks.json");
 
-        _logger.LogDebug("LibraryService initialized with data directory: {DataDir}", dataDir);
+        _logger.LogDebug("LibraryService initialized with database persistence for playlists");
     }
 
-    // ===== INDEX 1: LibraryEntry (Main Global Index) =====
+    // ===== INDEX 1: LibraryEntry (Main Global Index - JSON backed) =====
 
-    /// <summary>
-    /// Finds a library entry by unique hash (synchronous).
-    /// </summary>
     public LibraryEntry? FindLibraryEntry(string uniqueHash)
     {
         var entries = LoadDownloadedTracks();
         return entries.FirstOrDefault(e => e.UniqueHash == uniqueHash);
     }
 
-    /// <summary>
-    /// Finds a library entry by unique hash (asynchronous).
-    /// </summary>
     public async Task<LibraryEntry?> FindLibraryEntryAsync(string uniqueHash)
     {
         var entries = await LoadDownloadedTracksAsync();
         return entries.FirstOrDefault(e => e.UniqueHash == uniqueHash);
     }
 
-    /// <summary>
-    /// Loads all library entries (main global index).
-    /// </summary>
     public async Task<List<LibraryEntry>> LoadAllLibraryEntriesAsync()
     {
         return await LoadDownloadedTracksAsync();
     }
 
-    /// <summary>
-    /// Adds a new entry to the main library.
-    /// </summary>
     public async Task AddLibraryEntryAsync(LibraryEntry entry)
     {
         try
@@ -94,7 +78,7 @@ public class LibraryService : ILibraryService
             entries.Add(entry);
             
             await Task.Run(() => SaveLibraryIndex(entries));
-            _lastLibraryCacheTime = DateTime.MinValue; // Invalidate cache
+            _lastLibraryCacheTime = DateTime.MinValue;
             _logger.LogDebug("Added library entry: {Hash}", entry.UniqueHash);
         }
         catch (Exception ex)
@@ -104,9 +88,6 @@ public class LibraryService : ILibraryService
         }
     }
 
-    /// <summary>
-    /// Updates an existing library entry.
-    /// </summary>
     public async Task UpdateLibraryEntryAsync(LibraryEntry entry)
     {
         try
@@ -130,57 +111,59 @@ public class LibraryService : ILibraryService
         }
     }
 
-    // ===== INDEX 2: PlaylistJob (Playlist Headers) =====
+    // ===== INDEX 2: PlaylistJob (Playlist Headers - Database Backed) =====
 
-    /// <summary>
-    /// Loads all playlist jobs.
-    /// </summary>
     public async Task<List<PlaylistJob>> LoadAllPlaylistJobsAsync()
     {
-        return await Task.Run(() => LoadPlaylistJobsFromDisk());
+        try
+        {
+            var entities = await _databaseService.LoadAllPlaylistJobsAsync();
+            return entities.Select(EntityToPlaylistJob).ToList();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to load playlist jobs from database");
+            return new List<PlaylistJob>();
+        }
     }
 
-    /// <summary>
-    /// Finds a playlist job by ID (synchronous).
-    /// </summary>
     public PlaylistJob? FindPlaylistJob(Guid playlistId)
     {
-        var jobs = LoadPlaylistJobsFromDisk();
-        return jobs.FirstOrDefault(j => j.Id == playlistId);
+        var job = _databaseService.LoadPlaylistJobAsync(playlistId).Result;
+        return job != null ? EntityToPlaylistJob(job) : null;
     }
 
-    /// <summary>
-    /// Finds a playlist job by ID with related tracks (asynchronous).
-    /// </summary>
     public async Task<PlaylistJob?> FindPlaylistJobAsync(Guid playlistId)
     {
-        var jobs = await LoadAllPlaylistJobsAsync();
-        var job = jobs.FirstOrDefault(j => j.Id == playlistId);
-        
-        if (job != null)
+        try
         {
-            job.PlaylistTracks = await LoadPlaylistTracksAsync(playlistId);
+            var entity = await _databaseService.LoadPlaylistJobAsync(playlistId);
+            return entity != null ? EntityToPlaylistJob(entity) : null;
         }
-        
-        return job;
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to load playlist job {Id}", playlistId);
+            return null;
+        }
     }
 
-    /// <summary>
-    /// Saves a new or updated playlist job.
-    /// </summary>
     public async Task SavePlaylistJobAsync(PlaylistJob job)
     {
         try
         {
-            var jobs = LoadPlaylistJobsFromDisk();
-            var existing = jobs.FirstOrDefault(j => j.Id == job.Id);
-            
-            if (existing != null)
-                jobs.Remove(existing);
-            
-            jobs.Add(job);
-            
-            await Task.Run(() => SavePlaylistJobs(jobs));
+            var entity = new PlaylistJobEntity
+            {
+                Id = job.Id,
+                SourceTitle = job.SourceTitle,
+                SourceType = job.SourceType,
+                DestinationFolder = job.DestinationFolder,
+                CreatedAt = job.CreatedAt,
+                TotalTracks = job.OriginalTracks.Count,
+                SuccessfulCount = 0,
+                FailedCount = 0
+            };
+
+            await _databaseService.SavePlaylistJobAsync(entity);
             _logger.LogInformation("Saved playlist job: {Title} ({Id})", job.SourceTitle, job.Id);
         }
         catch (Exception ex)
@@ -190,23 +173,12 @@ public class LibraryService : ILibraryService
         }
     }
 
-    /// <summary>
-    /// Deletes a playlist job and its related tracks.
-    /// </summary>
     public async Task DeletePlaylistJobAsync(Guid playlistId)
     {
         try
         {
-            var jobs = LoadPlaylistJobsFromDisk();
-            jobs.RemoveAll(j => j.Id == playlistId);
-            
-            await Task.Run(() => SavePlaylistJobs(jobs));
-            
-            // Also delete related playlist tracks
-            var tracks = LoadPlaylistTracksFromDisk();
-            tracks.RemoveAll(t => t.PlaylistId == playlistId);
-            await Task.Run(() => SavePlaylistTracks(tracks));
-            
+            await _databaseService.DeletePlaylistJobAsync(playlistId);
+            await _databaseService.DeletePlaylistTracksAsync(playlistId);
             _logger.LogInformation("Deleted playlist job: {Id}", playlistId);
         }
         catch (Exception ex)
@@ -216,39 +188,28 @@ public class LibraryService : ILibraryService
         }
     }
 
-    // ===== INDEX 3: PlaylistTrack (Relational Index) =====
+    // ===== INDEX 3: PlaylistTrack (Relational Index - Database Backed) =====
 
-    /// <summary>
-    /// Loads all tracks for a specific playlist.
-    /// </summary>
     public async Task<List<PlaylistTrack>> LoadPlaylistTracksAsync(Guid playlistId)
     {
-        return await Task.Run(() =>
+        try
         {
-            var allTracks = LoadPlaylistTracksFromDisk();
-            return allTracks.Where(t => t.PlaylistId == playlistId)
-                           .OrderBy(t => t.TrackNumber)
-                           .ToList();
-        });
+            var entities = await _databaseService.LoadPlaylistTracksAsync(playlistId);
+            return entities.Select(EntityToPlaylistTrack).ToList();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to load playlist tracks for {PlaylistId}", playlistId);
+            return new List<PlaylistTrack>();
+        }
     }
 
-    /// <summary>
-    /// Saves a single playlist track.
-    /// </summary>
     public async Task SavePlaylistTrackAsync(PlaylistTrack track)
     {
         try
         {
-            var tracks = LoadPlaylistTracksFromDisk();
-            var existing = tracks.FirstOrDefault(t => t.Id == track.Id);
-            
-            if (existing != null)
-                tracks.Remove(existing);
-            
-            track.AddedAt = DateTime.UtcNow;
-            tracks.Add(track);
-            
-            await Task.Run(() => SavePlaylistTracks(tracks));
+            var entity = PlaylistTrackToEntity(track);
+            await _databaseService.SavePlaylistTrackAsync(entity);
             _logger.LogDebug("Saved playlist track: {PlaylistId}/{Hash}", track.PlaylistId, track.TrackUniqueHash);
         }
         catch (Exception ex)
@@ -258,22 +219,12 @@ public class LibraryService : ILibraryService
         }
     }
 
-    /// <summary>
-    /// Updates a playlist track.
-    /// </summary>
     public async Task UpdatePlaylistTrackAsync(PlaylistTrack track)
     {
         try
         {
-            var tracks = LoadPlaylistTracksFromDisk();
-            var index = tracks.FindIndex(t => t.Id == track.Id);
-            
-            if (index >= 0)
-                tracks[index] = track;
-            else
-                tracks.Add(track);
-            
-            await Task.Run(() => SavePlaylistTracks(tracks));
+            var entity = PlaylistTrackToEntity(track);
+            await _databaseService.SavePlaylistTrackAsync(entity);
             _logger.LogDebug("Updated playlist track status: {Hash} = {Status}", track.TrackUniqueHash, track.Status);
         }
         catch (Exception ex)
@@ -283,26 +234,12 @@ public class LibraryService : ILibraryService
         }
     }
 
-    /// <summary>
-    /// Bulk saves multiple playlist tracks.
-    /// </summary>
     public async Task SavePlaylistTracksAsync(List<PlaylistTrack> tracks)
     {
         try
         {
-            var allTracks = LoadPlaylistTracksFromDisk();
-            
-            // Remove any existing tracks from these playlists (for the affected playlist IDs)
-            var playlistIds = tracks.Select(t => t.PlaylistId).Distinct();
-            allTracks.RemoveAll(t => playlistIds.Contains(t.PlaylistId));
-            
-            // Add new tracks
-            foreach (var track in tracks)
-                track.AddedAt = DateTime.UtcNow;
-            
-            allTracks.AddRange(tracks);
-            
-            await Task.Run(() => SavePlaylistTracks(allTracks));
+            var entities = tracks.Select(PlaylistTrackToEntity).ToList();
+            await _databaseService.SavePlaylistTracksAsync(entities);
             _logger.LogInformation("Saved {Count} playlist tracks", tracks.Count);
         }
         catch (Exception ex)
@@ -314,12 +251,8 @@ public class LibraryService : ILibraryService
 
     // ===== Legacy / Compatibility Methods =====
 
-    /// <summary>
-    /// Loads all downloaded tracks as LibraryEntry objects (synchronous).
-    /// </summary>
     public List<LibraryEntry> LoadDownloadedTracks()
     {
-        // Return cache if fresh (within 5 minutes)
         if (DateTime.UtcNow - _lastLibraryCacheTime < TimeSpan.FromMinutes(5) && _libraryCache.Any())
             return _libraryCache;
 
@@ -328,17 +261,11 @@ public class LibraryService : ILibraryService
         return _libraryCache;
     }
 
-    /// <summary>
-    /// Loads all downloaded tracks as LibraryEntry objects (asynchronous).
-    /// </summary>
     public async Task<List<LibraryEntry>> LoadDownloadedTracksAsync()
     {
         return await Task.Run(() => LoadDownloadedTracks());
     }
 
-    /// <summary>
-    /// Adds a track to the library with source playlist reference (legacy).
-    /// </summary>
     public async Task AddTrackAsync(Track track, string actualFilePath, Guid sourcePlaylistId)
     {
         try
@@ -356,7 +283,7 @@ public class LibraryService : ILibraryService
             };
 
             await AddLibraryEntryAsync(entry);
-            _logger.LogDebug("Added track to library via legacy method: {Hash}", entry.UniqueHash);
+            _logger.LogDebug("Added track to library: {Hash}", entry.UniqueHash);
         }
         catch (Exception ex)
         {
@@ -365,7 +292,57 @@ public class LibraryService : ILibraryService
         }
     }
 
-    // ===== Private Helper Methods =====
+    // ===== Helper Conversion Methods =====
+
+    private PlaylistJob EntityToPlaylistJob(PlaylistJobEntity entity)
+    {
+        return new PlaylistJob
+        {
+            Id = entity.Id,
+            SourceTitle = entity.SourceTitle,
+            SourceType = entity.SourceType,
+            DestinationFolder = entity.DestinationFolder,
+            CreatedAt = entity.CreatedAt,
+            OriginalTracks = new ObservableCollection<Track>(),
+            PlaylistTracks = entity.Tracks?.Select(EntityToPlaylistTrack).ToList() ?? new()
+        };
+    }
+
+    private PlaylistTrack EntityToPlaylistTrack(PlaylistTrackEntity entity)
+    {
+        return new PlaylistTrack
+        {
+            Id = entity.Id,
+            PlaylistId = entity.PlaylistId,
+            Artist = entity.Artist,
+            Title = entity.Title,
+            Album = entity.Album,
+            TrackUniqueHash = entity.TrackUniqueHash,
+            Status = Enum.TryParse<TrackStatus>(entity.Status, out var status) ? status : TrackStatus.Missing,
+            ResolvedFilePath = entity.ResolvedFilePath,
+            TrackNumber = entity.TrackNumber,
+            AddedAt = entity.AddedAt
+        };
+    }
+
+    private PlaylistTrackEntity PlaylistTrackToEntity(PlaylistTrack track)
+    {
+        return new PlaylistTrackEntity
+        {
+            Id = track.Id,
+            PlaylistId = track.PlaylistId,
+            Artist = track.Artist,
+            Title = track.Title,
+            Album = track.Album,
+            TrackUniqueHash = track.TrackUniqueHash,
+            Status = track.Status.ToString(),
+            ResolvedFilePath = track.ResolvedFilePath,
+            TrackNumber = track.TrackNumber,
+            AddedAt = track.AddedAt
+        };
+    }
+
+    // ===== Private Helper Methods (JSON - LibraryEntry only) =====
 
     private List<LibraryEntry> LoadLibraryIndexFromDisk()
     {
@@ -396,84 +373,6 @@ public class LibraryService : ILibraryService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to save library index");
-            throw;
-        }
-    }
-
-    private List<PlaylistJob> LoadPlaylistJobsFromDisk()
-    {
-        if (!File.Exists(_playlistJobsPath))
-            return new List<PlaylistJob>();
-
-        try
-        {
-            var json = File.ReadAllText(_playlistJobsPath);
-            var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-            var jobs = JsonSerializer.Deserialize<List<PlaylistJob>>(json, options) ?? new();
-            
-            // Ensure OriginalTracks is ObservableCollection
-            foreach (var job in jobs)
-            {
-                if (job.OriginalTracks is not ObservableCollection<Track>)
-                {
-                    var tracks = job.OriginalTracks?.ToList() ?? new();
-                    job.OriginalTracks = new ObservableCollection<Track>(tracks);
-                }
-            }
-            
-            return jobs;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to load playlist jobs from {Path}", _playlistJobsPath);
-            return new List<PlaylistJob>();
-        }
-    }
-
-    private void SavePlaylistJobs(List<PlaylistJob> jobs)
-    {
-        try
-        {
-            var options = new JsonSerializerOptions { WriteIndented = true };
-            var json = JsonSerializer.Serialize(jobs, options);
-            File.WriteAllText(_playlistJobsPath, json);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to save playlist jobs");
-            throw;
-        }
-    }
-
-    private List<PlaylistTrack> LoadPlaylistTracksFromDisk()
-    {
-        if (!File.Exists(_playlistTracksPath))
-            return new List<PlaylistTrack>();
-
-        try
-        {
-            var json = File.ReadAllText(_playlistTracksPath);
-            var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-            return JsonSerializer.Deserialize<List<PlaylistTrack>>(json, options) ?? new();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to load playlist tracks from {Path}", _playlistTracksPath);
-            return new List<PlaylistTrack>();
-        }
-    }
-
-    private void SavePlaylistTracks(List<PlaylistTrack> tracks)
-    {
-        try
-        {
-            var options = new JsonSerializerOptions { WriteIndented = true };
-            var json = JsonSerializer.Serialize(tracks, options);
-            File.WriteAllText(_playlistTracksPath, json);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to save playlist tracks");
             throw;
         }
     }

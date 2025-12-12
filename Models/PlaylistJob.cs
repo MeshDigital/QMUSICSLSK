@@ -88,6 +88,19 @@ public class PlaylistJob : INotifyPropertyChanged
         set { SetProperty(ref _missingCount, value); }
     }
 
+    /// <summary>
+    /// Overall progress percentage for this job (0-100).
+    /// Calculated as: (SuccessfulCount + FailedCount) / TotalTracks * 100
+    /// </summary>
+    public double ProgressPercentage
+    {
+        get
+        {
+            if (TotalTracks == 0) return 0;
+            return (double)(SuccessfulCount + FailedCount) / TotalTracks * 100;
+        }
+    }
+
     public event PropertyChangedEventHandler? PropertyChanged;
 
     protected void OnPropertyChanged([CallerMemberName] string? propertyName = null)

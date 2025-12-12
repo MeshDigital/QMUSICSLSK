@@ -101,6 +101,7 @@ public partial class MainWindow : Window
             navigationService.RegisterPage("Library", typeof(LibraryPage));
             navigationService.RegisterPage("Downloads", typeof(DownloadsPage));
             navigationService.RegisterPage("Settings", typeof(SettingsPage));
+                        navigationService.RegisterPage("ImportPreview", typeof(ImportPreviewPage));
             LogToFile("Pages registered");
 
             if (rootFrame != null)

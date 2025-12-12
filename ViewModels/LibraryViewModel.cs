@@ -4,7 +4,6 @@ using System.ComponentModel;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
-using System.Windows.Data;
 using System.Windows.Input;
 using Microsoft.Extensions.Logging;
 using SLSKDONET.Models;
@@ -23,13 +22,8 @@ public class LibraryViewModel : INotifyPropertyChanged
     private ObservableCollection<PlaylistJob> _allProjects = new();
     private PlaylistJob? _selectedProject;
     private ObservableCollection<PlaylistTrackViewModel> _currentProjectTracks = new();
+    private string _noProjectSelectedMessage = "Select an import job to view its tracks";
     
-    public CollectionViewSource ActiveTracksInit { get; } = new();
-    public ICollectionView ActiveTracksView => ActiveTracksInit.View;
-
-    public CollectionViewSource WarehouseTracksInit { get; } = new();
-    public ICollectionView WarehouseTracksView => WarehouseTracksInit.View;
-
     public ICommand HardRetryCommand { get; }
     public ICommand PauseCommand { get; }
     public ICommand ResumeCommand { get; }
@@ -59,11 +53,20 @@ public class LibraryViewModel : INotifyPropertyChanged
         }
     }
     
-    // Detail List: Tracks for selected project
+    // Detail List: Tracks for selected project (Project Manifest)
     public ObservableCollection<PlaylistTrackViewModel> CurrentProjectTracks
     {
         get => _currentProjectTracks;
         set { _currentProjectTracks = value; OnPropertyChanged(); }
+    }
+
+    /// <summary>
+    /// Message to display when no project is selected.
+    /// </summary>
+    public string NoProjectSelectedMessage
+    {
+        get => _noProjectSelectedMessage;
+        set { if (_noProjectSelectedMessage != value) { _noProjectSelectedMessage = value; OnPropertyChanged(); } }
     }
 
     private bool _isGridView;
@@ -85,24 +88,6 @@ public class LibraryViewModel : INotifyPropertyChanged
         _logger = logger;
         _downloadManager = downloadManager;
         _libraryService = libraryService;
-
-        // Initialize Active View
-        ActiveTracksInit.Source = _downloadManager.AllGlobalTracks;
-        ActiveTracksInit.IsLiveFilteringRequested = true;
-        ActiveTracksInit.LiveFilteringProperties.Add("State");
-        ActiveTracksInit.IsLiveSortingRequested = true;
-        ActiveTracksInit.LiveSortingProperties.Add("Progress");
-        ActiveTracksInit.Filter += ActiveTracks_Filter;
-        ActiveTracksInit.SortDescriptions.Add(new SortDescription("State", ListSortDirection.Ascending));
-
-        // Initialize Warehouse View
-        WarehouseTracksInit.Source = _downloadManager.AllGlobalTracks;
-        WarehouseTracksInit.IsLiveFilteringRequested = true;
-        WarehouseTracksInit.LiveFilteringProperties.Add("State");
-        WarehouseTracksInit.IsLiveSortingRequested = true; // Optional for warehouse
-        WarehouseTracksInit.LiveSortingProperties.Add("Artist");
-        WarehouseTracksInit.Filter += WarehouseTracks_Filter;
-        WarehouseTracksInit.SortDescriptions.Add(new SortDescription("SortOrder", ListSortDirection.Ascending)); 
         
         // Commands
         HardRetryCommand = new RelayCommand<PlaylistTrackViewModel>(ExecuteHardRetry);
@@ -111,8 +96,7 @@ public class LibraryViewModel : INotifyPropertyChanged
         CancelCommand = new RelayCommand<PlaylistTrackViewModel>(ExecuteCancel);
         OpenProjectCommand = new RelayCommand<PlaylistJob>(project => SelectedProject = project);
         
-        
-        // Subscribe to global track updates for live progress
+        // Subscribe to global track updates for live project track status
         _downloadManager.TrackUpdated += OnGlobalTrackUpdated;
         
         // Subscribe to project added events for real-time Library updates
@@ -128,6 +112,9 @@ public class LibraryViewModel : INotifyPropertyChanged
         {
             // Add the new project to the observable collection
             AllProjects.Add(e.Job);
+
+            // Auto-select the newly added project so it shows immediately
+            SelectedProject = e.Job;
             
             _logger.LogInformation("Project added to Library: {Title}", e.Job.SourceTitle);
         });
@@ -180,30 +167,6 @@ public class LibraryViewModel : INotifyPropertyChanged
         
         source.SortOrder = newIndex;
         // Verify uniqueness? If we started with unique 0..N, we end with unique 0..N
-    }
-
-    private void ActiveTracks_Filter(object sender, FilterEventArgs e)
-    {
-        if (e.Item is PlaylistTrackViewModel vm)
-        {
-            // Active: Searching, Downloading, Queued
-            e.Accepted = vm.State == PlaylistTrackState.Searching ||
-                         vm.State == PlaylistTrackState.Downloading ||
-                         vm.State == PlaylistTrackState.Queued;
-        }
-    }
-
-    private void WarehouseTracks_Filter(object sender, FilterEventArgs e)
-    {
-        if (e.Item is PlaylistTrackViewModel vm)
-        {
-            // Warehouse: Pending, Completed, Failed, Cancelled
-            // Essentially !Active
-            e.Accepted = vm.State == PlaylistTrackState.Pending ||
-                         vm.State == PlaylistTrackState.Completed ||
-                         vm.State == PlaylistTrackState.Failed ||
-                         vm.State == PlaylistTrackState.Cancelled;
-        }
     }
 
     private void ExecuteHardRetry(PlaylistTrackViewModel? vm)

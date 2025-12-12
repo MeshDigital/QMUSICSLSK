@@ -40,9 +40,15 @@ public class NavigationService : INavigationService
             var page = _serviceProvider.GetService(pageType) as Page;
             if (page != null)
             {
-                // Ensure the page's DataContext is the MainViewModel.
-                // This is crucial for bindings to work correctly.
-                page.DataContext = _serviceProvider.GetService(typeof(MainViewModel));
+                var mainVm = _serviceProvider.GetService(typeof(MainViewModel)) as MainViewModel;
+                if (page is ImportPreviewPage && mainVm?.ImportPreviewViewModel != null)
+                {
+                    page.DataContext = mainVm.ImportPreviewViewModel;
+                }
+                else
+                {
+                    page.DataContext = mainVm;
+                }
                 _frame.Navigate(page);
             }
         }

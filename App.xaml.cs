@@ -168,6 +168,7 @@ public partial class App : System.Windows.Application
         services.AddTransient<DownloadsPage>();
         services.AddTransient<LibraryPage>();
         services.AddTransient<SettingsPage>();
+    services.AddTransient<ImportPreviewPage>();
 
         // Utilities can be registered as singletons as they are stateless.
         services.AddSingleton<SearchQueryNormalizer>();

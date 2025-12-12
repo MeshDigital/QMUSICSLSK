@@ -35,9 +35,12 @@
 
             <!-- Add utility converters -->
             <converters:CountToVisibilityConverter x:Key="CountToVisibilityConverter"/>
+            <converters:NullToVisibilityConverter x:Key="NullToVisibilityConverter"/>
             <converters:InverseNullToVisibilityConverter x:Key="InverseNullToVisibilityConverter"/>
             <converters:InverseBooleanConverter x:Key="InverseBooleanConverter"/>
             <converters:InverseBooleanToVisibilityConverter x:Key="InverseBooleanToVisibilityConverter"/>
+            <converters:IsSelectedToBackgroundConverter x:Key="IsSelectedToBackgroundConverter"/>
+            <converters:IsSelectedToBorderConverter x:Key="IsSelectedToBorderConverter"/>
         </ResourceDictionary>
     </Application.Resources>
 </Application>

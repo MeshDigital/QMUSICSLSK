@@ -235,71 +235,224 @@
             </StackPanel>
         </Border>
 
-        <!-- Results DataGrid -->
-        <DataGrid Grid.Row="3" Name="ResultsGrid" 
-                  ItemsSource="{Binding SearchResults}"
-                  Style="{StaticResource ModernDataGridStyle}" 
-                  ColumnHeaderStyle="{StaticResource ModernColumnHeaderStyle}"
-                  CellStyle="{StaticResource ModernCellStyle}"
-                  RowStyle="{StaticResource ModernRowStyle}"
-                  Margin="0"
-                  IsReadOnly="True"
-                  Visibility="{Binding IsAlbumSearch, Converter={StaticResource InverseBooleanToVisibilityConverter}}"
-                  SelectionChanged="ResultsGrid_SelectionChanged">
-            <DataGrid.Columns>
-                <DataGridTextColumn Header="#" Binding="{Binding OriginalIndex, StringFormat={}{0}}" Width="40"/>
-                <DataGridTextColumn Header="Rank" Binding="{Binding CurrentRank, StringFormat={}{0:F1}}" Width="50"/>
-                <DataGridTextColumn Header="Artist" Binding="{Binding Artist}" Width="150"/>
-                <DataGridTextColumn Header="Title" Binding="{Binding Title}" Width="*" MinWidth="200"/>
-                <DataGridTextColumn Header="Album" Binding="{Binding Album}" Width="150"/>
-                <DataGridTextColumn Header="Bitrate" Binding="{Binding Bitrate, StringFormat={}{0} kbps}" Width="80"/>
-                <DataGridTextColumn Header="User" Binding="{Binding Username}" Width="120"/>
-                <DataGridTextColumn Header="Size" Binding="{Binding Size, StringFormat={}{0:N0} KB}" Width="100"/>
-            </DataGrid.Columns>
-        </DataGrid>
+        <!-- Results / Import Preview Region -->
+        <Grid Grid.Row="3">
+            <!-- Import Preview embedded in Search page so search bar/nav stay visible -->
+            <Grid x:Name="ImportPreviewPanel"
+                  Visibility="{Binding IsImportPreviewVisible, Converter={StaticResource BooleanToVisibilityConverter}}">
+                <Grid DataContext="{Binding ImportPreviewViewModel}">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
 
-        <!-- Album Results DataGrid -->
-        <DataGrid Grid.Row="3" Name="AlbumResultsGrid" 
-                  ItemsSource="{Binding AlbumResults}"
-                  Style="{StaticResource ModernDataGridStyle}" 
-                  ColumnHeaderStyle="{StaticResource ModernColumnHeaderStyle}"
-                  CellStyle="{StaticResource ModernCellStyle}"
-                  RowStyle="{StaticResource ModernRowStyle}"
-                  Margin="0"
-                  IsReadOnly="True"
-                  Visibility="{Binding IsAlbumSearch, Converter={StaticResource BooleanToVisibilityConverter}}">
-            <DataGrid.Columns>
-                <DataGridTemplateColumn Header="Action" Width="50">
-                    <DataGridTemplateColumn.CellTemplate>
-                        <DataTemplate>
-                            <Button Content="⬇️" Command="{Binding DownloadAlbumCommand}"
-                                    ToolTip="Download Album"
-                                    Width="30" Height="24" Padding="0"
-                                    Background="Transparent" BorderThickness="0"/>
-                        </DataTemplate>
-                    </DataGridTemplateColumn.CellTemplate>
-                </DataGridTemplateColumn>
-                <DataGridTextColumn Header="Album" Binding="{Binding AlbumTitle}" Width="*" MinWidth="200" FontWeight="SemiBold"/>
-                <DataGridTextColumn Header="Artist" Binding="{Binding Artist}" Width="150"/>
-                <DataGridTextColumn Header="Tracks" Binding="{Binding TrackCount}" Width="60"/>
-                <DataGridTextColumn Header="Quality" Binding="{Binding QualitySummary}" Width="120"/>
-                <DataGridTextColumn Header="User" Binding="{Binding Username}" Width="120"/>
-                <DataGridTextColumn Header="Size" Binding="{Binding TotalSizeMb, StringFormat={}{0:F1} MB}" Width="80"/>
-                <DataGridTemplateColumn Header="Slot" Width="40">
-                    <DataGridTemplateColumn.CellTemplate>
-                        <DataTemplate>
-                            <TextBlock Text="🚀" ToolTip="Free Upload Slot Available" 
-                                       Visibility="{Binding HasFreeSlot, Converter={StaticResource BooleanToVisibilityConverter}}"
-                                       HorizontalAlignment="Center"/>
-                        </DataTemplate>
-                    </DataGridTemplateColumn.CellTemplate>
-                </DataGridTemplateColumn>
-            </DataGrid.Columns>
-        </DataGrid>
+                    <!-- Preview Header -->
+                    <Border Grid.Row="0" Background="{StaticResource SecondaryBackgroundBrush}" 
+                            BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1" Padding="16">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="4">
+                                <TextBlock FontSize="17" FontWeight="SemiBold" Foreground="{StaticResource TextBrush}">
+                                    <Run Text="📁 "/>
+                                    <Run Text="{Binding SourceTitle}"/>
+                                </TextBlock>
+                                <TextBlock FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,4,0,0">
+                                    <Run Text="Source: "/>
+                                    <Run Text="{Binding SourceType, Mode=OneWay}"/>
+                                </TextBlock>
+                                <TextBlock FontSize="12" Foreground="#7CCB5B" Margin="0,4,0,0" FontWeight="Medium">
+                                    <Run Text="Loaded: "/>
+                                    <Run Text="{Binding TrackCount, Mode=OneWay}"/>
+                                    <Run Text=" tracks"/>
+                                </TextBlock>
+                            </StackPanel>
+
+                            <StackPanel Grid.Column="1" Orientation="Vertical" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="16,0,0,0">
+                                <TextBlock FontSize="13" Foreground="{StaticResource AccentBrush}" FontWeight="Medium">
+                                    <Run Text="Selected: "/>
+                                    <Run Text="{Binding SelectedCount, Mode=OneWay}"/>
+                                </TextBlock>
+                                <TextBlock Text="{Binding StatusMessage}" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,4,0,0"/>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
+                    <!-- Preview Body -->
+                    <Border Grid.Row="1" Background="{StaticResource BackgroundBrush}">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                            <ItemsControl ItemsSource="{Binding AlbumGroups}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid Margin="0,0,0,16">
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="Auto"/>
+                                            </Grid.RowDefinitions>
+
+                                            <Border Grid.Row="0" Background="{StaticResource SurfaceBrush}" Margin="12,0,12,8" CornerRadius="4" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1">
+                                                <Grid Margin="12,10,12,10">
+                                                    <StackPanel>
+                                                        <TextBlock Text="{Binding Album}" FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource TextBrush}"/>
+                                                        <TextBlock FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,4,0,0">
+                                                            <Run Text="{Binding Tracks.Count, Mode=OneWay}"/>
+                                                            <Run Text=" tracks"/>
+                                                        </TextBlock>
+                                                    </StackPanel>
+                                                </Grid>
+                                            </Border>
+
+                                            <ItemsControl Grid.Row="1" ItemsSource="{Binding Tracks}" Margin="0">
+                                                <ItemsControl.ItemsPanel>
+                                                    <ItemsPanelTemplate>
+                                                        <WrapPanel Orientation="Horizontal" Margin="12,0,12,0"/>
+                                                    </ItemsPanelTemplate>
+                                                </ItemsControl.ItemsPanel>
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <Border Width="220" Margin="0,0,8,8" Background="{Binding IsSelected, Converter={StaticResource IsSelectedToBackgroundConverter}}"
+                                                                BorderBrush="{Binding IsSelected, Converter={StaticResource IsSelectedToBorderConverter}}"
+                                                                BorderThickness="1.5" CornerRadius="6" MouseDown="PreviewTrackCard_MouseDown" Cursor="Hand">
+                                                            <Grid Margin="10">
+                                                                <Grid.RowDefinitions>
+                                                                    <RowDefinition Height="Auto"/>
+                                                                    <RowDefinition Height="Auto"/>
+                                                                    <RowDefinition Height="Auto"/>
+                                                                    <RowDefinition Height="Auto"/>
+                                                                    <RowDefinition Height="Auto"/>
+                                                                </Grid.RowDefinitions>
+                                                                <CheckBox Grid.Row="0" IsChecked="{Binding IsSelected, Mode=TwoWay}" Foreground="{StaticResource TextBrush}" Margin="0,0,0,6" Checked="PreviewTrackSelectionChanged" Unchecked="PreviewTrackSelectionChanged"/>
+                                                                <TextBlock Grid.Row="1" Text="{Binding Title}" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource TextBrush}" TextTrimming="CharacterEllipsis" ToolTip="{Binding Title}"/>
+                                                                <TextBlock Grid.Row="2" Text="{Binding Artist}" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" TextTrimming="CharacterEllipsis" Margin="0,4,0,0" ToolTip="{Binding Artist}"/>
+                                                                <TextBlock Grid.Row="3" Text="{Binding Album}" FontSize="10" Foreground="#7A7A7A" TextTrimming="CharacterEllipsis" Margin="0,2,0,0" ToolTip="{Binding Album}"/>
+                                                                <TextBlock Grid.Row="4" FontSize="10" Foreground="#5A5A5A" Margin="0,6,0,0">
+                                                                    <Run Text="Length: "/>
+                                                                    <Run Text="{Binding Length, StringFormat={}{0:hh\\:mm\\:ss}, FallbackValue='Unknown'}"/>
+                                                                </TextBlock>
+                                                            </Grid>
+                                                        </Border>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                    </Border>
+
+                    <!-- Preview Footer -->
+                    <Border Grid.Row="2" Background="{StaticResource SecondaryBackgroundBrush}"
+                            BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1,0,0" Padding="16">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                                <Button Content="☑️ Select All" Command="{Binding SelectAllCommand}" Style="{StaticResource ModernButtonStyle}" Padding="10,7" FontSize="12" Foreground="{StaticResource TextBrush}" Margin="0,0,8,0"/>
+                                <Button Content="☐ Deselect All" Command="{Binding DeselectAllCommand}" Style="{StaticResource ModernButtonStyle}" Padding="10,7" FontSize="12" Foreground="{StaticResource TextBrush}"/>
+                            </StackPanel>
+
+                            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                                <Button Content="Cancel" Command="{Binding CancelCommand}" Style="{StaticResource ModernButtonStyle}" Padding="14,8" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" 
+                                        IsEnabled="{Binding IsLoading, Converter={StaticResource InverseBooleanConverter}}" Margin="0,0,8,0"/>
+                                <Button Content="➕ Add to Library" Command="{Binding AddToLibraryCommand}" Style="{StaticResource PrimaryButtonStyle}" Padding="14,8" FontSize="12" FontWeight="SemiBold" IsEnabled="{Binding CanAddToLibrary}">
+                                    <Button.Effect>
+                                        <DropShadowEffect BlurRadius="8" ShadowDepth="2" Opacity="0.35" Color="#4CAF50"/>
+                                    </Button.Effect>
+                                </Button>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
+                    <!-- Loading Overlay -->
+                    <Grid Grid.Row="1" Background="#00000055" Visibility="{Binding IsLoading, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                            <TextBlock Text="Adding to library..." Foreground="{StaticResource TextBrush}" FontSize="14" HorizontalAlignment="Center"/>
+                            <ProgressBar IsIndeterminate="True" Width="160" Height="4" Margin="0,8,0,0"/>
+                        </StackPanel>
+                    </Grid>
+                </Grid>
+            </Grid>
+
+            <!-- Default Results Panel -->
+            <Grid x:Name="ResultsPanel"
+                  Visibility="{Binding IsImportPreviewVisible, Converter={StaticResource InverseBooleanToVisibilityConverter}}">
+                <!-- Results DataGrid -->
+                <DataGrid Name="ResultsGrid" 
+                          ItemsSource="{Binding SearchResults}"
+                          Style="{StaticResource ModernDataGridStyle}" 
+                          ColumnHeaderStyle="{StaticResource ModernColumnHeaderStyle}"
+                          CellStyle="{StaticResource ModernCellStyle}"
+                          RowStyle="{StaticResource ModernRowStyle}"
+                          Margin="0"
+                          IsReadOnly="True"
+                          Visibility="{Binding IsAlbumSearch, Converter={StaticResource InverseBooleanToVisibilityConverter}}"
+                          SelectionChanged="ResultsGrid_SelectionChanged">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="#" Binding="{Binding OriginalIndex, StringFormat={}{0}}" Width="40"/>
+                        <DataGridTextColumn Header="Rank" Binding="{Binding CurrentRank, StringFormat={}{0:F1}}" Width="50"/>
+                        <DataGridTextColumn Header="Artist" Binding="{Binding Artist}" Width="150"/>
+                        <DataGridTextColumn Header="Title" Binding="{Binding Title}" Width="*" MinWidth="200"/>
+                        <DataGridTextColumn Header="Album" Binding="{Binding Album}" Width="150"/>
+                        <DataGridTextColumn Header="Bitrate" Binding="{Binding Bitrate, StringFormat={}{0} kbps}" Width="80"/>
+                        <DataGridTextColumn Header="User" Binding="{Binding Username}" Width="120"/>
+                        <DataGridTextColumn Header="Size" Binding="{Binding Size, StringFormat={}{0:N0} KB}" Width="100"/>
+                    </DataGrid.Columns>
+                </DataGrid>
+
+                <!-- Album Results DataGrid -->
+                <DataGrid Name="AlbumResultsGrid" 
+                          ItemsSource="{Binding AlbumResults}"
+                          Style="{StaticResource ModernDataGridStyle}" 
+                          ColumnHeaderStyle="{StaticResource ModernColumnHeaderStyle}"
+                          CellStyle="{StaticResource ModernCellStyle}"
+                          RowStyle="{StaticResource ModernRowStyle}"
+                          Margin="0"
+                          IsReadOnly="True"
+                          Visibility="{Binding IsAlbumSearch, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <DataGrid.Columns>
+                        <DataGridTemplateColumn Header="Action" Width="50">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <Button Content="⬇️" Command="{Binding DownloadAlbumCommand}"
+                                            ToolTip="Download Album"
+                                            Width="30" Height="24" Padding="0"
+                                            Background="Transparent" BorderThickness="0"/>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTextColumn Header="Album" Binding="{Binding AlbumTitle}" Width="*" MinWidth="200" FontWeight="SemiBold"/>
+                        <DataGridTextColumn Header="Artist" Binding="{Binding Artist}" Width="150"/>
+                        <DataGridTextColumn Header="Tracks" Binding="{Binding TrackCount}" Width="60"/>
+                        <DataGridTextColumn Header="Quality" Binding="{Binding QualitySummary}" Width="120"/>
+                        <DataGridTextColumn Header="User" Binding="{Binding Username}" Width="120"/>
+                        <DataGridTextColumn Header="Size" Binding="{Binding TotalSizeMb, StringFormat={}{0:F1} MB}" Width="80"/>
+                        <DataGridTemplateColumn Header="Slot" Width="40">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="🚀" ToolTip="Free Upload Slot Available" 
+                                               Visibility="{Binding HasFreeSlot, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                               HorizontalAlignment="Center"/>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                    </DataGrid.Columns>
+                </DataGrid>
+            </Grid>
+        </Grid>
 
         <!-- Action Buttons -->
         <Border Grid.Row="4" Background="{StaticResource SecondaryBackgroundBrush}"
-                BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1,0,0" Padding="20,12">
+                BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1,0,0" Padding="20,12"
+                Visibility="{Binding IsImportPreviewVisible, Converter={StaticResource InverseBooleanToVisibilityConverter}}">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto"/>

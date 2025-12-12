@@ -1,6 +1,8 @@
 using Microsoft.VisualBasic;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
+using SLSKDONET.Models;
 
 namespace SLSKDONET.Views
 {
@@ -40,6 +42,21 @@ namespace SLSKDONET.Views
             {
                 _viewModel.SelectedTrackCount = ResultsGrid.SelectedItems.Count;
             }
+        }
+
+        private void PreviewTrackCard_MouseDown(object sender, MouseButtonEventArgs e)
+        {
+            if (sender is Border border && border.DataContext is Track track && _viewModel?.ImportPreviewViewModel != null)
+            {
+                track.IsSelected = !track.IsSelected;
+                _viewModel.ImportPreviewViewModel.UpdateSelectedCount();
+                e.Handled = true;
+            }
+        }
+
+        private void PreviewTrackSelectionChanged(object sender, RoutedEventArgs e)
+        {
+            _viewModel?.ImportPreviewViewModel?.UpdateSelectedCount();
         }
     }
 }

@@ -4,6 +4,7 @@
       xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
       xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
       xmlns:viewmodels="clr-namespace:SLSKDONET.ViewModels"
+      xmlns:converters="clr-namespace:SLSKDONET.Converters"
       mc:Ignorable="d" 
       d:DataContext="{d:DesignInstance Type=viewmodels:LibraryViewModel}"
       d:DesignHeight="800" d:DesignWidth="1200"
@@ -92,26 +93,120 @@
                       Background="#404040" 
                       HorizontalAlignment="Stretch"/>
 
-        <!-- DETAIL VIEW: Conveyor Belt for Selected Project -->
-        <Grid Grid.Column="2">
+        <!-- DETAIL VIEW: Project Manifest for Selected Job -->
+        <Grid Grid.Column="2" Background="#1E1E1E">
             <Grid.RowDefinitions>
-                <RowDefinition Height="*" MinHeight="200"/>
                 <RowDefinition Height="Auto"/>
-                <RowDefinition Height="*" MinHeight="200"/>
+                <RowDefinition Height="*"/>
             </Grid.RowDefinitions>
 
-            <!-- ACTIVE TRACKS (Conveyor Belt) -->
-            <GroupBox Grid.Row="0" Header="⚡ Active Downloads" Foreground="White" BorderBrush="#404040" Margin="10">
-                <DataGrid ItemsSource="{Binding ActiveTracksView}"
+            <!-- No Project Selected Message -->
+            <TextBlock Grid.Row="0" Grid.RowSpan="2"
+                       Text="{Binding NoProjectSelectedMessage}"
+                       HorizontalAlignment="Center"
+                       VerticalAlignment="Center"
+                       FontSize="14"
+                       Foreground="#666"
+                       IsHitTestVisible="False">
+                <TextBlock.Visibility>
+                    <Binding Path="SelectedProject" Converter="{StaticResource NullToVisibilityConverter}"/>
+                </TextBlock.Visibility>
+            </TextBlock>
+
+            <!-- Project Header with Progress -->
+            <Border Grid.Row="0" Background="#252526" BorderBrush="#404040" BorderThickness="0,0,0,1" Padding="16,12">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding SelectedProject.SourceTitle, StringFormat='📁 {0}'}"
+                                   FontSize="16" FontWeight="Bold" Foreground="White"/>
+                        <TextBlock Foreground="#A0A0A0" FontSize="11" Margin="0,4,0,0">
+                            <Run Text="{Binding SelectedProject.TotalTracks}"/>
+                            <Run Text="tracks •"/>
+                            <Run Text="{Binding SelectedProject.SuccessfulCount}"/>
+                            <Run Text="downloaded"/>
+                        </TextBlock>
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="20,0,0,0">
+                        <ProgressBar Value="{Binding SelectedProject.ProgressPercentage, Mode=OneWay}" 
+                                     Maximum="100" Height="6" Width="150" VerticalAlignment="Center" 
+                                     Background="#333" Foreground="#4CAF50"/>
+                        <TextBlock Text="{Binding SelectedProject.ProgressPercentage, StringFormat={}{0:F0}%}" 
+                                   HorizontalAlignment="Center" Margin="0,4,0,0" FontSize="11" Foreground="#A0A0A0"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <!-- Project Tracks List -->
+            <Grid Grid.Row="1">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" MinHeight="30"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <!-- View Mode Selector -->
+                <Border Grid.Row="0" Background="#252526" Padding="12">
+                    <CheckBox Content="🖼️ Gallery Mode" 
+                              IsChecked="{Binding IsGridView}" 
+                              Foreground="White" 
+                              VerticalAlignment="Center"
+                              FontSize="12"/>
+                </Border>
+
+                <!-- Gallery View (Grid) -->
+                <ListBox Grid.Row="1"
+                         ItemsSource="{Binding CurrentProjectTracks}"
+                         Background="Transparent"
+                         BorderThickness="0"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                    <ListBox.Visibility>
+                        <Binding Path="IsGridView" Converter="{StaticResource BooleanToVisibilityConverter}"/>
+                    </ListBox.Visibility>
+                    <ListBox.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel Orientation="Horizontal"/>
+                        </ItemsPanelTemplate>
+                    </ListBox.ItemsPanel>
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <Border Background="#2D2D2D" Margin="8" Padding="12" CornerRadius="8" Width="160">
+                                <StackPanel>
+                                    <!-- Album Art with Fallback -->
+                                    <Border Background="#1E1E1E" CornerRadius="4" Height="140" Width="140">
+                                        <Image Source="{Binding CoverArtUrl}" Stretch="UniformToFill"/>
+                                    </Border>
+                                    <TextBlock Text="{Binding Artist}" FontWeight="Bold" Margin="0,8,0,2" TextTrimming="CharacterEllipsis" Foreground="White"/>
+                                    <TextBlock Text="{Binding Title}" FontSize="11" Foreground="#A0A0A0" TextTrimming="CharacterEllipsis"/>
+                                    <TextBlock Text="{Binding State}" FontSize="10" Margin="0,4,0,0" Foreground="#A0A0A0"/>
+                                    <ProgressBar Value="{Binding Progress, Mode=OneWay}" Maximum="100" Height="2" Margin="0,4,0,0" Background="#333" Foreground="#007ACC"/>
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+
+                <!-- List View (DataGrid) -->
+                <DataGrid Grid.Row="1"
+                          ItemsSource="{Binding CurrentProjectTracks}"
                           AutoGenerateColumns="False"
+                          AllowDrop="True"
                           Background="Transparent"
-                          RowBackground="#252526"
+                          GridLinesVisibility="Horizontal"
+                          HorizontalGridLinesBrush="#333"
+                          RowBackground="#1E1E1E"
+                          AlternatingRowBackground="#252526"
                           Foreground="White"
                           BorderThickness="0"
-                          GridLinesVisibility="Horizontal"
-                          HorizontalGridLinesBrush="#404040"
                           HeadersVisibility="Column"
-                          IsReadOnly="True">
+                          IsReadOnly="False">
+                    <DataGrid.Visibility>
+                        <Binding Path="IsGridView" Converter="{StaticResource InverseBooleanToVisibilityConverter}"/>
+                    </DataGrid.Visibility>
                     <DataGrid.Resources>
                         <Style TargetType="DataGridColumnHeader">
                             <Setter Property="Background" Value="#2D2D2D"/>
@@ -121,30 +216,46 @@
                             <Setter Property="BorderBrush" Value="#404040"/>
                         </Style>
                         <Style TargetType="DataGridCell">
-                            <Setter Property="Padding" Value="10,6"/>
-                            <Setter Property="Template">
+                            <Setter Property="BorderThickness" Value="0"/>
+                            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+                        </Style>
+                        <Style TargetType="DataGridRow">
+                            <Setter Property="AllowDrop" Value="True"/>
+                            <EventSetter Event="PreviewMouseLeftButtonDown" Handler="DataGridRow_PreviewMouseLeftButtonDown"/>
+                            <EventSetter Event="Drop" Handler="DataGridRow_Drop"/>
+                            <EventSetter Event="PreviewDragOver" Handler="OnPreviewDragOver"/>
+                            <Setter Property="ContextMenu">
                                 <Setter.Value>
-                                    <ControlTemplate TargetType="DataGridCell">
-                                        <Border Padding="{TemplateBinding Padding}" 
-                                                Background="{TemplateBinding Background}" 
-                                                BorderBrush="Transparent" 
-                                                BorderThickness="0">
-                                            <ContentPresenter VerticalAlignment="Center" />
-                                        </Border>
-                                    </ControlTemplate>
+                                    <ContextMenu>
+                                        <MenuItem Header="▶️ Resume" 
+                                                  Command="{Binding DataContext.ResumeCommand, RelativeSource={RelativeSource AncestorType=Page}}"
+                                                  CommandParameter="{Binding}"/>
+                                        <MenuItem Header="⏸️ Pause" 
+                                                  Command="{Binding DataContext.PauseCommand, RelativeSource={RelativeSource AncestorType=Page}}"
+                                                  CommandParameter="{Binding}"/>
+                                        <MenuItem Header="🔄 Hard Retry" 
+                                                  Command="{Binding DataContext.HardRetryCommand, RelativeSource={RelativeSource AncestorType=Page}}"
+                                                  CommandParameter="{Binding}"/>
+                                        <Separator/>
+                                        <MenuItem Header="❌ Cancel" 
+                                                  Command="{Binding DataContext.CancelCommand, RelativeSource={RelativeSource AncestorType=Page}}"
+                                                  CommandParameter="{Binding}"/>
+                                    </ContextMenu>
                                 </Setter.Value>
                             </Setter>
                         </Style>
                     </DataGrid.Resources>
-
                     <DataGrid.Columns>
-                        <!-- Status & Spinner -->
-                        <DataGridTemplateColumn Header="State" Width="120">
+                        <DataGridTextColumn Header="Artist" Binding="{Binding Artist}" Width="*"/>
+                        <DataGridTextColumn Header="Title" Binding="{Binding Title}" Width="*"/>
+                        <DataGridTextColumn Header="Album" Binding="{Binding Model.Album}" Width="*"/>
+                        
+                        <!-- Status & Progress -->
+                        <DataGridTemplateColumn Header="Status" Width="120">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
                                     <StackPanel Orientation="Horizontal">
                                         <TextBlock Text="{Binding State}" VerticalAlignment="Center"/>
-                                        <!-- Simple Spinner Simulation for Searching/Downloading -->
                                         <TextBlock Text=" 🔄" VerticalAlignment="Center">
                                             <TextBlock.Style>
                                                 <Style TargetType="TextBlock">
@@ -165,16 +276,13 @@
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
 
-                        <DataGridTextColumn Header="Artist" Binding="{Binding Artist}" Width="*"/>
-                        <DataGridTextColumn Header="Title" Binding="{Binding Title}" Width="*"/>
-                        
                         <!-- Progress Bar -->
-                        <DataGridTemplateColumn Header="Progress" Width="200">
+                        <DataGridTemplateColumn Header="Progress" Width="150">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
                                     <Grid>
                                         <ProgressBar Value="{Binding Progress, Mode=OneWay}" Maximum="100" Height="4" VerticalAlignment="Center" Background="#333" Foreground="#007ACC"/>
-                                        <TextBlock Text="{Binding Progress, StringFormat={}{0:F1}%}" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="10" Foreground="White"/>
+                                        <TextBlock Text="{Binding Progress, StringFormat={}{0:F0}%}" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="10" Foreground="White"/>
                                     </Grid>
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
@@ -182,135 +290,20 @@
                         
                         <DataGridTextColumn Header="Speed" Binding="{Binding CurrentSpeed}" Width="100"/>
                         
-                         <!-- Actions -->
+                        <!-- Actions -->
                         <DataGridTemplateColumn Header="Actions" Width="80">
-                             <DataGridTemplateColumn.CellTemplate>
+                            <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
-                                    <Button Content="Cancel" Command="{Binding DataContext.HardRetryCommand, RelativeSource={RelativeSource AncestorType=Page}}" CommandParameter="{Binding}" 
-                                            Background="#C42B1C" Foreground="White" BorderThickness="0" Padding="5,2"/>
+                                    <Button Content="Retry" 
+                                            Command="{Binding DataContext.HardRetryCommand, RelativeSource={RelativeSource AncestorType=Page}}" 
+                                            CommandParameter="{Binding}"
+                                            Background="#FF6C00" Foreground="White" BorderThickness="0" Padding="5,2"/>
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
                     </DataGrid.Columns>
                 </DataGrid>
-            </GroupBox>
-
-            <!-- SPLITTER -->
-            <GridSplitter Grid.Row="1" Height="2" HorizontalAlignment="Stretch" Background="#404040" ShowsPreview="True"/>
-
-            <!-- WAREHOUSE TRACKS -->
-            <GroupBox Grid.Row="2" Foreground="White" BorderBrush="#404040" Margin="10,0,10,10">
-                <GroupBox.Header>
-                     <StackPanel Orientation="Horizontal">
-                         <TextBlock Text="📚 Warehouse (History &amp; Pending)" FontWeight="Bold" Margin="0,0,10,0"/>
-                         <CheckBox Content="🖼️ Gallery Mode" IsChecked="{Binding IsGridView}" Foreground="White" VerticalAlignment="Center"/>
-                     </StackPanel>
-                </GroupBox.Header>
-                <Grid>
-                    <!-- Gallery View (ListBox) -->
-                    <ListBox ItemsSource="{Binding WarehouseTracksView}"
-                             Background="Transparent"
-                             BorderThickness="0"
-                             ScrollViewer.HorizontalScrollBarVisibility="Disabled">
-                        <ListBox.Visibility>
-                            <Binding Path="IsGridView" Converter="{StaticResource BooleanToVisibilityConverter}"/>
-                        </ListBox.Visibility>
-                        <ListBox.ItemsPanel>
-                            <ItemsPanelTemplate>
-                                <WrapPanel Orientation="Horizontal"/>
-                            </ItemsPanelTemplate>
-                        </ListBox.ItemsPanel>
-                        <ListBox.ItemTemplate>
-                            <DataTemplate>
-                                <Border Background="#2D2D2D" Margin="8" Padding="12" CornerRadius="8" Width="160">
-                                    <StackPanel>
-                                        <!-- Album Art with Fallback -->
-                                        <Border Background="#1E1E1E" CornerRadius="4" Height="140" Width="140">
-                                            <Image Source="{Binding CoverArtUrl}" 
-                                                   Stretch="UniformToFill"/>
-                                        </Border>
-                                        <TextBlock Text="{Binding Artist}" FontWeight="Bold" Margin="0,8,0,2" TextTrimming="CharacterEllipsis" Foreground="White"/>
-                                        <TextBlock Text="{Binding Title}" FontSize="11" Foreground="#A0A0A0" TextTrimming="CharacterEllipsis"/>
-                                        <TextBlock Text="{Binding State}" FontSize="10" Margin="0,4,0,0" Foreground="#A0A0A0"/>
-                                    </StackPanel>
-                                </Border>
-                            </DataTemplate>
-                        </ListBox.ItemTemplate>
-                    </ListBox>
-
-                    <!-- List View (DataGrid) -->
-                    <DataGrid ItemsSource="{Binding WarehouseTracksView}"
-                              AutoGenerateColumns="False"
-                              AllowDrop="True"
-                              Background="Transparent"
-                              GridLinesVisibility="Horizontal"
-                              HorizontalGridLinesBrush="#333"
-                              RowBackground="#1E1E1E"
-                              AlternatingRowBackground="#252526"
-                              Foreground="White"
-                              BorderThickness="0"
-                              HeadersVisibility="Column"
-                              IsReadOnly="False">
-                        <DataGrid.Visibility>
-                            <Binding Path="IsGridView" Converter="{StaticResource InverseBooleanToVisibilityConverter}"/>
-                        </DataGrid.Visibility>
-                        <DataGrid.Resources>
-                            <Style TargetType="DataGridColumnHeader">
-                                <Setter Property="Background" Value="#2D2D2D"/>
-                                <Setter Property="Foreground" Value="#A0A0A0"/>
-                                <Setter Property="Padding" Value="10,8"/>
-                                <Setter Property="BorderThickness" Value="0,0,1,1"/>
-                                <Setter Property="BorderBrush" Value="#404040"/>
-                            </Style>
-                            <Style TargetType="DataGridCell">
-                                <Setter Property="BorderThickness" Value="0"/>
-                                <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
-                            </Style>
-                            <Style TargetType="DataGridRow">
-                                <Setter Property="AllowDrop" Value="True"/>
-                                <EventSetter Event="PreviewMouseLeftButtonDown" Handler="DataGridRow_PreviewMouseLeftButtonDown"/>
-                                <EventSetter Event="Drop" Handler="DataGridRow_Drop"/>
-                                <EventSetter Event="PreviewDragOver" Handler="OnPreviewDragOver"/>
-                                <Setter Property="ContextMenu">
-                                    <Setter.Value>
-                                        <ContextMenu>
-                                            <MenuItem Header="▶️ Resume" 
-                                                      Command="{Binding DataContext.ResumeCommand, RelativeSource={RelativeSource AncestorType=Page}}"
-                                                      CommandParameter="{Binding}"/>
-                                            <MenuItem Header="⏸️ Pause" 
-                                                      Command="{Binding DataContext.PauseCommand, RelativeSource={RelativeSource AncestorType=Page}}"
-                                                      CommandParameter="{Binding}"/>
-                                            <MenuItem Header="🔄 Hard Retry" 
-                                                      Command="{Binding DataContext.HardRetryCommand, RelativeSource={RelativeSource AncestorType=Page}}"
-                                                      CommandParameter="{Binding}"/>
-                                            <Separator/>
-                                            <MenuItem Header="❌ Cancel" 
-                                                      Command="{Binding DataContext.CancelCommand, RelativeSource={RelativeSource AncestorType=Page}}"
-                                                      CommandParameter="{Binding}"/>
-                                        </ContextMenu>
-                                    </Setter.Value>
-                                </Setter>
-                            </Style>
-                        </DataGrid.Resources>
-                        <DataGrid.Columns>
-                            <DataGridTextColumn Header="Artist" Binding="{Binding Artist}" Width="*"/>
-                            <DataGridTextColumn Header="Title" Binding="{Binding Title}" Width="*"/>
-                            <DataGridTextColumn Header="Album" Binding="{Binding Model.Album}" Width="*"/>
-                            <DataGridTextColumn Header="Status" Binding="{Binding State}" Width="120"/>
-                            <DataGridTemplateColumn Header="Actions" Width="100">
-                                <DataGridTemplateColumn.CellTemplate>
-                                    <DataTemplate>
-                                        <Button Content="Retry" 
-                                                Command="{Binding DataContext.HardRetryCommand, RelativeSource={RelativeSource AncestorType=Page}}" 
-                                                CommandParameter="{Binding}"
-                                                Background="#FF6C00" Foreground="White" BorderThickness="0" Padding="5,2"/>
-                                    </DataTemplate>
-                                </DataGridTemplateColumn.CellTemplate>
-                            </DataGridTemplateColumn>
-                        </DataGrid.Columns>
-                    </DataGrid>
-                </Grid>
-            </GroupBox>
+            </Grid>
         </Grid>
     </Grid>
 </Page>
