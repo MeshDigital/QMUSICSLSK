@@ -124,7 +124,7 @@ public class LibraryViewModel : INotifyPropertyChanged
     
     private async void OnProjectAdded(object? sender, ProjectEventArgs e)
     {
-        await System.Windows.Application.Current.Dispatcher.InvokeAsync(async () =>
+        await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
         {
             // Add the new project to the observable collection
             AllProjects.Add(e.Job);

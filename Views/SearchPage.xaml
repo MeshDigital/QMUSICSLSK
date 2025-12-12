@@ -36,7 +36,10 @@
 
                     <!-- Search Input with integrated buttons -->
                     <Border Grid.Column="0" Background="{StaticResource BackgroundBrush}" 
-                            CornerRadius="6" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1">
+                            CornerRadius="8" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1">
+                        <Border.Effect>
+                            <DropShadowEffect BlurRadius="8" ShadowDepth="2" Opacity="0.3" Color="#000000"/>
+                        </Border.Effect>
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
@@ -46,10 +49,13 @@
                             <!-- Main TextBox -->
                             <ui:TextBox Name="SearchBox" Grid.Column="0"
                                      Text="{Binding SearchQuery, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                     PlaceholderText="🔍 Type artist/title, paste Spotify/CSV URL - Auto-detects format"
+                                     PlaceholderText="🔍 Search: artist/title | Spotify URL | CSV file path | Paste anything"
                                      Icon="{ui:SymbolIcon Search24}"
                                      ClearButtonEnabled="True"
-                                     Height="40"
+                                     Height="48"
+                                     FontSize="16"
+                                     Padding="14,12"
+                                     VerticalContentAlignment="Center"
                                      VerticalAlignment="Center"
                                      IsEnabled="{Binding IsSearching, Converter={StaticResource InverseBooleanConverter}}">
                                 <ui:TextBox.InputBindings>
@@ -58,19 +64,28 @@
                             </ui:TextBox>
 
                             <!-- Quick Action Buttons (in textbox) -->
-                            <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="0,0,4,0">
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="0,0,6,0">
                                 <CheckBox Content="📁 Albums" IsChecked="{Binding IsAlbumSearch}"
-                                          Height="32" VerticalContentAlignment="Center" Margin="0,0,8,0"
+                                          Height="36" VerticalContentAlignment="Center" Margin="0,0,10,0"
+                                          Foreground="{StaticResource TextBrush}"
+                                          FontSize="13" FontWeight="Medium"
                                           ToolTip="Group results by Album (User + Directory)"/>
-                                <Button Content="📋" ToolTip="Import CSV" Click="ImportCsvButton_Click"
+                                <Button Content="📋" ToolTip="Browse for CSV file" Click="ImportCsvButton_Click"
                                         Style="{StaticResource ModernButtonStyle}" 
-                                        Width="32" Height="32" Padding="0" FontSize="14" Margin="2,0"/>
-                                <Button Content="🎵" ToolTip="Import Spotify Playlist" Click="ImportSpotifyButton_Click"
-                                        Style="{StaticResource ModernButtonStyle}"
-                                        Width="32" Height="32" Padding="0" FontSize="14" Margin="2,0"/>
+                                        Width="36" Height="36" Padding="0" FontSize="16" Margin="4,0"
+                                        Background="{StaticResource SurfaceBrush}">
+                                    <Button.Effect>
+                                        <DropShadowEffect BlurRadius="4" ShadowDepth="1" Opacity="0.2"/>
+                                    </Button.Effect>
+                                </Button>
                                 <Button Content="🔧" ToolTip="Search Filters" Command="{Binding ToggleFiltersPanelCommand}"
                                         Style="{StaticResource ModernButtonStyle}"
-                                        Width="32" Height="32" Padding="0" FontSize="14" Margin="2,0"/>
+                                        Width="36" Height="36" Padding="0" FontSize="16" Margin="4,0"
+                                        Background="{StaticResource SurfaceBrush}">
+                                    <Button.Effect>
+                                        <DropShadowEffect BlurRadius="4" ShadowDepth="1" Opacity="0.2"/>
+                                    </Button.Effect>
+                                </Button>
                             </StackPanel>
                         </Grid>
                     </Border>
@@ -79,11 +94,15 @@
                     <Button Grid.Column="1" Content="🔍 Search" 
                             Style="{StaticResource PrimaryButtonStyle}"
                             Command="{Binding SearchCommand}"
-                            Height="40" Padding="24,0" Margin="8,0,0,0"
-                            IsEnabled="{Binding IsSearching, Converter={StaticResource InverseBooleanConverter}}"/>
+                            Height="48" Padding="28,0" Margin="12,0,0,0" FontSize="15" FontWeight="SemiBold"
+                            IsEnabled="{Binding IsSearching, Converter={StaticResource InverseBooleanConverter}}">
+                        <Button.Effect>
+                            <DropShadowEffect BlurRadius="10" ShadowDepth="3" Opacity="0.4" Color="{StaticResource AccentColor}"/>
+                        </Button.Effect>
+                    </Button>
                 </Grid>
 
-                <!-- Search Status Row -->
+                <!-- Search Status Row (only show when searching) -->
                 <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,8,0,0"
                             Visibility="{Binding IsSearching, Converter={StaticResource BooleanToVisibilityConverter}, FallbackValue=Collapsed}">
                     <TextBlock Text="⏳ Searching..." 
@@ -280,23 +299,33 @@
 
         <!-- Action Buttons -->
         <Border Grid.Row="4" Background="{StaticResource SecondaryBackgroundBrush}"
-                BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1,0,0" Padding="16">
+                BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1,0,0" Padding="20,12">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
                 
-                <StackPanel Grid.Column="0" Orientation="Horizontal" Height="44">
+                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
                     <Button Content="⬇️ Add Selected to Downloads"
                             Style="{StaticResource PrimaryButtonStyle}"
-                            VerticalAlignment="Center" 
                             Command="{Binding AddToDownloadsCommand}"
                             CommandParameter="{Binding ElementName=ResultsGrid, Path=SelectedItems}"
-                            Padding="16,10"/>
-                    <TextBlock Text="{Binding SelectedTrackCount, StringFormat='({0} selected)'}"
-                               Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center"
-                               Margin="16,0,0,0" FontSize="{StaticResource FontSizeSmall}"/>
+                            Height="42" Padding="20,10" FontSize="14" FontWeight="SemiBold">
+                        <Button.Effect>
+                            <DropShadowEffect BlurRadius="8" ShadowDepth="2" Opacity="0.3" Color="{StaticResource AccentColor}"/>
+                        </Button.Effect>
+                    </Button>
+                    <Border Background="{StaticResource SurfaceBrush}" 
+                            CornerRadius="20" Padding="12,6" Margin="16,0,0,0"
+                            VerticalAlignment="Center"
+                            BorderBrush="{StaticResource BorderBrush}" BorderThickness="1">
+                        <TextBlock Foreground="{StaticResource AccentBrush}" 
+                                   FontSize="13" FontWeight="SemiBold">
+                            <Run Text="{Binding SelectedTrackCount, Mode=OneWay}"/>
+                            <Run Text=" selected" Foreground="{StaticResource TextSecondaryBrush}" FontWeight="Normal"/>
+                        </TextBlock>
+                    </Border>
                 </StackPanel>
                 
                 <!-- Status Message -->

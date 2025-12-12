@@ -171,7 +171,8 @@ public class MainViewModel : INotifyPropertyChanged
         // Initialize commands
         LoginCommand = new AsyncRelayCommand<string>(LoginAsync, (pwd) => !IsConnected && !string.IsNullOrEmpty(pwd));
         SearchCommand = new AsyncRelayCommand(SearchAsync, () =>
-            !IsSearching && !string.IsNullOrEmpty(SearchQuery) && (IsConnected || LooksLikeSpotifyUrl(SearchQuery)));
+            !IsSearching && !string.IsNullOrEmpty(SearchQuery) && 
+            (IsConnected || LooksLikeSpotifyUrl(SearchQuery) || LooksLikeCsvFilePath(SearchQuery)));
         AddToDownloadsCommand = new RelayCommand<IList<object>?>(AddToDownloads, items => items is { Count: > 0 });
         ImportCsvCommand = new AsyncRelayCommand<string>(ImportCsvAsync, filePath => !string.IsNullOrEmpty(filePath));
         ImportFromSpotifyCommand = new AsyncRelayCommand(() => ImportFromSpotifyAsync());
@@ -263,7 +264,7 @@ public class MainViewModel : INotifyPropertyChanged
         try
         {
             var decryptedPassword = _protectedDataService.Unprotect(_config.Password);
-            Username = _config.Username;
+            Username = _config.Username ?? "";
             await LoginAsync(decryptedPassword);
             _logger.LogInformation("Auto-login successful");
         }
@@ -360,6 +361,34 @@ public class MainViewModel : INotifyPropertyChanged
             || q.Contains("open.spotify.com/album/", StringComparison.OrdinalIgnoreCase);
     }
 
+    private bool LooksLikeCsvFilePath(string? query)
+    {
+        if (string.IsNullOrWhiteSpace(query)) return false;
+
+        var q = query.Trim();
+        
+        // Check if it looks like a file path (Windows or Unix style)
+        // Windows: C:\path\to\file.csv or \\network\path\file.csv
+        // Unix: /path/to/file.csv or ~/path/to/file.csv
+        var hasPathCharacters = q.Contains('\\') || q.Contains('/');
+        var endsWithCsv = q.EndsWith(".csv", StringComparison.OrdinalIgnoreCase);
+        
+        // Additional check: if it contains path characters and .csv, try to see if file exists
+        if (hasPathCharacters && endsWithCsv)
+        {
+            try
+            {
+                return System.IO.File.Exists(q);
+            }
+            catch
+            {
+                return false;
+            }
+        }
+        
+        return false;
+    }
+
     public bool IsConnected
     {
         get => _isConnected;
@@ -375,22 +404,24 @@ public class MainViewModel : INotifyPropertyChanged
         }
     }
 
-    private bool _isLoginOverlayVisible = false;
-    public bool IsLoginOverlayVisible
-    {
-        get => _isLoginOverlayVisible;
-        set
-        {
-            if (_isLoginOverlayVisible != value)
-            {
-                _isLoginOverlayVisible = value;
-                OnPropertyChanged();
-            }
-        }
-    }
+    private bool _loginDismissed = false;
     
-    public ICommand ShowLoginCommand => new RelayCommand(() => IsLoginOverlayVisible = true);
-    public ICommand DismissLoginCommand => new RelayCommand(() => IsLoginOverlayVisible = false);
+    /// <summary>
+    /// Login overlay is visible when not connected AND user hasn't dismissed it.
+    /// </summary>
+    public bool IsLoginOverlayVisible => !IsConnected && !_loginDismissed;
+    
+    public ICommand ShowLoginCommand => new RelayCommand(() => 
+    {
+        _loginDismissed = false;
+        OnPropertyChanged(nameof(IsLoginOverlayVisible));
+    });
+    
+    public ICommand DismissLoginCommand => new RelayCommand(() => 
+    {
+        _loginDismissed = true;
+        OnPropertyChanged(nameof(IsLoginOverlayVisible));
+    });
 
     /// <summary>
     /// Connection status string for display (e.g., "Connected", "Disconnected").
@@ -693,6 +724,23 @@ public class MainViewModel : INotifyPropertyChanged
             }
         }
 
+        // CSV file path detection: C:\path\to\file.csv or /path/to/file.csv
+        if (LooksLikeCsvFilePath(SearchQuery))
+        {
+            try
+            {
+                IsSearching = true;
+                StatusText = $"Importing CSV file: {System.IO.Path.GetFileName(SearchQuery)}";
+                _logger.LogInformation("Detected CSV file path: {Path}", SearchQuery);
+                await ImportCsvAsync(SearchQuery);
+            }
+            finally
+            {
+                IsSearching = false;
+            }
+            return;
+        }
+
         // Spotify URL path: import without requiring Soulseek connection
         if (LooksLikeSpotifyUrl(SearchQuery))
         {
@@ -740,13 +788,13 @@ public class MainViewModel : INotifyPropertyChanged
             var resultsBuffer = new ConcurrentBag<Track>();
             var allResults = new List<Track>(); // Collect all results for ranking
             
-            // Use a timer to batch UI updates
+            // Use a timer to batch UI updates - only for album mode or if ranking is disabled
             using var timer = new PeriodicTimer(TimeSpan.FromMilliseconds(250));
             var batchUpdateTask = Task.Run(async () =>
             {
                 while (await timer.WaitForNextTickAsync(searchToken))
                 {
-                    if (!resultsBuffer.IsEmpty)
+                    if (!resultsBuffer.IsEmpty && IsAlbumSearch)
                     {
                         var batch = new List<Track>();
                         while(resultsBuffer.TryTake(out var track))
@@ -755,7 +803,7 @@ public class MainViewModel : INotifyPropertyChanged
                             allResults.Add(track); // Accumulate for ranking
                         }
 
-                        if (batch.Any() && !IsAlbumSearch)
+                        if (batch.Any())
                         {
                             System.Windows.Application.Current.Dispatcher.Invoke(() =>
                             {
@@ -767,6 +815,14 @@ public class MainViewModel : INotifyPropertyChanged
                             });
                         }
                     }
+                    else if (!resultsBuffer.IsEmpty)
+                    {
+                        // For track mode, just accumulate without showing - we'll rank and display at the end
+                        while(resultsBuffer.TryTake(out var track))
+                        {
+                            allResults.Add(track);
+                        }
+                    }
                 }
             }, searchToken);
 
@@ -774,10 +830,8 @@ public class MainViewModel : INotifyPropertyChanged
             {
                 foreach(var track in tracks)
                 {
-                    // Keep streaming UI updates
+                    // Collect for final ranking
                     resultsBuffer.Add(track);
-                    // Collect for final ranking to ensure all results are ranked
-                    allResults.Add(track);
                 }
             }, searchToken);
             

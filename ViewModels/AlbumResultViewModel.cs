@@ -85,12 +85,12 @@ public class AlbumResultViewModel
             {
                 Id = System.Guid.NewGuid(),
                 PlaylistId = job.Id,
-                Artist = t.Artist,
-                Title = t.Title,
-                Album = AlbumTitle,
+                Artist = t.Artist ?? "",
+                Title = t.Title ?? "",
+                Album = AlbumTitle ?? "",
                 Status = TrackStatus.Missing,
-                TrackUniqueHash = t.UniqueHash,
-                ResolvedFilePath = null,
+                TrackUniqueHash = t.UniqueHash ?? "",
+                ResolvedFilePath = string.Empty,
                 AddedAt = System.DateTime.Now
             };
             

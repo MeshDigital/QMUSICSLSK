@@ -55,9 +55,9 @@ public class ConfigManager
 
             _config = new AppConfig
             {
-                SoulseekServer = config["Soulseek:Server"],
+                SoulseekServer = config["Soulseek:Server"] ?? "vps.slsknet.org",
                 SoulseekPort = int.TryParse(config["Soulseek:Port"], out var sPort) ? sPort : 2242,
-                Username = config["Soulseek:Username"],
+                Username = config["Soulseek:Username"] ?? "",
                 Password = config["Soulseek:Password"],
                 ListenPort = int.TryParse(config["Soulseek:ListenPort"], out var port) ? port : 49998,
                 UseUPnP = bool.TryParse(config["Soulseek:UseUPnP"], out var upnp) && upnp,
