@@ -1,41 +1,152 @@
-# SLSKDONET: Roadmap to v1.0
+# SLSKDONET: Current Status & Roadmap
 
-This roadmap outlines the strategic steps to elevate SLSKDONET from a functional prototype to a robust, "daily driver" application.
+## ✅ Completed Features
 
-## 1. The Stability Layer: Persistence (Priority: 🟢 Completed)
-**Current State**: **Implemented**. SQLite integration is live. Library and Download Manager share a unified persistence layer.
-**The Plan**:
-- [x] **Database**: Integrate **SQLite** (lightweight, zero-config).
-- [x] **Migration**: Move `PlaylistTrackViewModel` state to persistent storage.
-- [x] **Lifecycle**: On app launch, restore all `Pending`, `Paused`, and `Failed` tracks.
-- [x] **History**: Keep a log of `Completed` downloads for user reference.
+### Core Infrastructure
+- **Persistence Layer**: SQLite database with Entity Framework Core
+- **Download Management**: Concurrent downloads with progress tracking
+- **Library System**: Playlist management with drag-and-drop organization
+- **Audio Playback**: Built-in player with LibVLC integration
+- **Import System**: Multi-source imports (Spotify, CSV, manual)
 
-## 2. The Missing Core: True Album Downloading (Priority: 🟠 High)
-**Current State**: `SoulseekAdapter` finds album directories but doesn't process them. Users must pick tracks individually.
-**The Plan**:
-- **Directory Parsing**: Implement recursive file enumeration for `DownloadMode.Album`.
-- **Grouping**: Update `LibraryViewModel` to group tracks by `Album` header.
-- **Batch Logic**: Create `AlbumDownloadJob` that acts as a parent task for multiple files.
+### User Experience
+- **Modern UI**: Dark-themed WPF interface with WPF-UI controls
+- **Drag-and-Drop**: Visual playlist organization with adorners
+- **Console Diagnostics**: Debug mode with detailed logging
+- **Version Display**: Application version shown in status bar
+- **Responsive Design**: Async operations keep UI responsive
 
-## 3. The Visual Experience: UI Polish (Priority: 🟡 Medium)
-**Current State**: Functional, data-dense, text-heavy.
-**The Plan**:
-- **Album Art**: Integrate a metadata provider (e.g., Last.fm or Spotify API) to fetch cover art based on Artist/Album tags.
-- **Styling**: Implement a consistent Design System (Colors, Typography) using `WPF UI` or modern styles.
-- **Feedback**: Add toast notifications for "Download Complete" or "Search Finished".
-
-## 4. Automation: The "Wishlist" (Priority: 🟢 Low/Future)
-**Current State**: Manual Search -> Download flow.
-**The Plan**:
-- **Wishlist**: Users add "Artist - Album" to a watch list.
-- **Sentinel**: A low-priority background worker searches periodically (e.g., every 30 mins).
-- **Auto-Snatch**: Automatically queues items that meet strict criteria (e.g., 320kbps + Free Slot).
-
-## 5. Performance Improvements
-- **Virtualization**: Ensure `DataGrid` enables UI virtualization to handle 10,000+ items without lag.
-- **Memory Management**: Optimize `ObservableCollection` updates (using `AddRange` patterns) to reduce UI thread thrashing.
+### Technical Achievements
+- **Database Concurrency**: Proper entity state management
+- **UI Refresh**: Real-time updates from database
+- **File Path Resolution**: Smart lookup from DownloadManager
+- **Error Handling**: Comprehensive diagnostics and user feedback
 
 ---
 
-## Recommended Next Step: 1. Persistence
-Implementing SQLite persistence is the most high-impact change for user trust. It transforms the app from a "session tool" to a "library manager".
+## 🚧 In Progress
+
+### Album Downloading
+**Status**: Partial implementation
+- Directory enumeration exists in `SoulseekAdapter`
+- Needs UI grouping and batch download logic
+- **Priority**: High
+
+### Search Ranking
+**Status**: Implemented but needs refinement
+- Basic ranking system in place
+- Could benefit from user feedback tuning
+- **Priority**: Medium
+
+---
+
+## 🎯 Planned Features
+
+### High Priority
+
+#### 1. Album Download Completion
+- Recursive directory parsing for album mode
+- UI grouping by album in Library view
+- Batch download job management
+- **Impact**: Major feature gap
+
+#### 2. Metadata Enrichment
+- Album art fetching (Last.fm/Spotify API)
+- Automatic ID3 tag writing
+- Cover art display in Library
+- **Impact**: Visual polish
+
+#### 3. Download Resume
+- Partial file recovery after crashes
+- Resume interrupted downloads
+- Better error recovery
+- **Impact**: Reliability
+
+### Medium Priority
+
+#### 4. Advanced Filters
+- Bitrate range sliders
+- Format multi-select
+- Length tolerance
+- User/uploader filters
+- **Impact**: Power user features
+
+#### 5. Playlist Export
+- Export to M3U/M3U8
+- Export to CSV
+- Spotify playlist sync
+- **Impact**: Workflow integration
+
+#### 6. Batch Operations
+- Multi-select in Library
+- Bulk delete/move
+- Batch metadata editing
+- **Impact**: Efficiency
+
+### Low Priority / Future
+
+#### 7. Wishlist/Auto-Download
+- Background monitoring for new releases
+- Auto-queue matching tracks
+- Notification system
+- **Impact**: Automation
+
+#### 8. Statistics Dashboard
+- Download history charts
+- Library analytics
+- Source statistics
+- **Impact**: Nice-to-have
+
+#### 9. Themes
+- Light mode option
+- Custom color schemes
+- User-defined themes
+- **Impact**: Personalization
+
+---
+
+## 🐛 Known Issues
+
+### Critical
+- None currently
+
+### Minor
+- Drag-and-drop adorner positioning on high-DPI displays
+- Occasional UI thread delays with large playlists (10k+ tracks)
+
+---
+
+## 📊 Performance Targets
+
+- **Startup Time**: < 2 seconds
+- **Search Response**: < 5 seconds for 100 results
+- **Download Throughput**: Limited by network and Soulseek peers
+- **UI Responsiveness**: No freezes during background operations
+- **Database Operations**: < 100ms for typical queries
+
+---
+
+## 🔄 Recent Changes (v1.0.0)
+
+- ✅ Fixed database concurrency exception in drag-and-drop
+- ✅ Added UI refresh after playlist modifications
+- ✅ Implemented file path resolution from DownloadManager
+- ✅ Added taskbar icon with transparent background
+- ✅ Enabled console diagnostics for debug builds
+- ✅ Added version display in status bar
+
+---
+
+## 📝 Next Immediate Actions
+
+1. **Complete album downloading** - Highest user impact
+2. **Add metadata/cover art** - Visual polish
+3. **Implement download resume** - Reliability improvement
+4. **Performance optimization** - Handle larger libraries
+5. **User documentation** - Tutorials and guides
+
+---
+
+**Last Updated**: December 13, 2024
+**Current Version**: 1.0.0
+**Status**: Active Development

@@ -7,8 +7,9 @@
 │                         UI Layer                            │
 │  ┌─────────────────────────────┐   ┌──────────────────────┐ │
 │  │ MainWindow (navigation shell)│  │ WPF Pages (Search,   │ │
-│  │ ├─ NavigationService         │  │ Imported, Downloads, │ │
-│  │ └─ Status/Hotkeys            │  │ Library, Settings)   │ │
+│  │ ├─ NavigationService         │  │ Library, Downloads,  │ │
+│  │ ├─ PlayerViewModel           │  │ Settings, History)   │ │
+│  │ └─ Drag-and-Drop Adorners    │  │                      │ │
 │  └──────────────┬───────────────┘   └───────────┬──────────┘ │
 │                 │                               │            │
 │                 ▼                               ▼            │
@@ -16,117 +17,179 @@
 │        │              MainViewModel (App Brain)          │   │
 │        │  - Commands for navigation & orchestration      │   │
 │        │  - Surface collections (SearchResults, Library) │   │
-│        │  - Diagnostics harness & status pipeline        │   │
+│        │  - Connection status & global state             │   │
 │        └───────────────┬─────────────────────────────────┘   │
 └────────────────────────┼──────────────────────────────────────┘
-                                                 │
-                        ┌────────────▼────────────┐
-                        │   Application Services  │
-                        │  DownloadManager        │
-                        │  LibraryService         │
-                        │  Spotify/Csv Input      │
-                        │  Metadata/Tagging       │
-                        └────────────┬────────────┘
-                                                 │
-                        ┌────────────▼────────────┐
-                        │ Infrastructure Layer    │
-                        │  SoulseekAdapter        │
-                        │  DatabaseService (EF)   │
-                        │  ConfigManager (INI)    │
-                        │  FileNameFormatter      │
-                        └─────────────────────────┘
+                         │
+        ┌────────────────▼────────────────┐
+        │   Application Services          │
+        │  DownloadManager                │
+        │  LibraryService                 │
+        │  AudioPlayerService (LibVLC)    │
+        │  ImportOrchestrator             │
+        │  MetadataService                │
+        └────────────┬────────────────────┘
+                     │
+        ┌────────────▼────────────────┐
+        │ Infrastructure Layer        │
+        │  SoulseekAdapter            │
+        │  DatabaseService (EF Core)  │
+        │  ConfigManager (INI)        │
+        │  Import Providers           │
+        │   ├─ SpotifyImportProvider  │
+        │   ├─ CsvImportProvider      │
+        │   └─ ManualImportProvider   │
+        └─────────────────────────────┘
 ```
 
-The application layers are wired using `Microsoft.Extensions.DependencyInjection` inside `App.xaml.cs`. All services are singletons unless the page/view requires a transient instance.
+The application uses `Microsoft.Extensions.DependencyInjection` for service wiring in `App.xaml.cs`. All services are singletons unless otherwise specified.
 
 ## Navigation Shell
 
-- `MainWindow` hosts a left-hand navigation rail with `Frame` navigation managed by `NavigationService`.
-- Pages share the same `MainViewModel` instance, exposing state across the shell.
-- `Ctrl+R` is bound globally to `RunDiagnosticsCommand` through `Window.InputBindings`.
-- The global status bar reflects connection state, download counters, and provides login/disconnect actions.
+- `MainWindow` hosts a left-hand navigation rail with `Frame` navigation managed by `NavigationService`
+- Pages share the same `MainViewModel` instance for cross-page state
+- Global status bar shows connection state, download progress, and version number
+- Player sidebar (collapsible) for audio playback control
 
-## Playlist Import Pipeline
+## Import Pipeline
 
 ```
-User action (CSV path / Spotify URL / manual query)
+User action (Spotify URL / CSV file / manual query)
                 │
                 ▼
 ┌────────────────────────────┐
-│ Input Sources (IInputSource)│
-│  - CsvInputSource           │
-│  - SpotifyInputSource       │
-│  - SpotifyScraperInputSource│
-│  - Ad-hoc manual inputs     │
+│ Import Providers           │
+│  - SpotifyImportProvider   │
+│  - CsvImportProvider       │
+│  - ManualImportProvider    │
 └──────────────┬─────────────┘
-                             │ SearchQuery list
-                             ▼
+               │ ImportResult
+               ▼
 ┌────────────────────────────┐
-│ SearchQueryNormalizer      │
-│  - Clean featuring markers │
-│  - Trim noise words        │
-│  - Standardize casing      │
+│ ImportOrchestrator         │
+│  - Validates tracks        │
+│  - Creates PlaylistJob     │
+│  - Persists to database    │
 └──────────────┬─────────────┘
-                             │ Normalized queries
-                             ▼
-┌────────────────────────────┐
-│ MainViewModel.Imported     │
-│  - `ImportedQueries` list  │
-│  - Import preview dialog   │
-└──────────────┬─────────────┘
-                             │ `SearchAllImported`
-                             ▼
-┌────────────────────────────┐
-│ PlaylistJob (Models)       │
-│  - Stored in LibraryService│
-│  - Persisted via Database  │
-└──────────────┬─────────────┘
-                             │
-                             ▼
-DownloadManager.QueueProject -> global processing loop
+               │
+               ▼
+DownloadManager.QueueProject → global processing loop
 ```
 
 ## Download Orchestration
 
-- `DownloadManager` maintains `ObservableCollection<PlaylistTrackViewModel>` (`AllGlobalTracks`) with cross-thread synchronization.
-- Tracks flow through `PlaylistTrackState` (Pending → Searching → Downloading → Completed/Failed). Properties fire change notifications consumed by pages.
-- `SemaphoreSlim` enforces `MaxConcurrentDownloads` from configuration. Concurrency is re-evaluated on each loop iteration for responsive throttling.
-- Metadata enrichment (album art, tagging) is performed asynchronously via `IMetadataService` and `ITaggerService` while downloads proceed.
-- Events: `TrackUpdated` notifies `MainViewModel` to refresh counters and global progress.
+- `DownloadManager` maintains `ObservableCollection<PlaylistTrackViewModel>` (`AllGlobalTracks`)
+- Tracks flow through states: Pending → Searching → Downloading → Completed/Failed
+- `SemaphoreSlim` enforces `MaxConcurrentDownloads` from configuration
+- Metadata enrichment (album art, tagging) runs asynchronously via `IMetadataService`
+- Events: `TrackUpdated`, `ProjectAdded`, `ProjectUpdated` notify ViewModels
+
+## Audio Playback System
+
+```
+User action (double-click track / drag to player)
+                │
+                ▼
+┌────────────────────────────┐
+│ PlayerViewModel            │
+│  - PlayTrack(path)         │
+│  - Pause/Resume/Stop       │
+│  - Volume control          │
+└──────────────┬─────────────┘
+               │
+               ▼
+┌────────────────────────────┐
+│ IAudioPlayerService        │
+│  (AudioPlayerService)      │
+│  - LibVLC wrapper          │
+│  - IsInitialized check     │
+│  - Media player instance   │
+└────────────────────────────┘
+```
+
+**LibVLC Integration**:
+- Native libraries loaded from `libvlc/` folder in output directory
+- Initialization checked on startup; UI shows error if libraries missing
+- Supports MP3, FLAC, WAV, and other common formats
+
+## Drag-and-Drop System
+
+```
+User drags track from DataGrid
+                │
+                ▼
+┌────────────────────────────┐
+│ LibraryPage.xaml.cs        │
+│  - MouseDown handler       │
+│  - DragAdorner creation    │
+│  - DoDragDrop call         │
+└──────────────┬─────────────┘
+               │
+               ▼
+┌────────────────────────────┐
+│ Drop Targets               │
+│  - Playlist ListBox        │
+│  - Player sidebar          │
+└──────────────┬─────────────┘
+               │
+               ▼
+┌────────────────────────────┐
+│ LibraryViewModel           │
+│  - AddToPlaylist()         │
+│  - Resolves file paths     │
+│  - Persists to database    │
+│  - Reloads UI              │
+└────────────────────────────┘
+```
+
+**Visual Feedback**:
+- `DragAdorner` shows track info during drag
+- Console logging (`[DRAG]` prefix) for diagnostics
 
 ## Persistence Layer
 
-- `DatabaseService` wraps `AppDbContext` (EF Core + SQLite) with repositories for:
-    - `LibraryEntryEntity`: global library index keyed by `UniqueHash`.
-    - `PlaylistJobEntity`: playlist/job headers with soft delete and creation indexes.
-    - `PlaylistTrackEntity`: relational rows tracking per-track status and file metadata.
-- Database stored in `%AppData%\SLSKDONET\library.db`; schema is created automatically on startup.
-- `LibraryService` provides domain-friendly conversions (`EntityToPlaylistJob`, `EntityToPlaylistTrack`) and ensures timestamps stay accurate.
+- `DatabaseService` wraps `AppDbContext` (EF Core + SQLite):
+  - `LibraryEntryEntity`: Global library index by `UniqueHash`
+  - `PlaylistJobEntity`: Playlist/job headers with soft delete
+  - `PlaylistTrackEntity`: Per-track status and file metadata
+  - `PlaylistActivityLogEntity`: Activity history for playlists
+- Database: `%AppData%\SLSKDONET\library.db`
+- Schema created automatically on startup with migration support
+- `LibraryService` provides domain-friendly conversions
 
 ## Configuration & Secrets
 
-- `ConfigManager` manages `%AppData%\SLSKDONET\config.ini`, providing defaults if the file is missing.
-- `AppConfig` is injected into services; `ProtectedDataService` encrypts stored passwords when `RememberPassword` is enabled.
-- Runtime adjustments (e.g., change download directory or concurrency) are applied through `SaveSettingsCommand` and persisted immediately.
+- `ConfigManager` manages `%AppData%\SLSKDONET\config.ini`
+- `AppConfig` injected into services
+- `ProtectedDataService` encrypts passwords using Windows DPAPI
+- Runtime settings changes persist immediately via `SaveSettingsCommand`
+
+## Diagnostics System
+
+### Console Output (Debug Builds)
+- Debug builds (`OutputType=Exe`) show console window
+- Release builds (`OutputType=WinExe`) hide console
+- All `Console.WriteLine()` and `Debug.WriteLine()` visible in console
+- Prefixes: `[DRAG]`, `[PLAYBACK]`, `info:`, `warn:`, `fail:`
+
+### UI Diagnostics
+- Version number displayed in status bar
+- Player initialization status shown in player sidebar
+- Connection status in status bar
+- Download progress with real-time counters
 
 ## Eventing & Status Propagation
 
-- `SoulseekAdapter` exposes an `EventBus` (Reactive `Subject<(string eventType, object data)>`) to surface connection, search, and transfer events.
-- `MainViewModel` maps adapter state into UI-friendly properties (`IsConnected`, `StatusText`).
-- `DownloadManager` fires `TrackUpdated` whenever a `PlaylistTrackViewModel` changes; this keeps global counters accurate.
-- `MainWindow` status bar binds to `SuccessfulCount`, `FailedCount`, and `TodoCount` through `MainViewModel` projections over `AllGlobalTracks`.
-
-## Diagnostics Harness
-
-- `RunDiagnosticsHarnessAsync` seeds a temporary `PlaylistJob` with synthetic tracks, persists them, and verifies the library view refresh.
-- Temporary files are created under `%TEMP%` to simulate downloaded payloads and are cleaned up afterwards.
-- The harness preserves the original imported query list, avoiding user data loss during diagnostics runs.
+- `SoulseekAdapter` exposes `EventBus` (Reactive `Subject<>`) for network events
+- `MainViewModel` maps adapter state to UI properties (`IsConnected`, `StatusText`)
+- `DownloadManager` fires `TrackUpdated` for progress updates
+- `LibraryService` fires `ProjectDeleted`, `ProjectUpdated` for library changes
 
 ## Extensibility Points
 
-- **Input Sources**: implement `IInputSource` and register with DI to add new playlist providers.
-- **Metadata**: add alternative `IMetadataService` implementations for richer tagging/cover art pipelines.
-- **UI Pages**: register additional pages through `NavigationService.RegisterPage` in `MainWindow` initialization.
-- **Diagnostics**: extend the harness to include bespoke checks (e.g., metadata validation) without touching the production pipeline.
+- **Import Providers**: Implement `IImportProvider` and register with `ImportOrchestrator`
+- **Metadata Services**: Add alternative `IMetadataService` implementations
+- **Audio Backends**: Replace `IAudioPlayerService` implementation
+- **UI Pages**: Register additional pages via `NavigationService.RegisterPage`
 
-This architecture aligns with MVVM best practices, keeps orchestration logic within a single view model for observability, and centralizes persistence so large batches can be resumed across sessions.
+This architecture follows MVVM best practices, centralizes orchestration in ViewModels, and uses SQLite for persistence to support large-scale batch operations across sessions.
