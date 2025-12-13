@@ -88,6 +88,7 @@ public partial class App : System.Windows.Application
             
             // Start the Download Manager loop
             var downloadManager = Services.GetRequiredService<DownloadManager>();
+            downloadManager.InitAsync().GetAwaiter().GetResult(); // Load historical tracks from DB
             _ = downloadManager.StartAsync(); // Fire and forget background loop
 
             mainWindow.Show();

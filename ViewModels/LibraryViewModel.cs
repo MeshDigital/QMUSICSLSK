@@ -170,8 +170,11 @@ public class LibraryViewModel : INotifyPropertyChanged
         RemoveTrackCommand = new RelayCommand<object>(_ => { /* TODO: Implement Remove Track */ });
 
         // Initialize Views
-        ActiveDownloadsView = new ListCollectionView(_downloadManager.AllGlobalTracks);
-        ActiveDownloadsView.Filter = o => (o as PlaylistTrackViewModel)?.IsActive == true;
+        var activeView = new ListCollectionView(_downloadManager.AllGlobalTracks);
+        activeView.Filter = o => (o as PlaylistTrackViewModel)?.IsActive == true;
+        activeView.IsLiveFiltering = true;
+        activeView.LiveFilteringProperties.Add(nameof(PlaylistTrackViewModel.IsActive));
+        ActiveDownloadsView = activeView;
 
         // Subscribe to global track updates for live project track status
         _downloadManager.TrackUpdated += OnGlobalTrackUpdated;

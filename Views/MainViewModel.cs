@@ -217,8 +217,13 @@ public class MainViewModel : INotifyPropertyChanged
         });
         
         // Initialize Filtered View explicitly to avoid shared view issues
-        FilteredGlobalTracks = new ListCollectionView(_downloadManager.AllGlobalTracks);
-        FilteredGlobalTracks.Filter = FilterDownloads;
+        var filteredView = new ListCollectionView(_downloadManager.AllGlobalTracks);
+        filteredView.Filter = FilterDownloads;
+        filteredView.IsLiveFiltering = true;
+        filteredView.LiveFilteringProperties.Add(nameof(PlaylistTrackViewModel.State));
+        filteredView.LiveFilteringProperties.Add(nameof(PlaylistTrackViewModel.Artist));
+        filteredView.LiveFilteringProperties.Add(nameof(PlaylistTrackViewModel.Title));
+        FilteredGlobalTracks = filteredView;
 
         RescanLibraryCommand = new AsyncRelayCommand(RescanLibraryAsync);
         StartDownloadsCommand = new AsyncRelayCommand(StartDownloadsAsync, () => Downloads.Any(j => j.State == DownloadState.Pending));
