@@ -447,11 +447,24 @@ public class LibraryViewModel : INotifyPropertyChanged
             
             _logger.LogInformation("Found {Count} audio files in download directory", files.Count);
             
+            // Log first 5 filenames for debugging
+            if (files.Count > 0)
+            {
+                _logger.LogInformation("Sample filenames in download folder:");
+                foreach (var file in files.Take(5))
+                {
+                    _logger.LogInformation("  - {FileName}", System.IO.Path.GetFileName(file));
+                }
+            }
+            
             int resolved = 0;
             foreach (var track in tracksNeedingPaths)
             {
-                // Try to find a matching file by artist and title
-                var matchingFile = files.FirstOrDefault(f =>
+                // Try multiple matching strategies in order of confidence
+                string? matchingFile = null;
+                
+                // Strategy 1: Artist AND Title match (original logic)
+                matchingFile = files.FirstOrDefault(f =>
                 {
                     var fileName = System.IO.Path.GetFileNameWithoutExtension(f);
                     var artistMatch = !string.IsNullOrEmpty(track.Artist) && 
@@ -461,11 +474,33 @@ public class LibraryViewModel : INotifyPropertyChanged
                     return artistMatch && titleMatch;
                 });
                 
+                // Strategy 2: Title-only match (fallback for different artist formats)
+                if (matchingFile == null && !string.IsNullOrEmpty(track.Title))
+                {
+                    matchingFile = files.FirstOrDefault(f =>
+                    {
+                        var fileName = System.IO.Path.GetFileNameWithoutExtension(f);
+                        return fileName.Contains(track.Title, StringComparison.OrdinalIgnoreCase);
+                    });
+                }
+                
+                // Strategy 3: Normalized matching (remove special chars, underscores, etc.)
+                if (matchingFile == null && !string.IsNullOrEmpty(track.Title))
+                {
+                    var normalizedTitle = NormalizeForMatching(track.Title);
+                    matchingFile = files.FirstOrDefault(f =>
+                    {
+                        var fileName = System.IO.Path.GetFileNameWithoutExtension(f);
+                        var normalizedFileName = NormalizeForMatching(fileName);
+                        return normalizedFileName.Contains(normalizedTitle, StringComparison.OrdinalIgnoreCase);
+                    });
+                }
+                
                 if (matchingFile != null)
                 {
                     track.ResolvedFilePath = matchingFile;
-                    _logger.LogInformation("Resolved path for {Artist} - {Title}: {Path}", 
-                        track.Artist, track.Title, matchingFile);
+                    _logger.LogInformation("✅ Resolved path for {Artist} - {Title}: {Path}", 
+                        track.Artist, track.Title, System.IO.Path.GetFileName(matchingFile));
                     resolved++;
                     
                     // Save to database
@@ -483,16 +518,30 @@ public class LibraryViewModel : INotifyPropertyChanged
             }
             
             _logger.LogInformation("Resolved {Resolved}/{Total} missing file paths", resolved, tracksNeedingPaths.Count);
-            
-            if (_mainViewModel != null)
-            {
-                _mainViewModel.StatusText = $"Resolved {resolved} missing file paths";
-            }
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to resolve missing file paths");
+            _logger.LogError(ex, "Error during file path resolution");
         }
+    }
+    
+    // Helper method to normalize strings for matching
+    private string NormalizeForMatching(string input)
+    {
+        if (string.IsNullOrEmpty(input)) return string.Empty;
+        
+        // Remove special characters, convert to lowercase, replace separators with spaces
+        return input
+            .Replace("_", " ")
+            .Replace("-", " ")
+            .Replace("&", "and")
+            .Replace("(", "")
+            .Replace(")", "")
+            .Replace("[", "")
+            .Replace("]", "")
+            .Replace(".", " ")
+            .ToLowerInvariant()
+            .Trim();
     }
     private async void OnProjectAdded(object? sender, ProjectEventArgs e)
     {
