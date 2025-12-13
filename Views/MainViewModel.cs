@@ -1160,7 +1160,6 @@ public class MainViewModel : INotifyPropertyChanged
                 {
                     ImportPreviewViewModel = null;
                     StatusText = "Import cancelled";
-                    _navigationService.GoBack();
                 };
                 
                 // Navigate to the dedicated import preview page

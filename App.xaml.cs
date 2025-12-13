@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging;
 using SLSKDONET.Configuration;
 using SLSKDONET.Services.InputParsers;
 using SLSKDONET.Services;
+using SLSKDONET.ViewModels;
 using SLSKDONET.Views;
 
 namespace SLSKDONET;

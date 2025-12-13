@@ -73,7 +73,7 @@
         <!-- Footer Actions -->
         <Border Grid.Row="3" Background="#2a2a2a" Padding="10">
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                <TextBlock Text="{Binding SelectedCount, StringFormat='{0} tracks selected'}" 
+                <TextBlock Text="{Binding SelectedCount, StringFormat={}{0} tracks selected}" 
                            VerticalAlignment="Center" Margin="0,0,20,0" Foreground="LightGray"/>
                 <Button Content="Cancel" Command="{Binding CancelCommand}" Width="100" Margin="0,0,10,0" IsCancel="True"/>
                 <Button Content="Add to Library" Command="{Binding AddToLibraryCommand}" Width="120" IsDefault="True"

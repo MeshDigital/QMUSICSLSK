@@ -161,7 +161,9 @@ public class DatabaseService
     public async Task<List<PlaylistJobEntity>> LoadAllPlaylistJobsAsync()
     {
         using var context = new AppDbContext();
-        return await context.PlaylistJobs.AsNoTracking()
+        return await context.PlaylistJobs
+            .AsNoTracking()
+            .Where(j => !j.IsDeleted)
             .Include(j => j.Tracks)
             .OrderByDescending(j => j.CreatedAt)
             .ToListAsync();
