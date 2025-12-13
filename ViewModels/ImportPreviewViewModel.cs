@@ -9,6 +9,7 @@ using System.Windows.Input;
 using Microsoft.Extensions.Logging;
 using SLSKDONET.Models;
 using SLSKDONET.Services;
+using SLSKDONET.Services;
 using SLSKDONET.Views;
 
 namespace SLSKDONET.ViewModels;
@@ -22,6 +23,7 @@ public class ImportPreviewViewModel : INotifyPropertyChanged
     private readonly ILogger<ImportPreviewViewModel> _logger;
     private readonly DownloadManager _downloadManager;
     private readonly ILibraryService? _libraryService;
+    private readonly INavigationService _navigationService;
     
     private string _sourceTitle = "Import Preview";
     private string _sourceType = "";
@@ -96,11 +98,13 @@ public class ImportPreviewViewModel : INotifyPropertyChanged
     public ImportPreviewViewModel(
         ILogger<ImportPreviewViewModel> logger,
         DownloadManager downloadManager,
+        INavigationService navigationService,
         ILibraryService? libraryService = null)
     {
         _logger = logger;
         _downloadManager = downloadManager;
         _libraryService = libraryService;
+        _navigationService = navigationService;
 
         AddToLibraryCommand = new AsyncRelayCommand(AddToLibraryAsync, () => CanAddToLibrary);
         SelectAllCommand = new RelayCommand(SelectAll);
@@ -278,6 +282,45 @@ public class ImportPreviewViewModel : INotifyPropertyChanged
             SelectedCount = newCount;
             OnPropertyChanged(nameof(CanAddToLibrary));
         }
+    }
+
+    /// <summary>
+    /// Handles the logic when a playlist job is confirmed and added from the preview.
+    /// This was moved from MainViewModel to make this component more self-contained.
+    /// </summary>
+    public async Task HandlePlaylistJobAddedAsync(PlaylistJob job)
+    {
+        try
+        {
+            _logger.LogInformation("PlaylistJob added from ImportPreview: {Title} with {Count} tracks",
+                job.SourceTitle, job.OriginalTracks.Count);
+
+            // Queue project through DownloadManager to persist and add to Library.
+            await _downloadManager.QueueProject(job);
+
+            // Navigate to Library to see the new job.
+            _navigationService.NavigateTo("Library");
+
+            // Optionally, start the orchestration search automatically.
+            // This would require more dependencies, so for now we just navigate.
+            _logger.LogInformation("Navigated to Library. User can start search from there.");
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Error adding to library: {ex.Message}";
+            _logger.LogError(ex, "Failed to handle PlaylistJob addition");
+        }
+    }
+
+    /// <summary>
+    /// Handles the logic when the import is cancelled.
+    /// This was moved from MainViewModel.
+    /// </summary>
+    public void HandleCancellation()
+    {
+        // Navigate back to the search page on cancellation.
+        _navigationService.NavigateTo("Search");
+        _logger.LogInformation("Import cancelled, navigating back to Search page.");
     }
 
     protected void OnPropertyChanged([CallerMemberName] string? propertyName = null)

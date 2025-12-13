@@ -46,17 +46,14 @@ namespace SLSKDONET.Views
 
         private void PreviewTrackCard_MouseDown(object sender, MouseButtonEventArgs e)
         {
-            if (sender is Border border && border.DataContext is Track track && _viewModel?.ImportPreviewViewModel != null)
-            {
-                track.IsSelected = !track.IsSelected;
-                _viewModel.ImportPreviewViewModel.UpdateSelectedCount();
-                e.Handled = true;
-            }
+            // This handler is no longer needed as preview is now a dedicated page
+            // Track selection is handled in ImportPreviewPage
         }
 
         private void PreviewTrackSelectionChanged(object sender, RoutedEventArgs e)
         {
-            _viewModel?.ImportPreviewViewModel?.UpdateSelectedCount();
+            // This handler is no longer needed as preview is now a dedicated page
+            // Track selection is handled in ImportPreviewPage
         }
     }
 }

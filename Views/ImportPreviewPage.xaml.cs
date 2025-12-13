@@ -11,7 +11,8 @@ namespace SLSKDONET.Views
     {
         private readonly ImportPreviewViewModel _viewModel;
 
-        public ImportPreviewPage(ImportPreviewViewModel viewModel
+        public ImportPreviewPage(ImportPreviewViewModel viewModel, INavigationService navigationService)
+        {
             InitializeComponent();
             _viewModel = viewModel;
             DataContext = _viewModel;

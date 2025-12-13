@@ -59,9 +59,7 @@
                     <GridViewColumn Header="In Library" Width="80">
                         <GridViewColumn.CellTemplate>
                             <DataTemplate>
-                                <TextBlock Text="{Binding IsInLibrary, Converter={StaticResource BooleanToYesNoConverter}}" 
-                                           Foreground="{Binding IsInLibrary, Converter={StaticResource BooleanToColorConverter}}"
-                                           FontWeight="Bold"
+                                <TextBlock Text="{Binding IsInLibrary}" 
                                            HorizontalAlignment="Center"/>
                             </DataTemplate>
                         </GridViewColumn.CellTemplate>
@@ -77,7 +75,7 @@
                            VerticalAlignment="Center" Margin="0,0,20,0" Foreground="LightGray"/>
                 <Button Content="Cancel" Command="{Binding CancelCommand}" Width="100" Margin="0,0,10,0" IsCancel="True"/>
                 <Button Content="Add to Library" Command="{Binding AddToLibraryCommand}" Width="120" IsDefault="True"
-                        IsEnabled="{Binding CanAddToLibrary}" Style="{StaticResource AccentButtonStyle}"/>
+                        IsEnabled="{Binding CanAddToLibrary}"/>
             </StackPanel>
         </Border>
     </Grid>

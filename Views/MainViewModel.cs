@@ -103,7 +103,7 @@ public class MainViewModel : INotifyPropertyChanged
     public ICommand ImportCsvCommand { get; }
     public ICommand StartDownloadsCommand { get; }
     public ICommand ImportFromSpotifyCommand { get; }
-    public ICommand RemoveFromLibraryCommand { get; }
+    // public ICommand RemoveFromLibraryCommand { get; } // LEGACY
     public ICommand RescanLibraryCommand { get; }
     public ICommand CancelDownloadsCommand { get; }
     public ICommand ToggleFiltersPanelCommand { get; }
@@ -188,7 +188,7 @@ public class MainViewModel : INotifyPropertyChanged
         AddToDownloadsCommand = new RelayCommand<IList<object>?>(AddToDownloads, items => items is { Count: > 0 });
         ImportCsvCommand = new AsyncRelayCommand<string>(ImportCsvAsync, filePath => !string.IsNullOrEmpty(filePath));
         ImportFromSpotifyCommand = new AsyncRelayCommand(() => ImportFromSpotifyAsync());
-        RemoveFromLibraryCommand = new RelayCommand<IList<object>?>(RemoveFromLibrary, items => items is { Count: > 0 });
+        // RemoveFromLibraryCommand = new RelayCommand<IList<object>?>(RemoveFromLibrary, items => items is { Count: > 0 }); // LEGACY
         RescanLibraryCommand = new AsyncRelayCommand(RescanLibraryAsync);
         StartDownloadsCommand = new AsyncRelayCommand(StartDownloadsAsync, () => Downloads.Any(j => j.State == DownloadState.Pending));
         CancelDownloadsCommand = new RelayCommand(CancelDownloads);
@@ -292,7 +292,7 @@ public class MainViewModel : INotifyPropertyChanged
         _logger.LogInformation("App startup complete - showing login overlay");
         
         // Load library asynchronously to avoid blocking UI thread
-        _ = LoadLibraryAsync();
+        // _ = LoadLibraryAsync(); // LEGACY - Library now managed by LibraryViewModel
     }
     
     private async Task AutoLoginAsync()
@@ -353,6 +353,8 @@ public class MainViewModel : INotifyPropertyChanged
         });
     }
 
+    // LEGACY: This method is no longer used. Library management now handled by LibraryViewModel.
+    /*
     private async Task LoadLibraryAsync()
     {
         try
@@ -377,6 +379,7 @@ public class MainViewModel : INotifyPropertyChanged
             StatusText = "Failed to load library";
         }
     }
+    */
 
     public string Username
     {
@@ -1126,12 +1129,28 @@ public class MainViewModel : INotifyPropertyChanged
             // Show preview page instead of auto-searching
             if (queries.Any())
             {
-                _logger.LogInformation("Navigating to ImportPreviewPage for {Count} Spotify tracks", queries.Count);
-                // The NavigationService will create the page and its ViewModel via DI.
-                // We pass the queries as a parameter to the navigation call.
-                _navigationService.NavigateTo("ImportPreview");
-                StatusText = $"Preview: {queries.Count} tracks loaded from Spotify";
-            } else
+                _logger.LogInformation("Initializing ImportPreviewViewModel for {Count} Spotify tracks", queries.Count);
+                
+                // Get the ImportPreviewViewModel from DI and initialize it with the queries
+                var importPreviewVm = App.Current.Services.GetService(typeof(ImportPreviewViewModel)) as ImportPreviewViewModel;
+                if (importPreviewVm != null)
+                {
+                    await importPreviewVm.InitializePreviewAsync(
+                        queries.FirstOrDefault()?.SourceTitle ?? "Spotify Playlist",
+                        "Spotify",
+                        queries);
+                    
+                    // Now navigate to the preview page
+                    _navigationService.NavigateTo("ImportPreview");
+                    StatusText = $"Preview: {queries.Count} tracks loaded from Spotify";
+                }
+                else
+                {
+                    _logger.LogError("Failed to resolve ImportPreviewViewModel from DI");
+                    StatusText = "Import failed: Could not create preview";
+                }
+            }
+            else
             {
                 StatusText = "No tracks found in the Spotify playlist";
             }
@@ -1145,58 +1164,6 @@ public class MainViewModel : INotifyPropertyChanged
 
     /// <summary>
     /// Dev helper to scrape a Spotify playlist/album URL and log a short preview for troubleshooting.
-        /// <summary>
-        /// Handle when a PlaylistJob is added from the ImportPreview (via AddToLibrary button).
-        /// Persists the job to database and starts orchestration search.
-        /// </summary>
-        private async Task HandlePlaylistJobAddedAsync(PlaylistJob job)
-        {
-            try
-            {
-                _logger.LogInformation("PlaylistJob added from ImportPreview: {Title} with {Count} tracks", 
-                    job.SourceTitle, job.OriginalTracks.Count);
-            
-                // Queue project through DownloadManager to persist, add to Library, and fire ProjectAdded
-                // The DownloadManager will now handle the conversion from OriginalTracks to PlaylistTracks.
-                await _downloadManager.QueueProject(job);
-            
-                // Convert original tracks to SearchQueries for orchestration
-                ImportedQueries.Clear();
-                foreach (var track in job.OriginalTracks)
-                {
-                    var query = new SearchQuery
-                    {
-                        Artist = track.Artist,
-                        Title = track.Title,
-                        Album = track.Album,
-                        Length = track.Length ?? 0,
-                        SourceTitle = job.SourceTitle
-                    };
-                    ImportedQueries.Add(query);
-                }
-            
-                // Show notification
-                _notificationService.Show("Added to Library", 
-                    $"✓ {job.OriginalTracks.Count} tracks added. Starting search...", 
-                    NotificationType.Success, TimeSpan.FromSeconds(3));
-            
-                // Navigate to Library to see the job
-                _navigationService.NavigateTo("Library");
-            
-                // Start orchestration search for all tracks
-                StatusText = $"Searching {ImportedQueries.Count} tracks...";
-                _logger.LogInformation("Starting orchestration search for {Count} tracks from playlist: {Title}",
-                    ImportedQueries.Count, job.SourceTitle);
-            
-                await SearchAllImportedAsync();
-            }
-            catch (Exception ex)
-            {
-                StatusText = $"Error adding to library: {ex.Message}";
-                _logger.LogError(ex, "Failed to handle PlaylistJob addition");
-            }
-        }
-
     /// </summary>
     public async Task<List<SearchQuery>> DevFetchSpotifyAsync(string url, int previewCount = 5)
     {
@@ -1794,6 +1761,8 @@ public class MainViewModel : INotifyPropertyChanged
         StatusText = "Downloads cancelled";
     }
 
+    // LEGACY: This method is no longer used. Library management now handled by LibraryViewModel.
+    /*
     private void RemoveFromLibrary(IList<object>? selectedItems)
     {
         if (selectedItems == null || !selectedItems.Any()) return;
@@ -1807,6 +1776,7 @@ public class MainViewModel : INotifyPropertyChanged
         }
         StatusText = $"Removed {tracksToRemove.Count} entries from the library.";
     }
+    */
 
     private async Task RescanLibraryAsync()
     {
@@ -1830,14 +1800,15 @@ public class MainViewModel : INotifyPropertyChanged
 
         var (added, removed) = await Task.Run(() => _downloadLogService.SyncWithFolder(folder));
 
-        System.Windows.Application.Current.Dispatcher.Invoke(() =>
-        {
-            LibraryEntries.Clear();
-            foreach (var entry in _downloadLogService.GetEntries())
-            {
-                LibraryEntries.Add(entry);
-            }
-        });
+        // LEGACY: Library rescan now handled by LibraryViewModel
+        // System.Windows.Application.Current.Dispatcher.Invoke(() =>
+        // {
+        //     LibraryEntries.Clear();
+        //     foreach (var entry in _downloadLogService.GetEntries())
+        //     {
+        //         LibraryEntries.Add(entry);
+        //     }
+        // });
 
         StatusText = $"Rescan complete. Added {added}, removed {removed}.";
         _notificationService.Show("Rescan complete", $"Added {added}, removed {removed} entries.", NotificationType.Information, TimeSpan.FromSeconds(5));
@@ -1988,6 +1959,8 @@ public class MainViewModel : INotifyPropertyChanged
     /// </summary>
     private async void UpdateFilteredTracks()
     {
+        // LEGACY: Filtering now handled by LibraryViewModel
+        /*
         System.Windows.Application.Current.Dispatcher.Invoke(() =>
         {
             FilteredLibraryEntries.Clear();
@@ -2021,6 +1994,7 @@ public class MainViewModel : INotifyPropertyChanged
                 }
             }
         });
+        */
     }
 
     /// <summary>
