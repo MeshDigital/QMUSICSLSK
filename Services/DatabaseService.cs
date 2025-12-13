@@ -461,4 +461,20 @@ public class DatabaseService
             );
         }
     }
+
+    public async Task<List<PlaylistTrackEntity>> GetAllPlaylistTracksAsync()
+    {
+        using var context = new AppDbContext();
+        
+        // Filter out tracks from soft-deleted jobs
+        var validJobIds = context.PlaylistJobs
+            .Where(j => !j.IsDeleted)
+            .Select(j => j.Id);
+            
+        return await context.PlaylistTracks
+            .AsNoTracking()
+            .Where(t => validJobIds.Contains(t.PlaylistId))
+            .OrderByDescending(t => t.AddedAt)
+            .ToListAsync();
+    }
 }

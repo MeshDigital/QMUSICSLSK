@@ -41,7 +41,7 @@
     <PackageReference Include="TagLibSharp" Version="2.3.0" />
     
     <!-- JSON serialization for index files -->
-    <PackageReference Include="System.Text.Json" Version="8.0.4" />
+    <PackageReference Include="System.Text.Json" Version="8.0.5" />
 
     <!-- Modern Windows 11 UI Controls -->
     <PackageReference Include="WPF-UI" Version="4.1.0" />

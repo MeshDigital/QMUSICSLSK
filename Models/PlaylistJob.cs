@@ -58,8 +58,23 @@ public class PlaylistJob : INotifyPropertyChanged
 
     /// <summary>
     /// Total number of tracks in this job.
+    /// Default logic falls back to collection counts if not explicitly set.
     /// </summary>
-    public int TotalTracks => OriginalTracks.Count;
+    private int _totalTracksOverride;
+    public int TotalTracks 
+    {
+        get 
+        {
+            if (_totalTracksOverride > 0) return _totalTracksOverride;
+            if (PlaylistTracks?.Count > 0) return PlaylistTracks.Count;
+            return OriginalTracks?.Count ?? 0;
+        }
+        set 
+        {
+             SetProperty(ref _totalTracksOverride, value);
+             OnPropertyChanged(nameof(ProgressPercentage));
+        }
+    }
 
     /// <summary>
     /// Number of tracks successfully downloaded (status = Downloaded).

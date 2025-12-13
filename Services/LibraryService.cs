@@ -233,6 +233,39 @@ public class LibraryService : ILibraryService
         }
     }
 
+    public async Task<PlaylistJob> CreateEmptyPlaylistAsync(string title)
+    {
+        var job = new PlaylistJob
+        {
+            Id = Guid.NewGuid(),
+            SourceTitle = title,
+            SourceType = "User",
+            CreatedAt = DateTime.UtcNow,
+            PlaylistTracks = new List<PlaylistTrack>(),
+            TotalTracks = 0
+        };
+
+        // Persist and update reactive collection
+        await SavePlaylistJobWithTracksAsync(job);
+        
+        return job;
+    }
+
+    public async Task SaveTrackOrderAsync(Guid playlistId, IEnumerable<PlaylistTrack> tracks)
+    {
+        try
+        {
+            // Convert to models and persist batch
+            var entities = tracks.Select(PlaylistTrackToEntity).ToList();
+            await _databaseService.SavePlaylistTracksAsync(entities);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to persist track order for playlist {Id}", playlistId);
+            throw;
+        }
+    }
+
     // ===== INDEX 3: PlaylistTrack (Relational Index - Database Backed) =====
 
     public async Task<List<PlaylistTrack>> LoadPlaylistTracksAsync(Guid playlistId)
@@ -245,6 +278,20 @@ public class LibraryService : ILibraryService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to load playlist tracks for {PlaylistId}", playlistId);
+            return new List<PlaylistTrack>();
+        }
+    }
+
+    public async Task<List<PlaylistTrack>> GetAllPlaylistTracksAsync()
+    {
+        try
+        {
+            var entities = await _databaseService.GetAllPlaylistTracksAsync();
+            return entities.Select(EntityToPlaylistTrack).ToList();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to load all playlist tracks");
             return new List<PlaylistTrack>();
         }
     }

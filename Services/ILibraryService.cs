@@ -79,6 +79,16 @@ public interface ILibraryService
     /// </summary>
     Task DeletePlaylistJobAsync(Guid playlistId);
 
+    /// <summary>
+    /// Creates a new empty user playlist.
+    /// </summary>
+    Task<PlaylistJob> CreateEmptyPlaylistAsync(string title);
+
+    /// <summary>
+    /// Updates sort order of tracks in a playlist.
+    /// </summary>
+    Task SaveTrackOrderAsync(Guid playlistId, IEnumerable<PlaylistTrack> tracks);
+
     // ===== INDEX 3: PlaylistTrack (Relational Index) =====
 
     /// <summary>
@@ -86,6 +96,12 @@ public interface ILibraryService
     /// Used for the Playlist Track Detail view.
     /// </summary>
     Task<List<PlaylistTrack>> LoadPlaylistTracksAsync(Guid playlistId);
+
+    /// <summary>
+    /// Loads ALL tracks from all active playlists.
+    /// Used for "All Tracks" view.
+    /// </summary>
+    Task<List<PlaylistTrack>> GetAllPlaylistTracksAsync();
 
     /// <summary>
     /// Saves a single playlist track entry.

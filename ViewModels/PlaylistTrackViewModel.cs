@@ -45,14 +45,54 @@ public class PlaylistTrackViewModel : INotifyPropertyChanged
              {
                  _sortOrder = value;
                  OnPropertyChanged();
+                 // Propagate to Model
+                 if (Model != null) Model.TrackNumber = value;
              }
         }
     }
 
     public Guid SourceId { get; set; } // Project ID (PlaylistJob.Id)
     public string GlobalId { get; set; } // TrackUniqueHash
-    public string Artist { get; set; }
-    public string Title { get; set; }
+    
+    // Properties linked to Model and Notification
+    public string Artist 
+    { 
+        get => Model.Artist ?? string.Empty;
+        set
+        {
+            if (Model.Artist != value)
+            {
+                Model.Artist = value;
+                OnPropertyChanged();
+            }
+        }
+    }
+
+    public string Title 
+    { 
+        get => Model.Title ?? string.Empty;
+        set
+        {
+            if (Model.Title != value)
+            {
+                Model.Title = value;
+                OnPropertyChanged();
+            }
+        }
+    }
+
+    public string Album
+    {
+        get => Model.Album ?? string.Empty;
+        set
+        {
+            if (Model.Album != value)
+            {
+                Model.Album = value;
+                OnPropertyChanged();
+            }
+        }
+    }
     
     // Reference to the underlying model if needed for persistence later
     public PlaylistTrack Model { get; private set; }
@@ -73,6 +113,7 @@ public class PlaylistTrackViewModel : INotifyPropertyChanged
         GlobalId = track.TrackUniqueHash;
         Artist = track.Artist;
         Title = track.Title;
+        SortOrder = track.TrackNumber; // Initialize SortOrder
         State = PlaylistTrackState.Pending;
         
         // Map initial status from model

@@ -33,7 +33,6 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
     private readonly ILibraryService _libraryService;
 
     // Concurrency control
-    private readonly SemaphoreSlim _concurrencySemaphore;
     private readonly CancellationTokenSource _globalCts = new();
     private Task? _processingTask;
 
@@ -66,12 +65,16 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
         _databaseService = databaseService;
         _metadataService = metadataService;
         _libraryService = libraryService;
+        _libraryService = libraryService;
 
-        _concurrencySemaphore = new SemaphoreSlim(_config.MaxConcurrentDownloads);
+        // Initialize from config, but allow runtime changes
+        MaxActiveDownloads = _config.MaxConcurrentDownloads > 0 ? _config.MaxConcurrentDownloads : 3;
 
         // Enable cross-thread collection access
         System.Windows.Data.BindingOperations.EnableCollectionSynchronization(AllGlobalTracks, _collectionLock);
     }
+
+    public int MaxActiveDownloads { get; set; }
     
     public async Task InitAsync()
     {
@@ -277,6 +280,39 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
                         _logger.LogError(ex, "Failed to sync playlist track status for {Id}", vm.GlobalId);
                     }
                 }
+                }
+            
+            // Persist Metadata Changes (Interactive Editing)
+            if (e.PropertyName == "Artist" || e.PropertyName == "Title" || e.PropertyName == "Album")
+            {
+                 // 1. Update Global Cache
+                 await SaveTrackToDb(vm);
+
+                 // 2. Update PlaylistTrack Relation (Database)
+                 // This ensures the Library View shows new metadata on restart
+                 await _libraryService.UpdatePlaylistTrackAsync(vm.Model);
+
+                 // 3. Update Audio File Tags (if downloaded)
+                 // Only if file exists
+                 if (!string.IsNullOrEmpty(vm.Model.ResolvedFilePath) && File.Exists(vm.Model.ResolvedFilePath))
+                 {
+                      try 
+                      {
+                          // Create a lightweight Track object for tagging
+                          var trackInfo = new Track 
+                          { 
+                              Artist = vm.Artist, 
+                              Title = vm.Title, 
+                              Album = vm.Album 
+                          };
+                          await _taggerService.TagFileAsync(trackInfo, vm.Model.ResolvedFilePath);
+                          _logger.LogInformation("Updated ID3 tags for {File}", vm.Model.ResolvedFilePath);
+                      }
+                      catch(Exception ex) 
+                      {
+                          _logger.LogWarning("Failed to update ID3 tags: {Msg}", ex.Message);
+                      }
+                 }
             }
         }
     }
@@ -480,18 +516,29 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
                     continue;
                 }
 
-                // Acquire a concurrency slot
-                await _concurrencySemaphore.WaitAsync(token);
+                // Check concurrency limit (Dynamic)
+                int currentActive = 0;
+                lock (_collectionLock)
+                {
+                    currentActive = AllGlobalTracks.Count(t => t.IsActive);
+                }
+
+                if (currentActive >= MaxActiveDownloads)
+                {
+                    await Task.Delay(1000, token);
+                    continue;
+                }
 
                 // Double check status (race condition)
                 if (nextTrack.State != PlaylistTrackState.Pending)
                 {
-                    _concurrencySemaphore.Release();
                     continue;
                 }
 
+                // Mark as Searching immediately to prevent duplicate scheduling in the loop
+                nextTrack.State = PlaylistTrackState.Searching;
+
                 // Start processing in background (Fire & Forget)
-                // We don't await this; we want to continue the loop to find more work if concurrency allows
                 _ = Task.Run(async () =>
                 {
                     try
@@ -506,7 +553,7 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
                     }
                     finally
                     {
-                        _concurrencySemaphore.Release();
+                        // No semaphore to release
                     }
                 }, token);
             }
@@ -687,6 +734,6 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
     public void Dispose()
     {
         _globalCts.Cancel();
-        _concurrencySemaphore.Dispose();
+        _globalCts.Dispose();
     }
 }

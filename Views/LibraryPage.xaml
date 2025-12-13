@@ -24,6 +24,7 @@
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
                     <RowDefinition Height="*"/>
                 </Grid.RowDefinitions>
 
@@ -34,15 +35,51 @@
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
                     <TextBlock Text="My Library" FontSize="24" FontWeight="Bold" Foreground="White"/>
-                    <Button Grid.Column="1" Content="🔄" 
-                            Command="{Binding RefreshLibraryCommand}"
-                            Background="Transparent" BorderThickness="0" Foreground="#888" Cursor="Hand"
-                            FontSize="16" ToolTip="Refresh Library"
-                            Padding="5"/>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal">
+                        <Button Command="{Binding CreatePlaylistCommand}" 
+                                Background="#2A2A2A" BorderThickness="0" Foreground="#DDD" Cursor="Hand"
+                                Padding="12,6" Margin="0,0,8,0" VerticalAlignment="Center">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="➕" Margin="0,0,6,0" FontSize="12"/>
+                                <TextBlock Text="New Playlist" FontSize="12" FontWeight="SemiBold"/>
+                            </StackPanel>
+                            <Button.Resources>
+                                <Style TargetType="{x:Type Border}">
+                                    <Setter Property="CornerRadius" Value="4"/>
+                                </Style>
+                            </Button.Resources>
+                        </Button>
+                        <Button Command="{Binding RefreshLibraryCommand}" 
+                                Background="Transparent" BorderThickness="0" Foreground="#888" Cursor="Hand"
+                                ToolTip="Refresh Library" Margin="0,0,0,0" Padding="6">
+                             <TextBlock Text="🔄" FontSize="16"/>
+                        </Button>
+                    </StackPanel>
                 </Grid>
 
+                <!-- All Tracks Button -->
+                <Button Grid.Row="1" Command="{Binding LoadAllTracksCommand}" 
+                        Margin="12,0,12,10" Background="Transparent" BorderThickness="0" 
+                        HorizontalContentAlignment="Left" Cursor="Hand">
+                    <Button.Template>
+                        <ControlTemplate TargetType="Button">
+                            <Border x:Name="Border" Padding="10,8" CornerRadius="6" Background="Transparent">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="📂" Margin="0,0,12,0" FontSize="16" VerticalAlignment="Center"/>
+                                    <TextBlock Text="All Tracks" FontSize="14" FontWeight="SemiBold" Foreground="#DDD" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="Border" Property="Background" Value="#252525"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Button.Template>
+                </Button>
+
                 <!-- Empty State for Playlist List -->
-                <TextBlock Grid.Row="1" Text="No playlists found." 
+                <TextBlock Grid.Row="2" Text="No playlists found." 
                            Foreground="#888" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,20,0,0">
                     <TextBlock.Style>
                         <Style TargetType="TextBlock">
@@ -57,7 +94,7 @@
                 </TextBlock>
 
                 <!-- Playlist List -->
-                <ListBox Grid.Row="1" 
+                <ListBox Grid.Row="2" 
                          ItemsSource="{Binding AllProjects}" 
                          SelectedItem="{Binding SelectedProject}"
                          Background="Transparent"
@@ -139,6 +176,7 @@
                    Visibility="{Binding SelectedProject, Converter={StaticResource NullToVisibilityConverter}}">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/> <!-- HUD -->
                     <RowDefinition Height="*"/>
                 </Grid.RowDefinitions>
 
@@ -148,10 +186,11 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         
                         <!-- Title & Stats -->
-                        <StackPanel>
+                        <StackPanel Grid.Column="0">
                             <TextBlock Text="{Binding SelectedProject.SourceTitle}" 
                                        FontSize="28" FontWeight="Bold" Foreground="White"
                                        TextTrimming="CharacterEllipsis"/>
@@ -167,51 +206,113 @@
                             </StackPanel>
                         </StackPanel>
 
+                        <!-- SEARCH -->
+                         <TextBox Grid.Column="1" Width="200" Margin="0,0,20,0" Padding="8,6" VerticalAlignment="Center"
+                                  Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
+                                  Background="#2A2A2A" Foreground="White" BorderThickness="0"
+                                  Tag="Search Filter...">
+                                  <TextBox.Resources>
+                                      <Style TargetType="{x:Type Border}">
+                                          <Setter Property="CornerRadius" Value="4"/>
+                                      </Style>
+                                  </TextBox.Resources>
+                         </TextBox>
+
                         <!-- ACTIONS TOOLBAR (New Plugin System) -->
-                        <ItemsControl Grid.Column="1" ItemsSource="{Binding AvailableActions}">
-                            <ItemsControl.ItemsPanel>
-                                <ItemsPanelTemplate>
-                                    <StackPanel Orientation="Horizontal"/>
-                                </ItemsPanelTemplate>
-                            </ItemsControl.ItemsPanel>
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <Button Command="{Binding DataContext.ExecuteActionCommand, RelativeSource={RelativeSource AncestorType=Page}}" 
-                                            CommandParameter="{Binding}"
-                                            Margin="8,0,0,0" Padding="12,8" Background="#262626" BorderThickness="0">
-                                        <Button.Style>
-                                            <Style TargetType="Button">
-                                                <Setter Property="Template">
-                                                    <Setter.Value>
-                                                        <ControlTemplate TargetType="Button">
-                                                            <Border x:Name="BtnBorder" Background="{TemplateBinding Background}" CornerRadius="4">
-                                                                <StackPanel Orientation="Horizontal">
-                                                                    <TextBlock Text="{Binding IconGlyph}" Margin="0,0,8,0" FontSize="14"/>
-                                                                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" Foreground="White"/>
-                                                                </StackPanel>
-                                                            </Border>
-                                                            <ControlTemplate.Triggers>
-                                                                <Trigger Property="IsMouseOver" Value="True">
-                                                                    <Setter TargetName="BtnBorder" Property="Background" Value="#353535"/>
-                                                                </Trigger>
-                                                                <Trigger Property="IsPressed" Value="True">
-                                                                    <Setter TargetName="BtnBorder" Property="Background" Value="#404040"/>
-                                                                </Trigger>
-                                                            </ControlTemplate.Triggers>
-                                                        </ControlTemplate>
-                                                    </Setter.Value>
-                                                </Setter>
-                                            </Style>
-                                        </Button.Style>
-                                    </Button>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
+                        <!-- ACTIONS TOOLBAR (Management) -->
+                        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                            
+                            <!-- Open Folder -->
+                            <Button Command="{Binding OpenFolderCommand}" ToolTip="Open Folder in Explorer"
+                                    Margin="5,0,0,0" Padding="12,6" Background="#262626" BorderThickness="0" Cursor="Hand">
+                                <Button.Resources>
+                                    <Style TargetType="{x:Type Border}">
+                                        <Setter Property="CornerRadius" Value="4"/>
+                                    </Style>
+                                </Button.Resources>
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="📂" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                    <TextBlock Text="Folder" Foreground="#DDD" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Button>
+
+                            <!-- Remove Track (Context Sensitive) -->
+                            <Button Command="{Binding RemoveTrackCommand}" ToolTip="Remove Selected Track from Playlist"
+                                    Margin="8,0,0,0" Padding="12,6" Background="#262626" BorderThickness="0" Cursor="Hand">
+                                <Button.Resources>
+                                    <Style TargetType="{x:Type Border}">
+                                        <Setter Property="CornerRadius" Value="4"/>
+                                    </Style>
+                                </Button.Resources>
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="🗑️" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                    <TextBlock Text="Remove" Foreground="#DDD" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Button>
+
+                            <!-- Delete Playlist -->
+                            <Button Command="{Binding DeleteProjectCommand}" ToolTip="Delete Entire Playlist"
+                                    Margin="8,0,0,0" Padding="12,6" Background="#3A1010" BorderThickness="0" Cursor="Hand">
+                                <Button.Resources>
+                                    <Style TargetType="{x:Type Border}">
+                                        <Setter Property="CornerRadius" Value="4"/>
+                                    </Style>
+                                </Button.Resources>
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="❌" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                    <TextBlock Text="Delete" Foreground="#FFCCCC" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Button>
+                        </StackPanel>
+
                     </Grid>
                 </Border>
 
+                <!-- ACTIVE DOWNLOADS HUD -->
+                <Expander Grid.Row="1" Header="Active Downloads &amp; Concurrency" Foreground="#DDD" 
+                          Background="#1A1A1A" BorderBrush="#333" BorderThickness="0,0,0,1" Padding="10" IsExpanded="True">
+                    <Grid Height="120">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="220"/>
+                        </Grid.ColumnDefinitions>
+                        
+                        <!-- List -->
+                        <ListView Grid.Column="0" ItemsSource="{Binding ActiveDownloadsView}" Background="Transparent" BorderThickness="0" Foreground="White">
+                            <ListView.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid Margin="0,2" Width="450">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="100"/>
+                                            <ColumnDefinition Width="80"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel>
+                                            <TextBlock Text="{Binding Title}" Foreground="White" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                                            <TextBlock Text="{Binding Artist}" Foreground="#AAA" FontSize="11" TextTrimming="CharacterEllipsis"/>
+                                        </StackPanel>
+                                        <ProgressBar Grid.Column="1" Value="{Binding Progress}" Maximum="100" Height="4" Margin="10,0" VerticalAlignment="Center" Foreground="#007ACC" Background="#333"/>
+                                        <TextBlock Grid.Column="2" Text="{Binding CurrentSpeed}" Foreground="#888" HorizontalAlignment="Right" VerticalAlignment="Center" FontSize="11"/>
+                                    </Grid>
+                                </DataTemplate>
+                            </ListView.ItemTemplate>
+                        </ListView>
+
+                        <!-- Controls -->
+                        <StackPanel Grid.Column="1" Margin="20,0,0,0" VerticalAlignment="Top">
+                            <TextBlock Text="Max Concurrent Downloads" Foreground="#AAA" FontSize="12" Margin="0,0,0,8"/>
+                            <StackPanel Orientation="Horizontal">
+                                <Slider Value="{Binding MaxDownloads}" Minimum="1" Maximum="10" Width="150" 
+                                        AutoToolTipPlacement="TopLeft" SmallChange="1" IsSnapToTickEnabled="True" TickPlacement="BottomRight"/>
+                                <TextBlock Text="{Binding MaxDownloads}" Foreground="White" Margin="10,0,0,0" VerticalAlignment="Center" FontWeight="Bold"/>
+                            </StackPanel>
+                            <TextBlock Text="Limit active downloads to share bandwidth." Foreground="#666" FontSize="10" Margin="0,5,0,0" TextWrapping="Wrap"/>
+                        </StackPanel>
+                    </Grid>
+                </Expander>
+
                 <!-- TRACK LIST DATAGRID -->
-                <DataGrid Grid.Row="1" 
+                <DataGrid Grid.Row="2" 
                           ItemsSource="{Binding CurrentProjectTracks}"
                           AutoGenerateColumns="False"
                           Background="Transparent"
@@ -222,7 +323,10 @@
                           Foreground="#DDD"
                           RowHeight="40"
                           HeadersVisibility="Column"
-                          Padding="10">
+                          Padding="10"
+                          CanUserAddRows="False"
+                          CanUserDeleteRows="False"
+                          IsReadOnly="False">
                     
                     <DataGrid.Resources>
                         <Style TargetType="DataGridColumnHeader">
@@ -246,7 +350,25 @@
                                     </ControlTemplate>
                                 </Setter.Value>
                             </Setter>
+                            <Style.Triggers>
+                                <Trigger Property="IsSelected" Value="True">
+                                    <Setter Property="Background" Value="#2AFFFFFF"/>
+                                    <Setter Property="Foreground" Value="White"/>
+                                </Trigger>
+                            </Style.Triggers>
                         </Style>
+                        <!-- Styles for Editing -->
+                        <Style x:Key="TitleColumnStyle" TargetType="TextBlock">
+                            <Setter Property="FontWeight" Value="Medium"/>
+                            <Setter Property="Foreground" Value="White"/>
+                            <Setter Property="VerticalAlignment" Value="Center"/>
+                        </Style>
+                        <Style x:Key="EditingTextStyle" TargetType="TextBox">
+                            <Setter Property="Background" Value="#333"/>
+                            <Setter Property="Foreground" Value="White"/>
+                            <Setter Property="BorderThickness" Value="0"/>
+                        </Style>
+                        
                         <Style TargetType="DataGridRow">
                             <EventSetter Event="PreviewMouseLeftButtonDown" Handler="DataGridRow_PreviewMouseLeftButtonDown"/>
                             <EventSetter Event="Drop" Handler="DataGridRow_Drop"/>
@@ -256,31 +378,22 @@
                                 <Trigger Property="IsMouseOver" Value="True">
                                     <Setter Property="Background" Value="#1AFFFFFF"/>
                                 </Trigger>
-                                <Trigger Property="IsSelected" Value="True">
-                                    <Setter Property="Background" Value="#2AFFFFFF"/>
-                                </Trigger>
                             </Style.Triggers>
                         </Style>
                     </DataGrid.Resources>
 
                     <DataGrid.Columns>
                         <!-- # -->
-                        <DataGridTextColumn Header="#" Binding="{Binding SortOrder}" Width="40" Foreground="#666"/>
+                        <DataGridTextColumn Header="#" Binding="{Binding SortOrder}" Width="40" Foreground="#666" IsReadOnly="True"/>
                         
-                        <!-- Title -->
-                        <DataGridTemplateColumn Header="Title" Width="2*">
-                            <DataGridTemplateColumn.CellTemplate>
-                                <DataTemplate>
-                                    <TextBlock Text="{Binding Title}" FontWeight="Medium" Foreground="White" VerticalAlignment="Center"/>
-                                </DataTemplate>
-                            </DataGridTemplateColumn.CellTemplate>
-                        </DataGridTemplateColumn>
+                        <!-- Title (Editable) -->
+                        <DataGridTextColumn Header="Title" Binding="{Binding Title, UpdateSourceTrigger=LostFocus}" Width="2*" ElementStyle="{StaticResource TitleColumnStyle}" EditingElementStyle="{StaticResource EditingTextStyle}"/>
 
-                        <!-- Artist -->
-                        <DataGridTextColumn Header="Artist" Binding="{Binding Artist}" Width="1.5*"/>
+                        <!-- Artist (Editable) -->
+                        <DataGridTextColumn Header="Artist" Binding="{Binding Artist, UpdateSourceTrigger=LostFocus}" Width="1.5*" EditingElementStyle="{StaticResource EditingTextStyle}"/>
 
-                        <!-- Album -->
-                        <DataGridTextColumn Header="Album" Binding="{Binding Model.Album}" Width="1.5*" />
+                        <!-- Album (Editable) -->
+                        <DataGridTextColumn Header="Album" Binding="{Binding Model.Album, UpdateSourceTrigger=LostFocus}" Width="1.5*" EditingElementStyle="{StaticResource EditingTextStyle}"/>
 
                         <!-- Status -->
                         <DataGridTemplateColumn Header="Status" Width="120">
