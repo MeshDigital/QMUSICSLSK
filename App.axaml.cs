@@ -49,6 +49,9 @@ public partial class App : Application
                 var libraryViewModel = Services.GetRequiredService<LibraryViewModel>();
                 var mainViewModel = Services.GetRequiredService<MainViewModel>();
                 libraryViewModel.SetMainViewModel(mainViewModel);
+                
+                // Load playlists from database
+                libraryViewModel.LoadProjectsAsync().GetAwaiter().GetResult();
 
                 // Start the Download Manager loop
                 var downloadManager = Services.GetRequiredService<DownloadManager>();
