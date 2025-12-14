@@ -11,7 +11,8 @@
     <Border Background="#181818" 
             BorderBrush="#282828" 
             BorderThickness="0,1,0,0"
-            Height="90">
+            Height="90"
+            MaxHeight="90">
         <Grid ColumnDefinitions="300,*,300" Margin="16,0">
             
             <!-- LEFT: Track Info & Album Art -->

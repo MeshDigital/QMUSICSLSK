@@ -289,9 +289,8 @@ public class LibraryViewModel : INotifyPropertyChanged
             Filter = tracks => tracks.Where(t => t.PlayCount == 0 && t.Status == TrackStatus.Downloaded),
             Sort = tracks => tracks.OrderBy(t => t.AddedAt)
         });
-    }
-
-    private string _searchText = "";
+       // Search filter
+    private string _searchText = string.Empty;
     public string SearchText
     {
         get => _searchText;
@@ -305,8 +304,8 @@ public class LibraryViewModel : INotifyPropertyChanged
             }
         }
     }
-    
-    // Filter state properties
+
+    // Filter buttons (radio button behavior)
     private bool _isFilterAll = true;
     public bool IsFilterAll
     {
