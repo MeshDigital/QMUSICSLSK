@@ -67,6 +67,50 @@ public class MainViewModel : INotifyPropertyChanged
     }
 
     public ObservableCollection<Track> SearchResults { get; } = new();
+
+    // Search Filters
+    private string _selectedFormat = "All";
+    public string SelectedFormat
+    {
+        get => _selectedFormat;
+        set
+        {
+            if (_selectedFormat != value)
+            {
+                _selectedFormat = value;
+                OnPropertyChanged();
+            }
+        }
+    }
+
+    private int _minBitrateFilter = 0;
+    public int MinBitrateFilter
+    {
+        get => _minBitrateFilter;
+        set
+        {
+            if (_minBitrateFilter != value)
+            {
+                _minBitrateFilter = value;
+                OnPropertyChanged();
+            }
+        }
+    }
+
+    private int _minFileSizeFilter = 0;
+    public int MinFileSizeFilter
+    {
+        get => _minFileSizeFilter;
+        set
+        {
+            if (_minFileSizeFilter != value)
+            {
+                _minFileSizeFilter = value;
+                OnPropertyChanged();
+            }
+        }
+    }
+
     public ObservableCollection<AlbumResultViewModel> AlbumResults { get; } = new();
     public ObservableCollection<DownloadJob> Downloads { get; } = new();
     public ObservableCollection<SearchQuery> ImportedQueries { get; } = new();
