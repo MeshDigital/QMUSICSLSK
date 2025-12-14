@@ -1139,12 +1139,11 @@ public class LibraryViewModel : INotifyPropertyChanged
                     {
                         _logger.LogDebug("Track {Artist} - {Title} loaded with path: {Path}", 
                             track.Artist, track.Title, track.ResolvedFilePath);
-                    }
-                }
             }
 
             // Update UI - we're already on UI thread, no need for Dispatcher
             CurrentProjectTracks = tracks;
+            RefreshFilteredTracks(); // Update FilteredTracks so DataGrid displays the tracks
             _logger.LogInformation("Loaded {Count} tracks for project {Title}", tracks.Count, job.SourceTitle);
         }
         catch (Exception ex)
