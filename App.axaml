@@ -5,9 +5,22 @@
              RequestedThemeVariant="Dark">
     
     <Application.Resources>
+        <!-- Like/Heart Converters -->
         <converters:BoolToHeartConverter x:Key="BoolToHeartConverter"/>
         <converters:BoolToHeartColorConverter x:Key="BoolToHeartColorConverter"/>
+        
+        <!-- Boolean State Converters -->
         <converters:BoolToColorConverter x:Key="BoolToColorConverter"/>
+        <converters:BoolToLibraryStatusColorConverter x:Key="BoolToLibraryStatusColorConverter"/>
+        <converters:BoolToLibraryStatusTextConverter x:Key="BoolToLibraryStatusTextConverter"/>
+        <converters:BoolToEditModeTextConverter x:Key="BoolToEditModeTextConverter"/>
+        <converters:BoolToPlayPauseTextConverter x:Key="BoolToPlayPauseTextConverter"/>
+        <converters:BoolToPlayPauseIconConverter x:Key="BoolToPlayPauseIconConverter"/>
+        <converters:BoolToBackgroundConverter x:Key="BoolToBackgroundConverter"/>
+        
+        <!-- Utility Converters -->
+        <converters:RepeatModeIconConverter x:Key="RepeatModeIconConverter"/>
+        <converters:EqualityConverter x:Key="EqualityConverter"/>
     </Application.Resources>
     
     <Application.Styles>
