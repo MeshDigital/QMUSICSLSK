@@ -289,7 +289,9 @@ public class LibraryViewModel : INotifyPropertyChanged
             Filter = tracks => tracks.Where(t => t.PlayCount == 0 && t.Status == TrackStatus.Downloaded),
             Sort = tracks => tracks.OrderBy(t => t.AddedAt)
         });
-       // Search filter
+    }
+
+    // Search filter
     private string _searchText = string.Empty;
     public string SearchText
     {
