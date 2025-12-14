@@ -1143,10 +1143,8 @@ public class LibraryViewModel : INotifyPropertyChanged
                 }
             }
 
-            await Dispatcher.UIThread.InvokeAsync(() =>
-            {
-                CurrentProjectTracks = tracks;
-            });
+            // Update UI - we're already on UI thread, no need for Dispatcher
+            CurrentProjectTracks = tracks;
             _logger.LogInformation("Loaded {Count} tracks for project {Title}", tracks.Count, job.SourceTitle);
         }
         catch (Exception ex)
