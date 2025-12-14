@@ -20,16 +20,6 @@
                 
                 <!-- Actions -->
                 <StackPanel Grid.Row="1" Margin="16,0,16,12" Spacing="8">
-                    <Button Command="{Binding LoadAllTracksCommand}" 
-                            Classes="nav"
-                            HorizontalContentAlignment="Left"
-                            Padding="12,10">
-                        <StackPanel Orientation="Horizontal" Spacing="10">
-                            <TextBlock Text="📚" FontSize="16"/>
-                            <TextBlock Text="All Tracks" FontSize="13"/>
-                        </StackPanel>
-                    </Button>
-                    
                     <Button Command="{Binding AddPlaylistCommand}" 
                             Classes="nav"
                             HorizontalContentAlignment="Left"
@@ -50,18 +40,6 @@
                         </StackPanel>
                     </Button>
                     
-                    <!-- All Tracks Button -->
-                    <Button Command="{Binding LoadAllTracksCommand}" 
-                            Classes="nav"
-                            HorizontalContentAlignment="Left"
-                            Padding="12,10"
-                            ToolTip.Tip="View all downloaded tracks from all playlists">
-                        <StackPanel Orientation="Horizontal" Spacing="10">
-                            <TextBlock Text="🎵" FontSize="16"/>
-                            <TextBlock Text="All Tracks" FontSize="13" FontWeight="Bold"/>
-                        </StackPanel>
-                    </Button>
-                    
                     <!-- Delete Playlist Button -->
                     <Button Command="{Binding DeleteProjectCommand}" 
                             CommandParameter="{Binding SelectedProject}"
@@ -69,7 +47,7 @@
                             HorizontalContentAlignment="Left"
                             Padding="12,10"
                             IsEnabled="{Binding !!SelectedProject}"
-                            ToolTip.Tip="Delete selected playlist (with confirmation)">
+                            ToolTip.Tip="Delete selected playlist">
                         <StackPanel Orientation="Horizontal" Spacing="10">
                             <TextBlock Text="🗑️" FontSize="16"/>
                             <TextBlock Text="Delete Playlist" FontSize="13" Foreground="#FF6B6B"/>
@@ -163,9 +141,8 @@
                     <!-- Right: Actions -->
                     <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
                         <Button Command="{Binding SelectAllTracksCommand}"
-                                Background="#424242"
-                                Foreground="White"
-                                Padding="12,8"
+                                Classes="nav"
+                                Padding="10,6"
                                 IsVisible="{Binding !!FilteredTracks.Count}">
                             <StackPanel Orientation="Horizontal" Spacing="6">
                                 <TextBlock Text="☑️"/>
@@ -174,57 +151,32 @@
                         </Button>
                         
                         <Button Command="{Binding DeselectAllTracksCommand}"
-                                Background="#424242"
-                                Foreground="White"
-                                Padding="12,8"
+                                Classes="nav"
+                                Padding="10,6"
                                 IsVisible="{Binding HasSelectedTracks}">
                             <StackPanel Orientation="Horizontal" Spacing="6">
                                 <TextBlock Text="☐"/>
-                                <TextBlock Text="Deselect All"/>
+                                <TextBlock Text="Deselect"/>
                             </StackPanel>
                         </Button>
                         
                         <Button Command="{Binding ToggleEditModeCommand}"
-                                Background="{Binding IsEditMode, Converter={StaticResource BoolToColorConverter}}"
-                                Foreground="White"
-                                Padding="12,8">
+                                Classes="nav"
+                                Padding="10,6">
                             <StackPanel Orientation="Horizontal" Spacing="6">
                                 <TextBlock Text="✏️"/>
                                 <TextBlock Text="{Binding IsEditMode, Converter={StaticResource BoolToEditModeTextConverter}}"/>
                             </StackPanel>
                         </Button>
                         
-                        <Button Command="{Binding PauseProjectCommand}"
-                                CommandParameter="{Binding SelectedProject}"
-                                Background="#FFA500"
-                                Foreground="White"
-                                Padding="12,8">
+                        <Button Command="{Binding RefreshLibraryCommand}"
+                                Classes="nav"
+                                Padding="10,6"
+                                ToolTip.Tip="Refresh library and resolve missing file paths">
                             <StackPanel Orientation="Horizontal" Spacing="6">
-                                <TextBlock Text="⏸️"/>
-                                <TextBlock Text="Pause All"/>
-                            </StackPanel>
-                        </Button>
-                        
-                        <Button Command="{Binding ResumeProjectCommand}"
-                                CommandParameter="{Binding SelectedProject}"
-                                Background="#4CAF50"
-                                Foreground="White"
-                                Padding="12,8">
-                            <StackPanel Orientation="Horizontal" Spacing="6">
-                                <TextBlock Text="▶️"/>
-                                <TextBlock Text="Resume All"/>
-                            </StackPanel>
-                        </Button>
-                        
-                        <Button Command="{Binding DeleteProjectCommand}"
-                                CommandParameter="{Binding SelectedProject}"
-                                Background="#F44336"
-                                Foreground="White"
-                                Padding="12,8">
-                            <StackPanel Orientation="Horizontal" Spacing="6">
-                                <TextBlock Text="🗑️"/>
-                                <TextBlock Text="Delete Playlist"/>
-                            </StackPanel>
+                                <TextBlock Text="🔄"/>
+                                <TextBlock Text="Refresh"/>
+                            </Stackanel>
                         </Button>
                     </StackPanel>
                 </Grid>
