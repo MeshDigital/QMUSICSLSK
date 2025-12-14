@@ -69,7 +69,7 @@ public class PlaylistTrack
     /// <summary>
     /// Position within the original playlist (1-based index).
     /// </summary>
-    public int OriginalPosition { get; set; }
+    public int TrackNumber { get; set; }
 
     /// <summary>
     /// Timestamp when this track was added to the playlist.
