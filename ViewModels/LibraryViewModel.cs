@@ -105,6 +105,8 @@ public class LibraryViewModel : INotifyPropertyChanged
     }
 
     public bool HasSelectedProject => SelectedProject != null;
+    public bool CanDeleteProject => SelectedProject != null && !IsEditMode;
+
     public ObservableCollection<PlaylistTrackViewModel> CurrentProjectTracks
     {
         get => _currentProjectTracks;
