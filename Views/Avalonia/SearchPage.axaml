@@ -9,8 +9,8 @@
     
     <!-- Main Grid with Import Preview Overlay -->
     <Grid>
-        <!-- Search Results (Main Content) -->
-        <Grid RowDefinitions="Auto,Auto,*,Auto" IsVisible="{Binding !IsImportPreviewVisible}">
+        <!-- Search Results (Main Content) - Layer 0 -->
+        <Grid RowDefinitions="Auto,Auto,*,Auto" ZIndex="0">
         
         <!-- Header -->
         <Border Grid.Row="0" Background="#252526" Padding="24,20" BorderBrush="#3E3E3E" BorderThickness="0,0,0,1">
@@ -458,8 +458,9 @@
         </Border>
         </Grid>
         
-        <!-- Import Preview Overlay -->
+        <!-- Import Preview Overlay - Layer 1 (on top) -->
         <views:ImportPreviewPage DataContext="{Binding ImportPreviewViewModel}"
-                                IsVisible="{Binding IsImportPreviewVisible}"/>
+                                IsVisible="{Binding IsImportPreviewVisible}"
+                                ZIndex="1"/>
     </Grid>
 </UserControl>
