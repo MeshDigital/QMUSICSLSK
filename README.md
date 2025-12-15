@@ -3,7 +3,7 @@
 > **"I'm not a real developer. I'm just vibing my way to the ultimate music app with AI."**  
 > *– A non-developer's journey to building a cross-platform music library curator*
 
-[![Platform](https://img.shields.io/badge/platform-Windows%20(working)%20%7C%20macOS%2FLinux%20(planned)-blue)](https://github.com/MeshDigital/QMUSICSLSK)
+[![Platform](https://img.shields.io/badge/platform-Windows%20(in%20dev)%20%7C%20macOS%2FLinux%20(planned)-blue)](https://github.com/MeshDigital/QMUSICSLSK)
 [![.NET](https://img.shields.io/badge/.NET-8.0-purple)](https://dotnet.microsoft.com/)
 [![UI](https://img.shields.io/badge/UI-Avalonia-orange)](https://avaloniaui.net/)
 [![License](https://img.shields.io/badge/license-GPL--3.0-green)](LICENSE)
@@ -16,10 +16,10 @@
 A **cross-platform music downloader and library manager** that turns Soulseek into your personal Spotify. Import playlists, download tracks, organize your library, and play music—all with a beautiful, responsive UI.
 
 **Platform Status:**
-- ✅ **Windows 10/11**: Fully working and tested
-- 🚧 **macOS/Linux**: Built on cross-platform components (Avalonia UI), not yet tested
+- 🚧 **Windows 10/11**: In active development - core features working (import, download, library, player)
+- 🔮 **macOS/Linux**: Built on cross-platform components (Avalonia UI), not yet tested
 
-**Current Goal**: Stable, feature-rich Windows version  
+**Current Goal**: Stable, feature-complete Windows version  
 **End Goal**: True multi-platform support (Windows, macOS, Linux)
 
 **But here's the twist**: This entire project is built by a **non-developer using AI** (Claude, Gemini, ChatGPT). Every feature, every bug fix, every architectural decision—all vibed into existence through AI pair programming.
@@ -72,9 +72,9 @@ A **cross-platform music downloader and library manager** that turns Soulseek in
 
 ### Platform Roadmap
 - ✅ **Phase 0**: Cross-platform foundation (Avalonia UI migration complete)
-- ✅ **Current**: Windows 10/11 fully working and tested
-- 🚧 **Next**: macOS testing and platform-specific adjustments
-- 🚧 **Future**: Linux support (Ubuntu, Fedora, Arch)
+- 🚧 **Current**: Windows 10/11 in active development - core features functional
+- 🔮 **Next**: Complete Windows feature set and stability
+- 🔮 **Future**: macOS testing and Linux support
 
 **Strategy**: Build on cross-platform components (Avalonia, .NET 8.0) from day one, ensuring Windows stability first, then expand to macOS/Linux with minimal code changes.
 
@@ -96,11 +96,11 @@ A **cross-platform music downloader and library manager** that turns Soulseek in
 ## 🚀 Quick Start
 
 ### Prerequisites
-- **Windows 10/11** (primary platform - fully tested)
+- **Windows 10/11** (primary platform - in active development)
 - .NET 8.0 SDK ([Download](https://dotnet.microsoft.com/download))
 - Soulseek account (free at [slsknet.org](https://www.slsknet.org))
 
-> **Note**: While built with Avalonia (cross-platform framework), the app is currently developed and tested on Windows. macOS and Linux support is planned but not yet verified.
+> **Note**: This is an **active development project**. Core features work (import, download, library, player), but expect bugs and incomplete features. Built with Avalonia (cross-platform framework) for future macOS/Linux support.
 
 ### Installation
 
