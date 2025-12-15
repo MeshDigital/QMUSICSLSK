@@ -1,22 +1,21 @@
 using System.Collections.ObjectModel;
 using System.Collections.Generic;
-using System.Windows;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Windows.Input;
 using System.Linq;
 using System;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+using System.Windows.Input;
 using SLSKDONET.Configuration;
 using SLSKDONET.Models;
 using SLSKDONET.Services.InputParsers;
 using SLSKDONET.Services;
 using SLSKDONET.ViewModels;
 using SLSKDONET.Views;
-using Wpf.Ui.Controls;
-using System.Windows.Data;
+using Avalonia.Threading;
 using System.Collections.Concurrent;
 using System.IO;
 
@@ -33,6 +32,8 @@ public class MainViewModel : INotifyPropertyChanged
     private readonly SoulseekAdapter _soulseek;
     private readonly DownloadManager _downloadManager;
     private readonly ILibraryService _libraryService;
+    private readonly IFileInteractionService _fileInteractionService;
+    private readonly Services.ImportProviders.TracklistImportProvider _tracklistImportProvider;
     private string _username = "";
     private PlaylistJob? _currentPlaylistJob;
     private bool _isConnected = false;
@@ -46,8 +47,6 @@ public class MainViewModel : INotifyPropertyChanged
     private int _selectedTrackCount;
     private string _preferredFormats = "mp3,flac";
 
-    private int? _minBitrate;
-    private int? _maxBitrate;
     private CancellationTokenSource _searchCts = new();
 
 
@@ -67,6 +66,50 @@ public class MainViewModel : INotifyPropertyChanged
     }
 
     public ObservableCollection<Track> SearchResults { get; } = new();
+
+    // Search Filters
+    private string _selectedFormat = "All";
+    public string SelectedFormat
+    {
+        get => _selectedFormat;
+        set
+        {
+            if (_selectedFormat != value)
+            {
+                _selectedFormat = value;
+                OnPropertyChanged();
+            }
+        }
+    }
+
+    private int _minBitrateFilter = 0;
+    public int MinBitrateFilter
+    {
+        get => _minBitrateFilter;
+        set
+        {
+            if (_minBitrateFilter != value)
+            {
+                _minBitrateFilter = value;
+                OnPropertyChanged();
+            }
+        }
+    }
+
+    private int _minFileSizeFilter = 0;
+    public int MinFileSizeFilter
+    {
+        get => _minFileSizeFilter;
+        set
+        {
+            if (_minFileSizeFilter != value)
+            {
+                _minFileSizeFilter = value;
+                OnPropertyChanged();
+            }
+        }
+    }
+
     public ObservableCollection<AlbumResultViewModel> AlbumResults { get; } = new();
     public ObservableCollection<DownloadJob> Downloads { get; } = new();
     public ObservableCollection<SearchQuery> ImportedQueries { get; } = new();
@@ -77,6 +120,23 @@ public class MainViewModel : INotifyPropertyChanged
     public ImportPreviewViewModel? ImportPreviewViewModel { get; private set; }
     public PlayerViewModel PlayerViewModel { get; }
     
+    // Navigation - Current page being displayed
+    private object? _currentPage;
+    public object? CurrentPage
+    {
+        get => _currentPage;
+        set => SetProperty(ref _currentPage, value);
+    }
+    
+    // Page instances (lazy-loaded)
+    private object? _searchPage;
+    private object? _libraryPage;
+    private object? _downloadsPage;
+    private object? _settingsPage;
+    
+    // Store LibraryViewModel for navigation
+    private LibraryViewModel? _libraryViewModel;
+    
     private bool _isImportPreviewVisible;
     public bool IsImportPreviewVisible
     {
@@ -84,12 +144,228 @@ public class MainViewModel : INotifyPropertyChanged
         set => SetProperty(ref _isImportPreviewVisible, value);
     }
 
+    // --- Unified Search Properties ---
+
+    private SearchInputMode _currentSearchMode = SearchInputMode.AdHoc;
+    public SearchInputMode CurrentSearchMode
+    {
+        get => _currentSearchMode;
+        set
+        {
+            if (SetProperty(ref _currentSearchMode, value))
+            {
+                OnPropertyChanged(nameof(SearchInputPlaceholder));
+            }
+        }
+    }
+
+    public string SearchInputPlaceholder => CurrentSearchMode switch
+    {
+        SearchInputMode.AdHoc => "Search Soulseek (e.g. 'Artist - Title')...",
+        SearchInputMode.SpotifyLink => "Paste Spotify Playlist or Album URL...",
+        SearchInputMode.CsvFile => "Enter path to CSV file or Drag & Drop...",
+        _ => "Search..."
+    };
+
+    private RankingPreset _rankingPreset = RankingPreset.Balanced;
+    public RankingPreset RankingPreset
+    {
+        get => _rankingPreset;
+        set
+        {
+            if (SetProperty(ref _rankingPreset, value))
+            {
+                _config.RankingPreset = value.ToString();
+                _configManager.Save(_config);
+            }
+        }
+    }
+
+    public int MinBitrate
+    {
+        get => _config.PreferredMinBitrate;
+        set
+        {
+            if (_config.PreferredMinBitrate != value)
+            {
+                _config.PreferredMinBitrate = value;
+                OnPropertyChanged();
+                _configManager.Save(_config);
+            }
+        }
+    }
+
+    public int MaxBitrate
+    {
+        get => _config.PreferredMaxBitrate;
+        set
+        {
+            if (_config.PreferredMaxBitrate != value)
+            {
+                _config.PreferredMaxBitrate = value;
+                OnPropertyChanged();
+                _configManager.Save(_config);
+            }
+        }
+    }
+
+
+    private async Task ExecuteUnifiedSearchAsync()
+    {
+        if (string.IsNullOrWhiteSpace(SearchQuery))
+        {
+             _notificationService.Show("Search Error", "Please enter a search term, URL, or file path.", NotificationType.Warning);
+            return;
+        }
+
+        // Auto-detect mode based on input
+        var mode = DetermineInputMode(SearchQuery);
+        
+        // Update the mode property so the UI (placeholder etc) updates if needed
+        CurrentSearchMode = mode;
+
+        switch (mode)
+        {
+            case SearchInputMode.AdHoc:
+                if (!string.IsNullOrWhiteSpace(SearchQuery))
+                {
+                    await SearchAsync(); 
+                }
+                break;
+
+            case SearchInputMode.SpotifyLink:
+                await ImportFromSpotifyAsync(SearchQuery);
+                break;
+
+            case SearchInputMode.CsvFile:
+                await ImportCsvAsync(SearchQuery);
+                break;
+        }
+    }
+
+    private SearchInputMode DetermineInputMode(string query)
+    {
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            return SearchInputMode.AdHoc; 
+        }
+
+        var q = query.Trim();
+
+        // 1. Spotify Autodetection
+        if (q.Contains("spotify.com", StringComparison.OrdinalIgnoreCase) || 
+            q.StartsWith("spotify:", StringComparison.OrdinalIgnoreCase))
+        {
+            return SearchInputMode.SpotifyLink;
+        }
+
+        // 2. CSV Autodetection (check file extension or path chars)
+        // We can be looser here for the detection, verifying existence in the import method
+        if (q.EndsWith(".csv", StringComparison.OrdinalIgnoreCase))
+        {
+            return SearchInputMode.CsvFile;
+        }
+
+        // 3. Ad Hoc (default)
+        return SearchInputMode.AdHoc;
+    }
+
+    public ICommand BrowseCsvCommand { get; }
+    public ICommand PasteTracklistCommand { get; }
+
+    private async Task ExecuteBrowseCsvAsync()
+    {
+        var result = await _fileInteractionService.OpenFileDialogAsync(
+            "Select CSV File", 
+            new[] { new FileDialogFilter("CSV Files", new List<string> { "csv" }) });
+
+        if (!string.IsNullOrEmpty(result))
+        {
+            SearchQuery = result;
+            // Optionally trigger the search immediately
+            // await ExecuteUnifiedSearchAsync();
+        }
+    }
+
+    private async Task ExecutePasteTracklistAsync()
+    {
+        try
+        {
+            // Get multi-line input from user
+            var rawText = _userInputService.GetInput(
+                "Paste your tracklist here (timestamps will be removed automatically):",
+                "Paste Tracklist");
+
+            if (string.IsNullOrWhiteSpace(rawText))
+                return;
+
+            _logger.LogInformation("Processing pasted tracklist ({Length} chars)", rawText.Length);
+
+            // Use the TracklistImportProvider to parse
+            var result = await _tracklistImportProvider.ImportAsync(rawText);
+
+            if (!result.Success)
+            {
+                StatusText = result.ErrorMessage ?? "Failed to parse tracklist";
+                _logger.LogWarning("Tracklist parse failed: {Error}", result.ErrorMessage);
+                return;
+            }
+
+            // Show preview page
+            if (result.Tracks.Any())
+            {
+                _logger.LogInformation("Initializing ImportPreviewViewModel for {Count} pasted tracks", result.Tracks.Count);
+                var importPreviewVm = CreateImportPreviewViewModel();
+                await importPreviewVm.InitializePreviewAsync(
+                    result.SourceTitle,
+                    "Pasted Tracklist",
+                    result.Tracks);
+
+                ImportPreviewViewModel = importPreviewVm;
+                OnPropertyChanged(nameof(ImportPreviewViewModel));
+
+                // Show the preview in the search page
+                IsImportPreviewVisible = true;
+                OnPropertyChanged(nameof(IsImportPreviewVisible));
+
+                StatusText = $"Preview: {result.Tracks.Count} tracks loaded from pasted text";
+            }
+            else
+            {
+                StatusText = "No tracks found in pasted text";
+            }
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"Paste failed: {ex.Message}";
+            _logger.LogError(ex, "Failed to paste tracklist");
+        }
+    }
+
+
+
     private bool _isNavigationCollapsed;
     public bool IsNavigationCollapsed
     {
         get => _isNavigationCollapsed;
         set => SetProperty(ref _isNavigationCollapsed, value);
     }
+
+    // Player location toggle (sidebar vs bottom)
+    private bool _isPlayerAtBottom = false;
+    public bool IsPlayerAtBottom
+    {
+        get => _isPlayerAtBottom;
+        set
+        {
+            if (SetProperty(ref _isPlayerAtBottom, value))
+            {
+                OnPropertyChanged(nameof(IsPlayerInSidebar));
+            }
+        }
+    }
+
+    public bool IsPlayerInSidebar => !_isPlayerAtBottom;
     
     private bool _isPlayerSidebarVisible = true;
     public bool IsPlayerSidebarVisible
@@ -105,14 +381,12 @@ public class MainViewModel : INotifyPropertyChanged
         get => _downloadsSearchText;
         set
         {
-            if (SetProperty(ref _downloadsSearchText, value))
-            {
-                FilteredGlobalTracks?.Refresh();
-            }
+            SetProperty(ref _downloadsSearchText, value);
+            // Filter logic handled by DownloadsPage or binding
         }
     }
 
-    public ICollectionView FilteredGlobalTracks { get; private set; }
+    public ObservableCollection<PlaylistTrackViewModel> FilteredGlobalTracks { get; private set; } = new();
     public ICommand DeleteTrackCommand { get; }
 
     // Surface download manager counters compatibility
@@ -140,7 +414,7 @@ public class MainViewModel : INotifyPropertyChanged
 
     private void OnTrackUpdated(object? sender, PlaylistTrackViewModel e)
     {
-        System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+        Dispatcher.UIThread.Post(() =>
         {
             OnPropertyChanged(nameof(SuccessfulCount));
             OnPropertyChanged(nameof(FailedCount));
@@ -173,9 +447,16 @@ public class MainViewModel : INotifyPropertyChanged
     public ICommand NavigateSettingsCommand { get; }
     public ICommand ShowLoginCommand { get; }
     public ICommand DismissLoginCommand { get; }
+
     public ICommand DisconnectCommand { get; }
     public ICommand ToggleNavigationCommand { get; }
     public ICommand TogglePlayerCommand { get; }
+    
+    // Unified Search Commands
+    public ICommand UnifiedSearchCommand { get; }
+    public ICommand ClearSearchCommand { get; }
+    public ICommand TogglePlayerLocationCommand { get; }
+
     private readonly INotificationService _notificationService;
     private readonly INavigationService _navigationService;
 
@@ -197,6 +478,8 @@ public class MainViewModel : INotifyPropertyChanged
         ProtectedDataService protectedDataService,
         IUserInputService userInputService,
         CsvInputSource csvInputSource, // Add CsvInputSource dependency
+        IFileInteractionService fileInteractionService,
+        Services.ImportProviders.TracklistImportProvider tracklistImportProvider,
         PlayerViewModel playerViewModel)
     {
         _logger = logger;
@@ -216,6 +499,8 @@ public class MainViewModel : INotifyPropertyChanged
         _protectedDataService = protectedDataService;
         _userInputService = userInputService;
         _searchQueryNormalizer = searchQueryNormalizer; // Store it
+        _fileInteractionService = fileInteractionService;
+        _tracklistImportProvider = tracklistImportProvider;
         SpotifyClientId = _config.SpotifyClientId;
         SpotifyClientSecret = _config.SpotifyClientSecret;
         
@@ -245,7 +530,7 @@ public class MainViewModel : INotifyPropertyChanged
         ImportCsvCommand = new AsyncRelayCommand<string>(ImportCsvAsync, filePath => !string.IsNullOrEmpty(filePath));
         ImportFromSpotifyCommand = new AsyncRelayCommand(() => ImportFromSpotifyAsync());
         // RemoveFromLibraryCommand = new RelayCommand<IList<object>?>(RemoveFromLibrary, items => items is { Count: > 0 }); // LEGACY
-        
+
         
         // Downloads Page Commands
         DeleteTrackCommand = new AsyncRelayCommand<PlaylistTrackViewModel>(async (vm) => 
@@ -253,14 +538,8 @@ public class MainViewModel : INotifyPropertyChanged
              if (vm != null) await _downloadManager.DeleteTrackFromDiskAndHistoryAsync(vm);
         });
         
-        // Initialize Filtered View explicitly to avoid shared view issues
-        var filteredView = new ListCollectionView(_downloadManager.AllGlobalTracks);
-        filteredView.Filter = FilterDownloads;
-        filteredView.IsLiveFiltering = true;
-        filteredView.LiveFilteringProperties.Add(nameof(PlaylistTrackViewModel.State));
-        filteredView.LiveFilteringProperties.Add(nameof(PlaylistTrackViewModel.Artist));
-        filteredView.LiveFilteringProperties.Add(nameof(PlaylistTrackViewModel.Title));
-        FilteredGlobalTracks = filteredView;
+        // Bind filtered downloads directly to the observable collection (simple Avalonia approach)
+        FilteredGlobalTracks = _downloadManager.AllGlobalTracks;
 
         RescanLibraryCommand = new AsyncRelayCommand(RescanLibraryAsync);
         StartDownloadsCommand = new AsyncRelayCommand(StartDownloadsAsync, () => Downloads.Any(j => j.State == DownloadState.Pending));
@@ -283,11 +562,12 @@ public class MainViewModel : INotifyPropertyChanged
             StatusText = "Settings saved successfully!";
         });
 
-        // Initialize navigation commands
-        NavigateSearchCommand = new RelayCommand(() => _navigationService.NavigateTo("Search"));
-        NavigateLibraryCommand = new RelayCommand(() => _navigationService.NavigateTo("Library"));
-        NavigateDownloadsCommand = new RelayCommand(() => _navigationService.NavigateTo("Downloads"));
-        NavigateSettingsCommand = new RelayCommand(() => _navigationService.NavigateTo("Settings"));
+
+        // Initialize        // Navigation commands
+        NavigateSearchCommand = new RelayCommand(NavigateToSearch);
+        NavigateLibraryCommand = new RelayCommand(NavigateToLibrary);
+        NavigateDownloadsCommand = new RelayCommand(NavigateToDownloads);
+        NavigateSettingsCommand = new RelayCommand(NavigateToSettings);
         
         // Initialize login overlay commands
         ShowLoginCommand = new RelayCommand(() => 
@@ -360,6 +640,60 @@ public class MainViewModel : INotifyPropertyChanged
         
         _logger.LogInformation($"MainViewModel initialized. IsConnected={_isConnected}, IsSearching={_isSearching}, StatusText={_statusText}");
         _logger.LogInformation("=== MainViewModel Constructor Completed ===");
+
+
+        // Set default page to Search
+        // Unified Search Commands
+        // Unified Search Commands
+        UnifiedSearchCommand = new AsyncRelayCommand(ExecuteUnifiedSearchAsync, () => !IsSearching);
+        BrowseCsvCommand = new AsyncRelayCommand(ExecuteBrowseCsvAsync);
+        PasteTracklistCommand = new AsyncRelayCommand(ExecutePasteTracklistAsync);
+        ClearSearchCommand = new RelayCommand(() => SearchQuery = "", () => !string.IsNullOrEmpty(SearchQuery));
+        TogglePlayerLocationCommand = new RelayCommand(() => IsPlayerAtBottom = !IsPlayerAtBottom);
+        
+        NavigateToSearch();
+    }
+    
+    // Navigation Methods
+    private void NavigateToSearch()
+    {
+        if (_searchPage == null)
+        {
+            _searchPage = new Views.Avalonia.SearchPage { DataContext = this };
+        }
+        CurrentPage = _searchPage;
+    }
+    
+    private void NavigateToLibrary()
+    {
+        if (_libraryPage == null)
+        {
+            // Get LibraryViewModel from services if not already set
+            if (_libraryViewModel == null && App.Current is App app && app.Services != null)
+            {
+                _libraryViewModel = app.Services.GetService(typeof(LibraryViewModel)) as LibraryViewModel;
+            }
+            _libraryPage = new Views.Avalonia.LibraryPage { DataContext = _libraryViewModel };
+        }
+        CurrentPage = _libraryPage;
+    }
+    
+    private void NavigateToDownloads()
+    {
+        if (_downloadsPage == null)
+        {
+            _downloadsPage = new Views.Avalonia.DownloadsPage { DataContext = this };
+        }
+        CurrentPage = _downloadsPage;
+    }
+    
+    private void NavigateToSettings()
+    {
+        if (_settingsPage == null)
+        {
+            _settingsPage = new Views.Avalonia.SettingsPage { DataContext = this };
+        }
+        CurrentPage = _settingsPage;
     }
 
     // The field '_isLibraryLoaded' is assigned but its value is never used. It has been removed.
@@ -421,7 +755,7 @@ public class MainViewModel : INotifyPropertyChanged
     
     private void HandleStateChange(string? state)
     {
-        System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+        Dispatcher.UIThread.Post(() =>
         {
             _logger.LogInformation("Handling state change: {State}", state);
             
@@ -443,33 +777,7 @@ public class MainViewModel : INotifyPropertyChanged
         });
     }
 
-    // LEGACY: This method is no longer used. Library management now handled by LibraryViewModel.
-    /*
-    private async Task LoadLibraryAsync()
-    {
-        try
-        {
-            var entries = await Task.Run(() => _downloadLogService.GetEntries());
-            // Update UI collection on the UI thread
-            if (System.Windows.Application.Current?.Dispatcher != null)
-            {
-                await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
-                {
-                    LibraryEntries.Clear();
-                    foreach (var entry in entries)
-                    {
-                        LibraryEntries.Add(entry);
-                    }
-                });
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to load library entries");
-            StatusText = "Failed to load library";
-        }
-    }
-    */
+
 
     public string Username
     {
@@ -492,7 +800,7 @@ public class MainViewModel : INotifyPropertyChanged
             if (SetProperty(ref _searchQuery, value))
             {
                 // Notify SearchCommand to re-evaluate CanExecute
-                CommandManager.InvalidateRequerySuggested();
+                (SearchCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
             }
         }
     }
@@ -546,7 +854,8 @@ public class MainViewModel : INotifyPropertyChanged
                 OnPropertyChanged(nameof(IsLoginOverlayVisible));
                 OnPropertyChanged(nameof(ConnectionStatus));
                 // Notify commands that depend on IsConnected
-                CommandManager.InvalidateRequerySuggested();
+                (LoginCommand as AsyncRelayCommand<string>)?.RaiseCanExecuteChanged();
+                (SearchCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
             }
         }
     }
@@ -583,7 +892,8 @@ public class MainViewModel : INotifyPropertyChanged
             {
                 _logger.LogInformation($"*** IsSearching changed to: {value} ***");
                 // Notify commands that depend on IsSearching
-                CommandManager.InvalidateRequerySuggested();
+                (SearchCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+                (CancelSearchCommand as RelayCommand)?.RaiseCanExecuteChanged();
             }
         }
     }
@@ -746,24 +1056,6 @@ public class MainViewModel : INotifyPropertyChanged
     {
         get => _checkForDuplicates;
         set => SetProperty(ref _checkForDuplicates, value);
-    }
-
-    public int? MinBitrate
-    {
-        get => _minBitrate;
-        set
-        {
-            if (SetProperty(ref _minBitrate, value)) UpdateActiveFiltersSummary();
-        }
-    }
-
-    public int? MaxBitrate
-    {
-        get => _maxBitrate;
-        set
-        {
-            if (SetProperty(ref _maxBitrate, value)) UpdateActiveFiltersSummary();
-        }
     }
 
     private string _activeFiltersSummary = "No active filters.";
@@ -955,7 +1247,7 @@ public class MainViewModel : INotifyPropertyChanged
 
                         if (batch.Any())
                         {
-                            System.Windows.Application.Current.Dispatcher.Invoke(() =>
+                            Dispatcher.UIThread.Post(() =>
                             {
                                 foreach (var track in batch)
                                 {
@@ -993,7 +1285,7 @@ public class MainViewModel : INotifyPropertyChanged
                 if (IsAlbumSearch)
                 {
                     var albums = GroupResultsByAlbum(allResults);
-                     System.Windows.Application.Current.Dispatcher.Invoke(() =>
+                     Dispatcher.UIThread.Post(() =>
                     {
                         AlbumResults.Clear();
                         foreach (var album in albums)
@@ -1019,12 +1311,12 @@ public class MainViewModel : INotifyPropertyChanged
                         }
                     }
                     
-                    if (MinBitrate.HasValue || MaxBitrate.HasValue)
+                    if (MinBitrate > 0 || MaxBitrate > 0)
                     {
                         evaluator.AddPreferred(new BitrateCondition 
                         { 
-                            MinBitrate = MinBitrate, 
-                            MaxBitrate = MaxBitrate 
+                            MinBitrate = MinBitrate > 0 ? MinBitrate : null, 
+                            MaxBitrate = MaxBitrate > 0 ? MaxBitrate : null 
                         });
                     }
                     
@@ -1032,7 +1324,7 @@ public class MainViewModel : INotifyPropertyChanged
                     var rankedResults = ResultSorter.OrderResults(allResults, searchTrack, evaluator);
                     
                     // Update UI with ranked results
-                    System.Windows.Application.Current.Dispatcher.Invoke(() =>
+                    Dispatcher.UIThread.Post(() =>
                     {
                         SearchResults.Clear();
                         foreach (var track in rankedResults)
@@ -1173,32 +1465,21 @@ public class MainViewModel : INotifyPropertyChanged
             if (queries.Any())
             {
                 _logger.LogInformation("Initializing ImportPreviewViewModel for {Count} CSV tracks", queries.Count);
-                
-                // Get the ImportPreviewViewModel from DI and initialize it with the queries
-                var importPreviewVm = App.Current.Services.GetService(typeof(ImportPreviewViewModel)) as ImportPreviewViewModel;
-                if (importPreviewVm != null)
-                {
-                    var fileName = System.IO.Path.GetFileNameWithoutExtension(filePath);
-                    await importPreviewVm.InitializePreviewAsync(
-                        fileName ?? "CSV Import",
-                        "CSV",
-                        queries);
-                    
-                    // Assign to property so UI can bind
-                    ImportPreviewViewModel = importPreviewVm;
-                    OnPropertyChanged(nameof(ImportPreviewViewModel));
-                    
-                    // Show the preview in the search page
-                    IsImportPreviewVisible = true;
-                    OnPropertyChanged(nameof(IsImportPreviewVisible));
-                    
-                    StatusText = $"Preview: {queries.Count} tracks loaded from CSV";
-                }
-                else
-                {
-                    _logger.LogError("Failed to resolve ImportPreviewViewModel from DI");
-                    StatusText = "Import failed: Could not create preview";
-                }
+                var importPreviewVm = CreateImportPreviewViewModel();
+                var fileName = System.IO.Path.GetFileNameWithoutExtension(filePath);
+                await importPreviewVm.InitializePreviewAsync(
+                    fileName ?? "CSV Import",
+                    "CSV",
+                    queries);
+
+                ImportPreviewViewModel = importPreviewVm;
+                OnPropertyChanged(nameof(ImportPreviewViewModel));
+
+                // Show the preview in the search page
+                IsImportPreviewVisible = true;
+                OnPropertyChanged(nameof(IsImportPreviewVisible));
+
+                StatusText = $"Preview: {queries.Count} tracks loaded from CSV";
             }
             else
             {
@@ -1224,7 +1505,6 @@ public class MainViewModel : INotifyPropertyChanged
 
             List<SearchQuery> queries;
             var useApi = !string.IsNullOrWhiteSpace(SpotifyClientId) && !string.IsNullOrWhiteSpace(SpotifyClientSecret) && !_config.SpotifyUsePublicOnly;
-
             if (useApi)
             {
                 _logger.LogInformation("Using Spotify API for import");
@@ -1236,33 +1516,23 @@ public class MainViewModel : INotifyPropertyChanged
                 queries = await _spotifyScraperInputSource.ParseAsync(playlistUrl);
             }
 
-            // Show preview page instead of auto-searching
             if (queries.Any())
             {
                 _logger.LogInformation("Initializing ImportPreviewViewModel for {Count} Spotify tracks", queries.Count);
-                
-                // Get the ImportPreviewViewModel from DI and initialize it with the queries
-                var importPreviewVm = App.Current.Services.GetService(typeof(ImportPreviewViewModel)) as ImportPreviewViewModel;
-                if (importPreviewVm != null)
-                {
-                    await importPreviewVm.InitializePreviewAsync(
-                        queries.FirstOrDefault()?.SourceTitle ?? "Spotify Playlist",
-                        "Spotify",
-                        queries);
-                    
-                    // Assign to property so UI can bind
-                    ImportPreviewViewModel = importPreviewVm;
-                    OnPropertyChanged(nameof(ImportPreviewViewModel));
-                    
-                    // Now navigate to the preview page
-                    _navigationService.NavigateTo("ImportPreview");
-                    StatusText = $"Preview: {queries.Count} tracks loaded from Spotify";
-                }
-                else
-                {
-                    _logger.LogError("Failed to resolve ImportPreviewViewModel from DI");
-                    StatusText = "Import failed: Could not create preview";
-                }
+                var importPreviewVm = CreateImportPreviewViewModel();
+                await importPreviewVm.InitializePreviewAsync(
+                    queries.FirstOrDefault()?.SourceTitle ?? "Spotify Playlist",
+                    "Spotify",
+                    queries);
+
+                ImportPreviewViewModel = importPreviewVm;
+                OnPropertyChanged(nameof(ImportPreviewViewModel));
+
+                // Show the preview in the search page
+                IsImportPreviewVisible = true;
+                OnPropertyChanged(nameof(IsImportPreviewVisible));
+
+                StatusText = $"Preview: {queries.Count} tracks loaded from Spotify";
             }
             else
             {
@@ -1322,25 +1592,21 @@ public class MainViewModel : INotifyPropertyChanged
 
         T InvokeOnUi<T>(Func<T> func)
         {
-            var dispatcher = System.Windows.Application.Current?.Dispatcher;
-            if (dispatcher == null || dispatcher.CheckAccess())
-            {
+            if (Dispatcher.UIThread.CheckAccess())
                 return func();
-            }
 
-            return dispatcher.Invoke(func);
+            return Dispatcher.UIThread.InvokeAsync(func).Result;
         }
 
         void InvokeOnUiAction(Action action)
         {
-            var dispatcher = System.Windows.Application.Current?.Dispatcher;
-            if (dispatcher == null || dispatcher.CheckAccess())
+            if (Dispatcher.UIThread.CheckAccess())
             {
                 action();
             }
             else
             {
-                dispatcher.Invoke(action);
+                Dispatcher.UIThread.InvokeAsync(action).Wait();
             }
         }
 
@@ -1589,7 +1855,7 @@ public class MainViewModel : INotifyPropertyChanged
         StatusText = $"Orchestrating batch search for {ImportedQueries.Count} imported items...";
         _logger.LogInformation("SearchAllImportedAsync started for {count} queries.", ImportedQueries.Count);
         
-        System.Windows.Application.Current.Dispatcher.Invoke(() =>
+        Dispatcher.UIThread.Post(() =>
         {
             SearchResults.Clear();
             OrchestratedQueries.Clear();
@@ -1603,7 +1869,7 @@ public class MainViewModel : INotifyPropertyChanged
         try
         {
             // Initialize progress tracking UI with all queries in "Queued" state
-            System.Windows.Application.Current.Dispatcher.Invoke(() =>
+            Dispatcher.UIThread.Post(() =>
             {
                 int idx = 0;
                 foreach (var query in ImportedQueries)
@@ -1621,12 +1887,12 @@ public class MainViewModel : INotifyPropertyChanged
             {
                 evaluator.AddRequired(new FormatCondition { AllowedFormats = formatFilter.ToList() });
             }
-            if (MinBitrate.HasValue || MaxBitrate.HasValue)
+            if (MinBitrate > 0 || MaxBitrate > 0)
             {
                 evaluator.AddPreferred(new BitrateCondition 
                 { 
-                    MinBitrate = MinBitrate, 
-                    MaxBitrate = MaxBitrate 
+                    MinBitrate = MinBitrate > 0 ? MinBitrate : null, 
+                    MaxBitrate = MaxBitrate > 0 ? MaxBitrate : null 
                 });
             }
 
@@ -1641,7 +1907,7 @@ public class MainViewModel : INotifyPropertyChanged
                     _logger.LogInformation("Orchestrating search for: {Query}", queryStr);
                     
                     // Update UI: Searching state
-                    System.Windows.Application.Current.Dispatcher.Invoke(() =>
+                    Dispatcher.UIThread.Post(() =>
                     {
                         progress.State = "Searching";
                         progress.IsProcessing = true;
@@ -1664,7 +1930,7 @@ public class MainViewModel : INotifyPropertyChanged
                         ct);
 
                     // Update UI: Ranking state
-                    System.Windows.Application.Current.Dispatcher.Invoke(() =>
+                    Dispatcher.UIThread.Post(() =>
                     {
                         progress.TotalResults = allResultsForQuery.Count;
                         progress.State = "Ranking";
@@ -1697,7 +1963,7 @@ public class MainViewModel : INotifyPropertyChanged
                             bestMatchesPerQuery.Add(bestMatch);
 
                             // Update UI: Matched state with result info
-                            System.Windows.Application.Current.Dispatcher.Invoke(() =>
+                            Dispatcher.UIThread.Post(() =>
                             {
                                 progress.State = "Matched";
                                 progress.MatchedTrack = $"{bestMatch.Artist} - {bestMatch.Title}";
@@ -1712,7 +1978,7 @@ public class MainViewModel : INotifyPropertyChanged
                         _logger.LogWarning("No results found for query: {Query}", queryStr);
                         
                         // Update UI: Failed state
-                        System.Windows.Application.Current.Dispatcher.Invoke(() =>
+                        Dispatcher.UIThread.Post(() =>
                         {
                             progress.State = "Failed";
                             progress.ErrorMessage = "No results found";
@@ -1722,7 +1988,7 @@ public class MainViewModel : INotifyPropertyChanged
                     }
 
                     var completed = Interlocked.Increment(ref processedQueries);
-                    System.Windows.Application.Current.Dispatcher.Invoke(() =>
+                    Dispatcher.UIThread.Post(() =>
                     {
                         StatusText = $"Processed {completed}/{ImportedQueries.Count} queries. Found {bestMatchesPerQuery.Count} best matches.";
                     });
@@ -1733,7 +1999,7 @@ public class MainViewModel : INotifyPropertyChanged
                     // This is an expected exception when the user cancels the search.
                     // We log it and update the UI for this specific item.
                     // Then we rethrow to signal cancellation to the Parallel.ForEachAsync.
-                    System.Windows.Application.Current.Dispatcher.Invoke(() =>
+                    Dispatcher.UIThread.Post(() =>
                     {
                         progress.State = "Cancelled";
                         progress.IsProcessing = false;
@@ -1747,7 +2013,7 @@ public class MainViewModel : INotifyPropertyChanged
                     _logger.LogError(ex, "Error processing query: {Query}", queryStr);
                     
                     // Update UI: Failed state with error
-                    System.Windows.Application.Current.Dispatcher.Invoke(() =>
+                    Dispatcher.UIThread.Post(() =>
                     {
                         progress.State = "Failed";
                         progress.ErrorMessage = ex.Message;
@@ -1760,7 +2026,7 @@ public class MainViewModel : INotifyPropertyChanged
             StatusText = $"✓ Orchestration complete: {bestMatchesPerQuery.Count} best matches selected from {ImportedQueries.Count} queries.";
             
             // Display ranked results in UI
-            System.Windows.Application.Current.Dispatcher.Invoke(() =>
+            Dispatcher.UIThread.Post(() =>
             {
                 SearchResults.Clear();
                 foreach (var track in bestMatchesPerQuery.OrderByDescending(t => t.CurrentRank))
@@ -1804,7 +2070,7 @@ public class MainViewModel : INotifyPropertyChanged
                 // Queue the entire job (this fires ProjectAdded event for Library UI)
                 await _downloadManager.QueueProject(playlistJob);
                 
-                System.Windows.Application.Current.Dispatcher.Invoke(() =>
+                Dispatcher.UIThread.Post(() =>
                 {
                     StatusText = $"Created Spotify Playlist job with {bestMatchesPerQuery.Count} tracks. Starting download...";
                     _logger.LogInformation("Orchestration: queued {Count} best matches as PlaylistJob", bestMatchesPerQuery.Count);
@@ -1901,50 +2167,14 @@ public class MainViewModel : INotifyPropertyChanged
             return;
         }
 
-        var result = System.Windows.MessageBox.Show(
-            $"Rescan '{folder}'?\nThis will add new files and remove missing ones from history.",
-            "Rescan Library",
-            System.Windows.MessageBoxButton.OKCancel,
-            System.Windows.MessageBoxImage.Warning);
-
-        if (result != System.Windows.MessageBoxResult.OK)
-            return;
+        // TODO: Replace with a proper async confirmation dialog in Avalonia.
+        _notificationService.Show("Library Rescan", $"Rescanning '{folder}'...", NotificationType.Information, TimeSpan.FromSeconds(3));
 
         StatusText = "Rescanning download folder...";
 
         var (added, removed) = await Task.Run(() => _downloadLogService.SyncWithFolder(folder));
-
-        // LEGACY: Library rescan now handled by LibraryViewModel
-        // System.Windows.Application.Current.Dispatcher.Invoke(() =>
-        // {
-        //     LibraryEntries.Clear();
-        //     foreach (var entry in _downloadLogService.GetEntries())
-        //     {
-        //         LibraryEntries.Add(entry);
-        //     }
-        // });
-
-        StatusText = $"Rescan complete. Added {added}, removed {removed}.";
-        _notificationService.Show("Rescan complete", $"Added {added}, removed {removed} entries.", NotificationType.Information, TimeSpan.FromSeconds(5));
-    }
-
-    private void UpdateJobUI(DownloadJob job)
-    {
-        System.Windows.Application.Current.Dispatcher.Invoke(() =>
-        {
-            // Find and update the job in the observable collection
-            var existingJob = Downloads.FirstOrDefault(j => j.Id == job.Id);
-            if (existingJob != null)
-            {
-                // Update properties on the existing job object for efficient UI updates.
-                existingJob.State = job.State;
-                existingJob.Progress = job.Progress;
-                existingJob.BytesDownloaded = job.BytesDownloaded;
-                existingJob.StartedAt = job.StartedAt;
-                existingJob.CompletedAt = job.CompletedAt;
-                existingJob.ErrorMessage = job.ErrorMessage;
-            }
-        });
+        StatusText = $"Rescan complete: {added} added, {removed} removed.";
+        _logger.LogInformation("Rescan complete: Added {Added}, Removed {Removed}", added, removed);
     }
 
     private void ToggleFiltersPanel()
@@ -1965,8 +2195,8 @@ public class MainViewModel : INotifyPropertyChanged
     private void UpdateActiveFiltersSummary()
     {
         var filters = new List<string>();
-        if (MinBitrate.HasValue) filters.Add($"Min Bitrate: {MinBitrate}kbps");
-        if (MaxBitrate.HasValue) filters.Add($"Max Bitrate: {MaxBitrate}kbps");
+        if (MinBitrate > 0) filters.Add($"Min Bitrate: {MinBitrate}kbps");
+        if (MaxBitrate > 0) filters.Add($"Max Bitrate: {MaxBitrate}kbps");
         if (!string.IsNullOrEmpty(PreferredFormats)) filters.Add($"Formats: {PreferredFormats}");
 
         ActiveFiltersSummary = filters.Any()
@@ -1989,41 +2219,22 @@ public class MainViewModel : INotifyPropertyChanged
         _config.SpotifyClientSecret = SpotifyClientSecret;
         _config.SpotifyUsePublicOnly = !UseSpotifyApi;
 
-        _config.PreferredMinBitrate = MinBitrate ?? _config.PreferredMinBitrate;
-        _config.PreferredMaxBitrate = MaxBitrate ?? _config.PreferredMaxBitrate;
+        _config.PreferredMinBitrate = MinBitrate;
+        _config.PreferredMaxBitrate = MaxBitrate;
     }
 
 
     private void BrowseDownloadPath()
     {
-        var dialog = new System.Windows.Forms.FolderBrowserDialog
-        {
-            Description = "Select a folder for downloads",
-            SelectedPath = DownloadPath ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads")
-        };
-
-        if (dialog.ShowDialog() == System.Windows.Forms.DialogResult.OK)
-        {
-            DownloadPath = dialog.SelectedPath;
-            StatusText = $"Download path set to: {DownloadPath}";
-        }
+        // TODO: Implement using Avalonia's StorageProvider API
+        _notificationService.Show("Not Implemented", "Folder browsing will be enabled in a future version.", NotificationType.Warning);
     }
 
     private void BrowseSharedFolder()
     {
-        var dialog = new System.Windows.Forms.FolderBrowserDialog
-        {
-            Description = "Select a shared folder",
-            SelectedPath = SharedFolderPath ?? Environment.GetFolderPath(Environment.SpecialFolder.MyMusic)
-        };
-
-        if (dialog.ShowDialog() == System.Windows.Forms.DialogResult.OK)
-        {
-            SharedFolderPath = dialog.SelectedPath;
-            StatusText = $"Shared folder set to: {SharedFolderPath}";
-        }
+        // TODO: Implement using Avalonia's StorageProvider API
+        _notificationService.Show("Not Implemented", "Folder browsing will be enabled in a future version.", NotificationType.Warning);
     }
-
 
     private readonly SearchQueryNormalizer _searchQueryNormalizer;
     private readonly SpotifyScraperInputSource _spotifyScraperInputSource;
@@ -2045,7 +2256,7 @@ public class MainViewModel : INotifyPropertyChanged
     /// </summary>
     private void RebuildUniqueImports()
     {
-        System.Windows.Application.Current.Dispatcher.Invoke(() =>
+        Dispatcher.UIThread.Post(() =>
         {
             UniqueImports.Clear();
             
@@ -2075,7 +2286,7 @@ public class MainViewModel : INotifyPropertyChanged
     {
         // LEGACY: Filtering now handled by LibraryViewModel
         /*
-        System.Windows.Application.Current.Dispatcher.Invoke(() =>
+        Dispatcher.UIThread.Post(() =>
         {
             FilteredLibraryEntries.Clear();
             
@@ -2116,7 +2327,7 @@ public class MainViewModel : INotifyPropertyChanged
     /// </summary>
     private void UpdateImportDownloadStats()
     {
-        System.Windows.Application.Current.Dispatcher.Invoke(() =>
+        Dispatcher.UIThread.Post(() =>
         {
             if (SelectedImport == null)
             {
@@ -2179,5 +2390,31 @@ public class MainViewModel : INotifyPropertyChanged
         field = value;
         OnPropertyChanged(propertyName);
         return true;
+    }
+
+    private ImportPreviewViewModel CreateImportPreviewViewModel()
+    {
+        // Use NullLogger for now - the important part is the event wiring
+        var importLogger = NullLogger<ImportPreviewViewModel>.Instance;
+        var vm = new ImportPreviewViewModel(importLogger, _downloadManager, _navigationService, _libraryService);
+        
+        // Wire up Cancel event to hide preview and return to search
+        vm.Cancelled += (s, e) =>
+        {
+            _logger.LogInformation("Import preview cancelled by user");
+            IsImportPreviewVisible = false;
+            OnPropertyChanged(nameof(IsImportPreviewVisible));
+        };
+        
+        // Wire up AddedToLibrary event to process the job
+        vm.AddedToLibrary += async (s, job) =>
+        {
+            _logger.LogInformation("Import preview confirmed, adding {Count} tracks to library", job.OriginalTracks.Count);
+            await vm.HandlePlaylistJobAddedAsync(job);
+            IsImportPreviewVisible = false;
+            OnPropertyChanged(nameof(IsImportPreviewVisible));
+        };
+        
+        return vm;
     }
 }

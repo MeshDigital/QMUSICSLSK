@@ -46,6 +46,27 @@ public class PlaylistTrack
     public string ResolvedFilePath { get; set; } = string.Empty;
 
     /// <summary>
+    /// User rating (1-5 stars, 0 = not rated).
+    /// </summary>
+    public int Rating { get; set; } = 0;
+
+    /// <summary>
+    /// Whether the user has liked this track.
+    /// Liked tracks are automatically added to "Liked Songs" smart playlist.
+    /// </summary>
+    public bool IsLiked { get; set; } = false;
+
+    /// <summary>
+    /// Number of times this track has been played.
+    /// </summary>
+    public int PlayCount { get; set; } = 0;
+
+    /// <summary>
+    /// Last time this track was played.
+    /// </summary>
+    public DateTime? LastPlayedAt { get; set; }
+
+    /// <summary>
     /// Position within the original playlist (1-based index).
     /// </summary>
     public int TrackNumber { get; set; }

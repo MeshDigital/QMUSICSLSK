@@ -102,12 +102,10 @@ public class SoulseekAdapter : IDisposable
 
         try
         {
-            _logger.LogInformation("=== SEARCH STARTING ===");
-            _logger.LogInformation("Query: {Query}", query);
-            _logger.LogInformation("Mode: {Mode}", mode);
-            _logger.LogInformation("Format filter: {Formats}", formatFilter == null ? "NONE" : string.Join(", ", formatFilter));
-            _logger.LogInformation("Bitrate filter: Min={Min}, Max={Max}", bitrateFilter.Min, bitrateFilter.Max);
-            _logger.LogInformation("Connected: {Connected}", _client != null && _client.State.HasFlag(SoulseekClientStates.Connected));
+            var minBitrateStr = bitrateFilter.Min?.ToString() ?? "0";
+            var maxBitrateStr = bitrateFilter.Max?.ToString() ?? "unlimited";
+            _logger.LogInformation("Search started for query {SearchQuery} with mode {SearchMode}, format filter {FormatFilter}, bitrate range {MinBitrate}-{MaxBitrate}",
+                query, mode, formatFilter == null ? "NONE" : string.Join(", ", formatFilter), minBitrateStr, maxBitrateStr);
             
             var searchQuery = Soulseek.SearchQuery.FromText(query);
             var options = new SearchOptions(
@@ -204,18 +202,14 @@ public class SoulseekAdapter : IDisposable
                 resultCount = directories.Count;
             }
 
-            _logger.LogInformation("=== Search Summary ===");
-            _logger.LogInformation("Total files received: {Total}", totalFilesReceived);
-            _logger.LogInformation("Filtered by format: {Count}", filteredByFormat);
-            _logger.LogInformation("Filtered by bitrate: {Count}", filteredByBitrate);
-            _logger.LogInformation("Results passed to UI: {Count}", resultCount);
-            _logger.LogInformation("=======================");
+            _logger.LogInformation("Search completed: {ResultCount} results from {TotalFiles} files (filtered: {FormatFiltered} by format, {BitrateFiltered} by bitrate)",
+                resultCount, totalFilesReceived, filteredByFormat, filteredByBitrate);
             
             return resultCount;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Search failed: {Message}", ex.Message);
+            _logger.LogError(ex, "Search failed for query {SearchQuery} with mode {SearchMode}", query, mode);
             throw;
         }
     }

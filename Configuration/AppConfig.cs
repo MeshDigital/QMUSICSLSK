@@ -41,6 +41,14 @@ public class AppConfig
     public int MaxSearchAttempts { get; set; } = 3; // Max progressive search attempts per track
     public bool AutoRetryFailedDownloads { get; set; } = true;
     public int MaxDownloadRetries { get; set; } = 2;
+    public string RankingPreset { get; set; } = "Balanced";
+    
+    // Window state persistence
+    public double WindowWidth { get; set; } = 1400;
+    public double WindowHeight { get; set; } = 900;
+    public double WindowX { get; set; } = double.NaN; // NaN means center
+    public double WindowY { get; set; } = double.NaN;
+    public bool WindowMaximized { get; set; } = false;
 
     // Library Management
     public List<string> LibraryRootPaths { get; set; } = new(); // Root directories to scan for music files

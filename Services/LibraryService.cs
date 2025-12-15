@@ -1,3 +1,4 @@
+using Avalonia;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -9,6 +10,7 @@ using SLSKDONET.Configuration;
 using SLSKDONET.Data;
 using SLSKDONET.Models;
 using SLSKDONET.Utils;
+using Avalonia.Threading;
 
 namespace SLSKDONET.Services;
 
@@ -79,7 +81,7 @@ public class LibraryService : ILibraryService
             _logger.LogInformation("Loading playlists from database...");
             var jobs = await _databaseService.LoadAllPlaylistJobsAsync();
             
-            System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+            Dispatcher.UIThread.Post(() =>
             {
                 Playlists.Clear();
                 foreach (var job in jobs)
@@ -208,7 +210,7 @@ public class LibraryService : ILibraryService
             _logger.LogInformation("Saved playlist job: {Title} ({Id})", job.SourceTitle, job.Id);
 
             // REACTIVE: Auto-add to observable collection if not already there
-            System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+            Dispatcher.UIThread.Post(() =>
             {
                 if (!Playlists.Any(p => p.Id == job.Id))
                 {
@@ -232,7 +234,7 @@ public class LibraryService : ILibraryService
             await _databaseService.SavePlaylistJobWithTracksAsync(job).ConfigureAwait(false);
             
             // 2. Update In-Memory Reactive Collection (Fire & Forget to avoid deadlock)
-            _ = System.Windows.Application.Current?.Dispatcher.InvokeAsync(() =>
+            Dispatcher.UIThread.Post(() =>
             {
                 try 
                 {
@@ -264,7 +266,7 @@ public class LibraryService : ILibraryService
             _logger.LogInformation("Deleted playlist job: {Id}", playlistId);
 
             // REACTIVE: Auto-remove from observable collection
-            System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+            Dispatcher.UIThread.Post(() =>
             {
                 var jobToRemove = Playlists.FirstOrDefault(p => p.Id == playlistId);
                 if (jobToRemove != null)
@@ -495,6 +497,10 @@ public class LibraryService : ILibraryService
             Status = entity.Status,
             ResolvedFilePath = entity.ResolvedFilePath,
             TrackNumber = entity.TrackNumber,
+            Rating = entity.Rating,
+            IsLiked = entity.IsLiked,
+            PlayCount = entity.PlayCount,
+            LastPlayedAt = entity.LastPlayedAt,
             AddedAt = entity.AddedAt,
             SortOrder = entity.SortOrder
         };
@@ -513,6 +519,10 @@ public class LibraryService : ILibraryService
             Status = track.Status,
             ResolvedFilePath = track.ResolvedFilePath,
             TrackNumber = track.TrackNumber,
+            Rating = track.Rating,
+            IsLiked = track.IsLiked,
+            PlayCount = track.PlayCount,
+            LastPlayedAt = track.LastPlayedAt,
             AddedAt = track.AddedAt,
             SortOrder = track.SortOrder
         };

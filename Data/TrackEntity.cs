@@ -72,6 +72,12 @@ public class PlaylistTrackEntity
     public string ResolvedFilePath { get; set; } = string.Empty;
     public int TrackNumber { get; set; }
 
+    // User engagement
+    public int Rating { get; set; } = 0; // 1-5 stars, 0 = not rated
+    public bool IsLiked { get; set; } = false;
+    public int PlayCount { get; set; } = 0;
+    public DateTime? LastPlayedAt { get; set; }
+
     public DateTime AddedAt { get; set; }
     public int SortOrder { get; set; }
     

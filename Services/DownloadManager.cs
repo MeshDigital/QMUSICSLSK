@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using Avalonia.Threading;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
@@ -9,6 +10,7 @@ using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using Serilog.Context;
 using SLSKDONET.Configuration;
 using SLSKDONET.Models;
 using SLSKDONET.Services.InputParsers;
@@ -73,8 +75,8 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
         // Initialize from config, but allow runtime changes
         MaxActiveDownloads = _config.MaxConcurrentDownloads > 0 ? _config.MaxConcurrentDownloads : 3;
 
-        // Enable cross-thread collection access
-        System.Windows.Data.BindingOperations.EnableCollectionSynchronization(AllGlobalTracks, _collectionLock);
+        // Note: WPF collection synchronization is not needed for Avalonia
+        // The collection is accessed via async/await patterns which handle threading properly
     }
 
     public int MaxActiveDownloads { get; set; }
@@ -133,67 +135,59 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
     /// </summary>
     public async Task QueueProject(PlaylistJob job)
     {
-        // Robustness: If the job comes from an import preview, it will have OriginalTracks
-        // but no PlaylistTracks. We must convert them before proceeding.
-        if (job.PlaylistTracks.Count == 0 && job.OriginalTracks.Count > 0)
+        // Add correlation context for all logs related to this job
+        using (LogContext.PushProperty("PlaylistJobId", job.Id))
+        using (LogContext.PushProperty("JobName", job.SourceTitle))
         {
-            _logger.LogInformation("QueueProject: Converting {Count} OriginalTracks to PlaylistTracks for job '{Title}'.", job.OriginalTracks.Count, job.SourceTitle);
-            var playlistTracks = new List<PlaylistTrack>();
-            int idx = 1;
-            foreach (var track in job.OriginalTracks)
+            // Robustness: If the job comes from an import preview, it will have OriginalTracks
+            // but no PlaylistTracks. We must convert them before proceeding.
+            if (job.PlaylistTracks.Count == 0 && job.OriginalTracks.Count > 0)
             {
-                var pt = new PlaylistTrack
+                _logger.LogInformation("Converting {OriginalTrackCount} OriginalTracks to PlaylistTracks", job.OriginalTracks.Count);
+                var playlistTracks = new List<PlaylistTrack>();
+                int idx = 1;
+                foreach (var track in job.OriginalTracks)
                 {
-                    Id = Guid.NewGuid(),
-                    PlaylistId = job.Id,
-                    Artist = track.Artist ?? string.Empty,
-                    Title = track.Title ?? string.Empty,
-                    Album = track.Album ?? string.Empty,
-                    TrackUniqueHash = track.UniqueHash,
-                    Status = TrackStatus.Missing,
-                    ResolvedFilePath = string.Empty, // Will be determined during download
-                    TrackNumber = idx++
-                };
-                playlistTracks.Add(pt);
+                    var pt = new PlaylistTrack
+                    {
+                        Id = Guid.NewGuid(),
+                        PlaylistId = job.Id,
+                        Artist = track.Artist ?? string.Empty,
+                        Title = track.Title ?? string.Empty,
+                        Album = track.Album ?? string.Empty,
+                        TrackUniqueHash = track.UniqueHash,
+                        Status = TrackStatus.Missing,
+                        ResolvedFilePath = string.Empty,
+                        TrackNumber = idx++
+                    };
+                    playlistTracks.Add(pt);
+                }
+                job.PlaylistTracks = playlistTracks;
             }
-            job.PlaylistTracks = playlistTracks;
-        }
 
-        _logger.LogInformation(
-            "Queueing project. Title: {Title}, TrackCount: {Count}, JobId: {JobId}, Thread: {ThreadId}",
-            job.SourceTitle,
-            job.PlaylistTracks.Count,
-            job.Id,
-            Thread.CurrentThread.ManagedThreadId);
+            _logger.LogInformation("Queueing project with {TrackCount} tracks", job.PlaylistTracks.Count);
 
-        // 1. Persist the job header and all associated tracks via LibraryService
-        // This ensures the Library UI (Left Sidebar) is updated immediately.
-        try
-        {
-            await _libraryService.SavePlaylistJobWithTracksAsync(job);
+            // 1. Persist the job header and all associated tracks via LibraryService
+            try
+            {
+                await _libraryService.SavePlaylistJobWithTracksAsync(job);
+                _logger.LogInformation("Saved PlaylistJob to database with {TrackCount} tracks", job.PlaylistTracks.Count);
+
+                // Run diagnostic log right after saving
+                await _databaseService.LogPlaylistJobDiagnostic(job.Id);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to persist PlaylistJob and its tracks");
+                return;
+            }
+
+            // 3. Queue the tracks using the internal method
+            QueueTracks(job.PlaylistTracks);
             
-            _logger.LogInformation(
-                "Saved PlaylistJob to Library. Title: {Title}, TrackCount: {Count}, JobId: {JobId}, Thread: {ThreadId}",
-                job.SourceTitle,
-                job.PlaylistTracks.Count,
-                job.Id,
-                Thread.CurrentThread.ManagedThreadId);
-
-            // Run diagnostic log right after saving
-            await _databaseService.LogPlaylistJobDiagnostic(job.Id);
+            // 4. Fire event for Library UI to refresh
+            ProjectAdded?.Invoke(this, new ProjectEventArgs(job));
         }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to persist PlaylistJob and its tracks: {Id}", job.Id);
-            // This is a critical error, as the tracks won't be processed. We should not continue.
-            return;
-        }
-
-        // 3. Queue the tracks using the internal method for collection add and individual track persistence
-        QueueTracks(job.PlaylistTracks);
-        
-        // 4. Fire event for Library UI to refresh
-        ProjectAdded?.Invoke(this, new ProjectEventArgs(job));
     }
 
     /// <summary>
@@ -239,7 +233,7 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
     {
         if (vm == null) return;
         
-        _logger.LogInformation("Deleting track from disk and history: {Artist} - {Title} ({Id})", vm.Artist, vm.Title, vm.GlobalId);
+        _logger.LogInformation("Deleting track from disk and history: {Artist} - {Title} (GlobalId: {GlobalId})", vm.Artist, vm.Title, vm.GlobalId);
 
         // 1. Cancel active download
         if (vm.CanCancel)
@@ -281,13 +275,10 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
         await _databaseService.UpdatePlaylistTrackStatusAndRecalculateJobsAsync(vm.GlobalId, TrackStatus.Missing, string.Empty);
 
         // 5. Remove from Memory (Global Cache)
-        if (System.Windows.Application.Current != null)
+        await Dispatcher.UIThread.InvokeAsync(() =>
         {
-            await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
-            {
-                AllGlobalTracks.Remove(vm);
-            });
-        }
+            AllGlobalTracks.Remove(vm);
+        });
     }
     
     private async void OnTrackPropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -408,7 +399,7 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
             // Cancel the download but keep the partial file
             vm.CancellationTokenSource?.Cancel();
             vm.State = PlaylistTrackState.Paused;
-            _logger.LogInformation("Paused track: {Artist} - {Title}", vm.Artist, vm.Title);
+            _logger.LogInformation("Paused track: {Artist} - {Title} (GlobalId: {GlobalId})", vm.Artist, vm.Title, vm.GlobalId);
         }
     }
 
@@ -480,7 +471,7 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
             return;
         }
 
-        _logger.LogInformation("Cancelling track: {Artist} - {Title}", vm.Artist, vm.Title);
+        _logger.LogInformation("Cancelling track: {Artist} - {Title} (GlobalId: {GlobalId})", vm.Artist, vm.Title, vm.GlobalId);
 
         // 1. Cancel any active download
         vm.CancellationTokenSource?.Cancel();
@@ -605,7 +596,7 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogError(ex, "CRITICAL: Error in ProcessTrack wrapper for {Artist} - {Title}", nextTrack.Artist, nextTrack.Title);
+                        _logger.LogError(ex, "Error in ProcessTrack for {Artist} - {Title} (GlobalId: {GlobalId})", nextTrack.Artist, nextTrack.Title, nextTrack.GlobalId);
                         nextTrack.State = PlaylistTrackState.Failed;
                         nextTrack.ErrorMessage = "Internal Error: " + ex.Message;
                     }
@@ -671,7 +662,7 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
             {
                 track.State = PlaylistTrackState.Cancelled;
             }
-            _logger.LogInformation("Track processing stopped: {Artist} - {Title} ({State})", track.Artist, track.Title, track.State);
+            _logger.LogInformation("Track processing stopped: {Artist} - {Title} (State: {State}, GlobalId: {GlobalId})", track.Artist, track.Title, track.State, track.GlobalId);
             // State change will be persisted by OnTrackPropertyChanged
         }
         catch (Exception ex)
@@ -710,7 +701,7 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
         catch (OperationCanceledException) { /* Timeout or user cancellation is expected */ }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Search for '{Query}' failed.", query);
+            _logger.LogWarning(ex, "Search failed for query {SearchQuery}", query);
         }
 
         return results.IsEmpty ? null : results;

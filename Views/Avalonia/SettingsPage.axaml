@@ -1,0 +1,208 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="1200" d:DesignHeight="800"
+             x:Class="SLSKDONET.Views.Avalonia.SettingsPage"
+             Background="#1E1E1E" Foreground="White">
+    
+    <ScrollViewer>
+        <StackPanel Margin="24" Spacing="24" MaxWidth="800">
+            
+            <!-- Header -->
+            <StackPanel Spacing="8">
+                <TextBlock Text="Settings" FontSize="28" FontWeight="Bold" Foreground="White"/>
+                <TextBlock Text="Configure your download preferences and Soulseek settings" 
+                           FontSize="13" Foreground="#A0A0A0"/>
+            </StackPanel>
+
+            <!-- Download Settings -->
+            <Border Background="#252526" CornerRadius="8" Padding="20" BorderBrush="#3E3E3E" BorderThickness="1">
+                <StackPanel Spacing="16">
+                    <TextBlock Text="Download Settings" FontSize="16" FontWeight="SemiBold" Foreground="White"/>
+                    
+                    <!-- Download Folder -->
+                    <Grid ColumnDefinitions="180,*,Auto">
+                        <TextBlock Grid.Column="0" Text="Download Folder:" VerticalAlignment="Center" Foreground="#DDD"/>
+                        <TextBox Grid.Column="1" 
+                                 Text="{Binding DownloadPath, Mode=TwoWay}" 
+                                 IsReadOnly="True"
+                                 Background="#1E1E1E"
+                                 Margin="0,0,8,0"/>
+                        <Button Grid.Column="2" 
+                                Command="{Binding BrowseDownloadPathCommand}"
+                                Background="#0078D4"
+                                Foreground="White"
+                                Padding="12,8">
+                            <TextBlock Text="Browse..."/>
+                        </Button>
+                    </Grid>
+                    
+                    <!-- Shared Folder -->
+                    <Grid ColumnDefinitions="180,*,Auto">
+                        <TextBlock Grid.Column="0" Text="Shared Folder:" VerticalAlignment="Center" Foreground="#DDD"/>
+                        <TextBox Grid.Column="1" 
+                                 Text="{Binding SharedFolderPath, Mode=TwoWay}" 
+                                 IsReadOnly="True"
+                                 Background="#1E1E1E"
+                                 Margin="0,0,8,0"/>
+                        <Button Grid.Column="2" 
+                                Command="{Binding BrowseSharedFolderCommand}"
+                                Background="#0078D4"
+                                Foreground="White"
+                                Padding="12,8">
+                            <TextBlock Text="Browse..."/>
+                        </Button>
+                    </Grid>
+                    
+                    <!-- Max Concurrent Downloads -->
+                    <Grid ColumnDefinitions="180,100,*">
+                        <TextBlock Grid.Column="0" Text="Max Concurrent Downloads:" VerticalAlignment="Center" Foreground="#DDD"/>
+                        <NumericUpDown Grid.Column="1" 
+                                       Value="{Binding MaxConcurrentDownloads, Mode=TwoWay}"
+                                       Minimum="1"
+                                       Maximum="10"
+                                       Increment="1"
+                                       Background="#1E1E1E"
+                                       Foreground="White"/>
+                        <TextBlock Grid.Column="2" 
+                                   Text="Limit active downloads to share bandwidth" 
+                                   VerticalAlignment="Center" 
+                                   Foreground="#666" 
+                                   FontSize="11"
+                                   Margin="12,0,0,0"/>
+                    </Grid>
+                    
+                    <!-- File Name Format -->
+                    <Grid ColumnDefinitions="180,*">
+                        <TextBlock Grid.Column="0" Text="File Name Format:" VerticalAlignment="Center" Foreground="#DDD"/>
+                        <TextBox Grid.Column="1" 
+                                 Text="{Binding FileNameFormat, Mode=TwoWay}"
+                                 Background="#1E1E1E"/>
+                    </Grid>
+                    <TextBlock Text="Placeholders: {{artist}}, {{title}}, {{album}}, {{filename}}, {{bitrate}}, {{format}}, {{length}}, {{user}}" 
+                               Foreground="#666" 
+                               FontSize="11"
+                               Margin="180,0,0,0"/>
+                    
+                    <!-- Duplicate Prevention -->
+                    <Grid ColumnDefinitions="180,*">
+                        <TextBlock Grid.Column="0" Text="Prevent Duplicate Downloads:" VerticalAlignment="Center" Foreground="#DDD"/>
+                        <CheckBox Grid.Column="1" 
+                                  IsChecked="{Binding CheckForDuplicates, Mode=TwoWay}"
+                                  Content="Skip tracks that already exist in library"
+                                  Foreground="#AAA"/>
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <!-- Search Filter Defaults -->
+            <Border Background="#252526" CornerRadius="8" Padding="20" BorderBrush="#3E3E3E" BorderThickness="1">
+                <StackPanel Spacing="16">
+                    <TextBlock Text="Default Search Filters" FontSize="16" FontWeight="SemiBold" Foreground="White"/>
+                    
+                    <!-- Min Bitrate -->
+                    <Grid ColumnDefinitions="180,100,*">
+                        <TextBlock Grid.Column="0" Text="Min Bitrate:" VerticalAlignment="Center" Foreground="#DDD"/>
+                        <NumericUpDown Grid.Column="1" 
+                                       Value="{Binding MinBitrate, Mode=TwoWay}"
+                                       Minimum="0"
+                                       Maximum="320"
+                                       Increment="32"
+                                       Background="#1E1E1E"
+                                       Foreground="White"/>
+                        <TextBlock Grid.Column="2" 
+                                   Text="kbps" 
+                                   VerticalAlignment="Center" 
+                                   Foreground="#666"
+                                   Margin="12,0,0,0"/>
+                    </Grid>
+                    
+                    <!-- Max Bitrate -->
+                    <Grid ColumnDefinitions="180,100,*">
+                        <TextBlock Grid.Column="0" Text="Max Bitrate:" VerticalAlignment="Center" Foreground="#DDD"/>
+                        <NumericUpDown Grid.Column="1" 
+                                       Value="{Binding MaxBitrate, Mode=TwoWay}"
+                                       Minimum="0"
+                                       Maximum="320"
+                                       Increment="32"
+                                       Background="#1E1E1E"
+                                       Foreground="White"/>
+                        <TextBlock Grid.Column="2" 
+                                   Text="kbps" 
+                                   VerticalAlignment="Center" 
+                                   Foreground="#666"
+                                   Margin="12,0,0,0"/>
+                    </Grid>
+                    
+                    <!-- Preferred Formats -->
+                    <Grid ColumnDefinitions="180,*">
+                        <TextBlock Grid.Column="0" Text="Preferred Formats:" VerticalAlignment="Center" Foreground="#DDD"/>
+                        <TextBox Grid.Column="1" 
+                                 Text="{Binding PreferredFormats, Mode=TwoWay}"
+                                 Background="#1E1E1E"
+                                 Watermark="mp3,flac,aac"/>
+                    </Grid>
+                    <TextBlock Text="Comma-separated list of preferred audio formats" 
+                               Foreground="#666" 
+                               FontSize="11"
+                               Margin="180,0,0,0"/>
+                </StackPanel>
+            </Border>
+
+            <!-- Spotify Integration -->
+            <Border Background="#252526" CornerRadius="8" Padding="20" BorderBrush="#3E3E3E" BorderThickness="1">
+                <StackPanel Spacing="16">
+                    <TextBlock Text="Spotify Integration" FontSize="16" FontWeight="SemiBold" Foreground="White"/>
+                    
+                    <TextBlock TextWrapping="Wrap" Foreground="#AAA" FontSize="12">
+                        By default, Spotify playlists are imported using public scraping. For more reliable access and to import private playlists or 'Liked Songs', you can provide your own Spotify API credentials.
+                    </TextBlock>
+                    
+                    <!-- Use Spotify API -->
+                    <Grid ColumnDefinitions="180,*">
+                        <TextBlock Grid.Column="0" Text="Use Spotify API:" VerticalAlignment="Center" Foreground="#DDD"/>
+                        <CheckBox Grid.Column="1" 
+                                  IsChecked="{Binding UseSpotifyApi, Mode=TwoWay}"
+                                  Content="Use API credentials instead of public scraping"
+                                  Foreground="#AAA"/>
+                    </Grid>
+                    
+                    <!-- Client ID -->
+                    <Grid ColumnDefinitions="180,*" IsEnabled="{Binding UseSpotifyApi}">
+                        <TextBlock Grid.Column="0" Text="Spotify Client ID:" VerticalAlignment="Center" Foreground="#DDD"/>
+                        <TextBox Grid.Column="1" 
+                                 Text="{Binding SpotifyClientId, Mode=TwoWay}"
+                                 Background="#1E1E1E"
+                                 Watermark="Enter your Spotify Client ID"/>
+                    </Grid>
+                    
+                    <!-- Client Secret -->
+                    <Grid ColumnDefinitions="180,*" IsEnabled="{Binding UseSpotifyApi}">
+                        <TextBlock Grid.Column="0" Text="Spotify Client Secret:" VerticalAlignment="Center" Foreground="#DDD"/>
+                        <TextBox Grid.Column="1" 
+                                 Text="{Binding SpotifyClientSecret, Mode=TwoWay}"
+                                 Background="#1E1E1E"
+                                 Watermark="Enter your Spotify Client Secret"
+                                 PasswordChar="•"/>
+                    </Grid>
+                    <TextBlock Text="Your secret is encrypted and stored securely on your machine" 
+                               Foreground="#666" 
+                               FontSize="11"
+                               Margin="180,0,0,0"/>
+                </StackPanel>
+            </Border>
+
+            <!-- Save Button -->
+            <Button Command="{Binding SaveSettingsCommand}"
+                    Classes="primary"
+                    HorizontalAlignment="Left"
+                    Padding="24,12">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <TextBlock Text="💾" FontSize="16"/>
+                    <TextBlock Text="Save Settings" FontSize="14" FontWeight="SemiBold"/>
+                </StackPanel>
+            </Button>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

@@ -1,0 +1,182 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    
+    <Styles.Resources>
+        <!-- Color Resources -->
+        <SolidColorBrush x:Key="PrimaryBackgroundBrush">#1E1E1E</SolidColorBrush>
+        <SolidColorBrush x:Key="SecondaryBackgroundBrush">#252526</SolidColorBrush>
+        <SolidColorBrush x:Key="TertiaryBackgroundBrush">#2D2D2D</SolidColorBrush>
+        <SolidColorBrush x:Key="AccentBrush">#0078D4</SolidColorBrush>
+        <SolidColorBrush x:Key="BorderBrush">#3E3E3E</SolidColorBrush>
+        <SolidColorBrush x:Key="TextPrimaryBrush">#FFFFFF</SolidColorBrush>
+        <SolidColorBrush x:Key="TextSecondaryBrush">#A0A0A0</SolidColorBrush>
+    </Styles.Resources>
+    
+    <!-- Window Style -->
+    <Style Selector="Window">
+        <Setter Property="Background" Value="{StaticResource PrimaryBackgroundBrush}"/>
+        <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+    </Style>
+    
+    <!-- Primary Button Style (Blue Gradient) -->
+    <Style Selector="Button.primary">
+        <Setter Property="Foreground" Value="White"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="Padding" Value="16,10"/>
+        <Setter Property="CornerRadius" Value="4"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="Background">
+            <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                <GradientStop Color="#0078D4" Offset="0"/>
+                <GradientStop Color="#0063B1" Offset="1"/>
+            </LinearGradientBrush>
+        </Setter>
+    </Style>
+    
+    <Style Selector="Button.primary:pointerover">
+        <Setter Property="Background">
+            <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                <GradientStop Color="#1084D7" Offset="0"/>
+                <GradientStop Color="#0078D4" Offset="1"/>
+            </LinearGradientBrush>
+        </Setter>
+    </Style>
+    
+    <Style Selector="Button.primary:pressed">
+        <Setter Property="Background">
+            <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                <GradientStop Color="#0063B1" Offset="0"/>
+                <GradientStop Color="#005A9E" Offset="1"/>
+            </LinearGradientBrush>
+        </Setter>
+    </Style>
+    
+    <!-- Navigation Button Style -->
+    <Style Selector="Button.nav">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="Padding" Value="16,12"/>
+        <Setter Property="HorizontalContentAlignment" Value="Left"/>
+        <Setter Property="Cursor" Value="Hand"/>
+    </Style>
+    
+    <Style Selector="Button.nav:pointerover">
+        <Setter Property="Background" Value="{StaticResource SecondaryBackgroundBrush}"/>
+        <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+    </Style>
+    
+    <Style Selector="Button.nav:pressed">
+        <Setter Property="Background" Value="{StaticResource TertiaryBackgroundBrush}"/>
+    </Style>
+    
+    <!-- Default Button Style -->
+    <Style Selector="Button">
+        <Setter Property="Background" Value="{StaticResource TertiaryBackgroundBrush}"/>
+        <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Padding" Value="12,6"/>
+        <Setter Property="CornerRadius" Value="4"/>
+        <Setter Property="Cursor" Value="Hand"/>
+    </Style>
+    
+    <Style Selector="Button:pointerover">
+        <Setter Property="Background" Value="#3E3E3E"/>
+    </Style>
+    
+    <Style Selector="Button:pressed">
+        <Setter Property="Background" Value="{StaticResource AccentBrush}"/>
+    </Style>
+    
+    <!-- TextBox Style -->
+    <Style Selector="TextBox">
+        <Setter Property="Background" Value="{StaticResource TertiaryBackgroundBrush}"/>
+        <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Padding" Value="8,6"/>
+        <Setter Property="CornerRadius" Value="4"/>
+    </Style>
+    
+    <Style Selector="TextBox:focus">
+        <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
+    </Style>
+    
+    <!-- CheckBox Style -->
+    <Style Selector="CheckBox">
+        <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+    </Style>
+    
+    <!-- DataGrid Style -->
+    <Style Selector="DataGrid">
+        <Setter Property="Background" Value="{StaticResource PrimaryBackgroundBrush}"/>
+        <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+        <Setter Property="GridLinesVisibility" Value="None"/>
+        <Setter Property="HeadersVisibility" Value="Column"/>
+        <Setter Property="BorderThickness" Value="0"/>
+    </Style>
+    
+    <!-- ListBox Style -->
+    <Style Selector="ListBox">
+        <Setter Property="Background" Value="{StaticResource PrimaryBackgroundBrush}"/>
+        <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+        <Setter Property="BorderThickness" Value="0"/>
+    </Style>
+    
+    <Style Selector="ListBoxItem">
+        <Setter Property="Padding" Value="8"/>
+    </Style>
+    
+    <Style Selector="ListBoxItem:pointerover /template/ ContentPresenter">
+        <Setter Property="Background" Value="{StaticResource SecondaryBackgroundBrush}"/>
+    </Style>
+    
+    <Style Selector="ListBoxItem:selected /template/ ContentPresenter">
+        <Setter Property="Background" Value="{StaticResource TertiaryBackgroundBrush}"/>
+    </Style>
+    
+    <!-- Chip Style (for filter buttons) -->
+    <Style Selector="ToggleButton.chip">
+        <Setter Property="Background" Value="#2D2D2D"/>
+        <Setter Property="Foreground" Value="#A0A0A0"/>
+        <Setter Property="BorderBrush" Value="#3E3E3E"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="CornerRadius" Value="16"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="FontSize" Value="13"/>
+    </Style>
+    
+    <Style Selector="ToggleButton.chip:pointerover">
+        <Setter Property="Background" Value="#3E3E3E"/>
+        <Setter Property="Foreground" Value="White"/>
+    </Style>
+    
+    <Style Selector="ToggleButton.chip:checked">
+        <Setter Property="Background" Value="#0078D4"/>
+        <Setter Property="Foreground" Value="White"/>
+        <Setter Property="BorderBrush" Value="#0078D4"/>
+    </Style>
+    
+    <!-- Icon Button Style -->
+    <Style Selector="Button.icon-button">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Foreground" Value="#A0A0A0"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="Padding" Value="10"/>
+        <Setter Property="CornerRadius" Value="8"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="Width" Value="40"/>
+        <Setter Property="Height" Value="40"/>
+    </Style>
+    
+    <Style Selector="Button.icon-button:pointerover">
+        <Setter Property="Background" Value="#2D2D2D"/>
+        <Setter Property="Foreground" Value="White"/>
+    </Style>
+    
+    <Style Selector="Button.icon-button:pressed">
+        <Setter Property="Background" Value="#3E3E3E"/>
+    </Style>
+    
+</Styles>

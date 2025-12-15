@@ -27,7 +27,7 @@ public class ImportPreviewViewModel : INotifyPropertyChanged
     
     private string _sourceTitle = "Import Preview";
     private string _sourceType = "";
-    private ObservableCollection<Track> _importedTracks = new();
+    private ObservableCollection<SelectableTrack> _importedTracks = new();
     private ObservableCollection<AlbumGroupViewModel> _albumGroups = new();
     private bool _isLoading;
     private string _statusMessage = "Ready to import";
@@ -45,7 +45,7 @@ public class ImportPreviewViewModel : INotifyPropertyChanged
         set { _sourceType = value; OnPropertyChanged(); }
     }
 
-    public ObservableCollection<Track> ImportedTracks
+    public ObservableCollection<SelectableTrack> ImportedTracks
     {
         get => _importedTracks;
         set { _importedTracks = value; OnPropertyChanged(); }
@@ -117,50 +117,94 @@ public class ImportPreviewViewModel : INotifyPropertyChanged
     /// </summary>
     public async Task InitializePreviewAsync(string sourceTitle, string sourceType, IEnumerable<SearchQuery> queries)
     {
-        SourceTitle = sourceTitle;
-        SourceType = sourceType;
-        ImportedTracks.Clear();
-        AlbumGroups.Clear();
-
-        int trackNum = 1;
-        var tempTracks = new List<Track>();
-        foreach (var query in queries ?? Enumerable.Empty<SearchQuery>())
+        try
         {
-            var track = new Track
-            {
-                Title = query.Title,
-                Artist = query.Artist,
-                Album = query.Album,
-                Length = query.Length
-            };
-            tempTracks.Add(track);
-            trackNum++;
-        }
+            _logger.LogInformation("InitializePreviewAsync ENTRY: {SourceTitle}, {SourceType}, Query count: {Count}",
+                sourceTitle, sourceType, queries?.Count() ?? 0);
 
-        // Check for duplicates asynchronously
-        if (_libraryService != null)
-        {
-            try
+            SourceTitle = sourceTitle;
+            SourceType = sourceType;
+
+            int trackNum = 1;
+            var tempTracks = new List<Track>();
+            foreach (var query in queries ?? Enumerable.Empty<SearchQuery>())
             {
-                foreach (var track in tempTracks)
+                var track = new Track
                 {
-                    var entry = await _libraryService.FindLibraryEntryAsync(track.UniqueHash);
-                    track.IsInLibrary = entry != null;
+                    Title = query.Title,
+                    Artist = query.Artist,
+                    Album = query.Album,
+                    Length = query.Length
+                };
+                tempTracks.Add(track);
+                trackNum++;
+            }
+
+            _logger.LogInformation("Created {Count} Track objects from queries", tempTracks.Count);
+
+            // Check for duplicates asynchronously
+            if (_libraryService != null)
+            {
+                try
+                {
+                    foreach (var track in tempTracks)
+                    {
+                        var entry = await _libraryService.FindLibraryEntryAsync(track.UniqueHash);
+                        track.IsInLibrary = entry != null;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    // Database might not be initialized yet on first run - this is non-critical
+                    _logger.LogDebug(ex, "Could not check library for duplicates (database may not be initialized)");
                 }
             }
-            catch (Exception ex)
-            {
-                // Database might not be initialized yet on first run - this is non-critical
-                _logger.LogDebug(ex, "Could not check library for duplicates (database may not be initialized)");
-            }
-        }
 
-        ImportedTracks = new ObservableCollection<Track>(tempTracks);
-        // Group by album for display
-        GroupByAlbum();
-        StatusMessage = $"Loaded {ImportedTracks.Count} tracks";
-        _logger.LogInformation("Import preview initialized with {Count} tracks from {Source}", 
-            ImportedTracks.Count, sourceTitle);
+            // Create SelectableTrack wrappers
+            var selectableTracks = new List<SelectableTrack>();
+            foreach (var track in tempTracks)
+            {
+                var selectableTrack = new SelectableTrack(track);
+                
+                // Wire up notification so the ViewModel knows when selection changes
+                selectableTrack.OnSelectionChanged = () => 
+                {
+                     UpdateSelectedCount();
+                     // Re-evaluate command can-execute
+                     ((AsyncRelayCommand)AddToLibraryCommand).RaiseCanExecuteChanged();
+                };
+                
+                selectableTracks.Add(selectableTrack);
+            }
+
+            _logger.LogInformation("Created {Count} SelectableTrack wrappers", selectableTracks.Count);
+
+            // CRITICAL FIX: Replace entire collection instead of modifying it
+            // This triggers OnPropertyChanged and forces UI to rebind
+            // Pattern from main branch, adapted for SelectableTrack
+            await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                ImportedTracks = new ObservableCollection<SelectableTrack>(selectableTracks);
+                AlbumGroups.Clear(); // Clear album groups before regrouping
+            });
+
+            _logger.LogInformation("Replaced ImportedTracks collection with {Count} items", ImportedTracks.Count);
+
+            // Group by album for display
+            GroupByAlbum();
+            StatusMessage = $"Loaded {ImportedTracks.Count} tracks";
+            
+            _logger.LogInformation("Import preview initialized with {Count} tracks from {Source}. First track: {Artist} - {Title}", 
+                ImportedTracks.Count, sourceTitle, 
+                ImportedTracks.FirstOrDefault()?.Model.Artist ?? "None", 
+                ImportedTracks.FirstOrDefault()?.Model.Title ?? "None");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "InitializePreviewAsync FAILED for {SourceTitle}", sourceTitle);
+            StatusMessage = $"Error loading preview: {ex.Message}";
+            throw;
+        }
     }
 
     /// <summary>
@@ -171,7 +215,7 @@ public class ImportPreviewViewModel : INotifyPropertyChanged
         AlbumGroups.Clear();
 
         var groupedByAlbum = ImportedTracks
-            .GroupBy(t => t.Album ?? "[Unknown Album]")
+            .GroupBy(t => t.Model.Album ?? "[Unknown Album]")
             .OrderBy(g => g.Key)
             .ToList();
 
@@ -180,7 +224,7 @@ public class ImportPreviewViewModel : INotifyPropertyChanged
             var albumGroup = new AlbumGroupViewModel
             {
                 Album = group.Key,
-                Tracks = new ObservableCollection<Track>(group.ToList())
+                Tracks = new ObservableCollection<SelectableTrack>(group.ToList())
             };
             AlbumGroups.Add(albumGroup);
         }
@@ -191,7 +235,7 @@ public class ImportPreviewViewModel : INotifyPropertyChanged
     /// </summary>
     private async Task AddToLibraryAsync()
     {
-        var selectedTracks = ImportedTracks.Where(t => t.IsSelected).ToList();
+        var selectedTracks = ImportedTracks.Where(t => t.IsSelected).Select(t => t.Model).ToList();
 
         if (!selectedTracks.Any())
         {
@@ -337,11 +381,8 @@ public class ImportPreviewViewModel : INotifyPropertyChanged
     }
 }
 
-/// <summary>
-/// Represents a group of tracks from the same album for display
-/// </summary>
 public class AlbumGroupViewModel
 {
     public string Album { get; set; } = "[Unknown]";
-    public ObservableCollection<Track> Tracks { get; set; } = new();
+    public ObservableCollection<SelectableTrack> Tracks { get; set; } = new();
 }

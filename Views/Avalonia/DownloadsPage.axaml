@@ -1,0 +1,250 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="1200" d:DesignHeight="800"
+             x:Class="SLSKDONET.Views.Avalonia.DownloadsPage"
+             Background="#1E1E1E" Foreground="White">
+    
+    <Grid RowDefinitions="Auto,Auto,*">
+        
+        <!-- Header -->
+        <Border Grid.Row="0" Background="#252526" Padding="24,20" BorderBrush="#3E3E3E" BorderThickness="0,0,0,1">
+            <Grid ColumnDefinitions="*,Auto">
+                <StackPanel Grid.Column="0" Spacing="8">
+                    <TextBlock Text="Downloads" FontSize="28" FontWeight="Bold" Foreground="White"/>
+                    <StackPanel Orientation="Horizontal" Spacing="16">
+                        <TextBlock Foreground="#A0A0A0" FontSize="13">
+                            <Run Text="{Binding SuccessfulCount}"/>
+                            <Run Text=" completed" Foreground="#4CAF50"/>
+                        </TextBlock>
+                        <TextBlock Foreground="#A0A0A0" FontSize="13">
+                            <Run Text="{Binding TodoCount}"/>
+                            <Run Text=" pending" Foreground="#FFA500"/>
+                        </TextBlock>
+                        <TextBlock Foreground="#A0A0A0" FontSize="13">
+                            <Run Text="{Binding FailedCount}"/>
+                            <Run Text=" failed" Foreground="#F44336"/>
+                        </TextBlock>
+                    </StackPanel>
+                </StackPanel>
+                
+                <!-- Overall Progress -->
+                <StackPanel Grid.Column="1" Spacing="4" MinWidth="200">
+                    <TextBlock Text="{Binding DownloadProgressPercentage, StringFormat='Overall Progress: {0:F1}%'}" 
+                               FontSize="13" 
+                               Foreground="#A0A0A0"
+                               HorizontalAlignment="Right"/>
+                    <ProgressBar Value="{Binding DownloadProgressPercentage}" 
+                                 Maximum="100" 
+                                 Height="8" 
+                                 Background="#333" 
+                                 Foreground="#4CAF50"
+                                 CornerRadius="4"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Toolbar -->
+        <Border Grid.Row="1" Background="#1E1E1E" Padding="24,16" BorderBrush="#3E3E3E" BorderThickness="0,0,0,1">
+            <Grid ColumnDefinitions="*,Auto">
+                <!-- Search/Filter -->
+                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="12">
+                    <TextBox Text="{Binding DownloadsSearchText, Mode=TwoWay}"
+                             Watermark="Search downloads..."
+                             Width="250"
+                             Background="#252526"
+                             Foreground="White"
+                             Padding="10,8"/>
+                    
+                    <ComboBox SelectedIndex="0" Width="150">
+                        <ComboBoxItem Content="All States"/>
+                        <ComboBoxItem Content="Downloading"/>
+                        <ComboBoxItem Content="Completed"/>
+                        <ComboBoxItem Content="Failed"/>
+                        <ComboBoxItem Content="Pending"/>
+                    </ComboBox>
+                </StackPanel>
+                
+                <!-- Bulk Actions -->
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                    <Button Command="{Binding ShowPauseComingSoonCommand}"
+                            Background="#FFA500"
+                            Foreground="White"
+                            Padding="12,8"
+                            CornerRadius="6">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <TextBlock Text="⏸" FontSize="14"/>
+                            <TextBlock Text="Pause All" FontSize="13" FontWeight="SemiBold"/>
+                        </StackPanel>
+                    </Button>
+                    
+                    <Button Command="{Binding CancelDownloadsCommand}"
+                            Background="#D32F2F"
+                            Foreground="White"
+                            Padding="12,8"
+                            CornerRadius="6">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <TextBlock Text="⏹" FontSize="14"/>
+                            <TextBlock Text="Cancel All" FontSize="13" FontWeight="SemiBold"/>
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Downloads Grid -->
+        <DataGrid Grid.Row="2"
+                  x:Name="DownloadsGrid"
+                  ItemsSource="{Binding FilteredGlobalTracks}"
+                  AutoGenerateColumns="False"
+                  Background="Transparent"
+                  BorderThickness="0"
+                  GridLinesVisibility="Horizontal"
+                  RowBackground="Transparent"
+                  Foreground="#DDD"
+                  HeadersVisibility="Column"
+                  CanUserReorderColumns="False"
+                  CanUserResizeColumns="True"
+                  CanUserSortColumns="False"
+                  IsReadOnly="True">
+            
+            <DataGrid.Styles>
+                <Style Selector="DataGridRow:pointerover">
+                    <Setter Property="Background" Value="#1AFFFFFF"/>
+                </Style>
+                <Style Selector="DataGridRow:selected">
+                    <Setter Property="Background" Value="#2A0078D4"/>
+                </Style>
+            </DataGrid.Styles>
+
+            <DataGrid.Columns>
+                <!-- State -->
+                <DataGridTemplateColumn Header="State" Width="120">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <Border CornerRadius="4" 
+                                    Padding="8,4" 
+                                    Background="{Binding StatusColor}"
+                                    HorizontalAlignment="Left">
+                                <TextBlock Text="{Binding State}" 
+                                           FontSize="11" 
+                                           Foreground="White"
+                                           FontWeight="SemiBold"/>
+                            </Border>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+                
+                <!-- Artist - Title -->
+                <DataGridTemplateColumn Header="Track" Width="4*">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <StackPanel Spacing="2">
+                                <TextBlock FontWeight="Bold" Foreground="White">
+                                    <Run Text="{Binding Artist}"/>
+                                    <Run Text=" - " Foreground="#666"/>
+                                    <Run Text="{Binding Title}"/>
+                                </TextBlock>
+                                <TextBlock Text="{Binding ErrorMessage}" 
+                                           Foreground="#F44336" 
+                                           FontSize="10"
+                                           TextTrimming="CharacterEllipsis"
+                                           IsVisible="{Binding !!ErrorMessage}"/>
+                            </StackPanel>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+
+                <!-- Progress -->
+                <DataGridTemplateColumn Header="Progress" Width="200">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <Grid RowDefinitions="Auto,Auto">
+                                <ProgressBar Grid.Row="0"
+                                             Value="{Binding Progress}" 
+                                             Maximum="1" 
+                                             Height="6" 
+                                             Background="#333" 
+                                             Foreground="#4CAF50"
+                                             CornerRadius="3"/>
+                                <StackPanel Grid.Row="1" 
+                                            Orientation="Horizontal" 
+                                            Spacing="8" 
+                                            Margin="0,4,0,0">
+                                    <TextBlock Text="{Binding Progress, StringFormat='{}{0:P0}'}" 
+                                               FontSize="10" 
+                                               Foreground="#AAA"/>
+                                    <TextBlock Text="{Binding CurrentSpeed}" 
+                                               FontSize="10" 
+                                               Foreground="#AAA"
+                                               IsVisible="{Binding !!CurrentSpeed}"/>
+                                </StackPanel>
+                            </Grid>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+
+                <!-- Actions -->
+                <DataGridTemplateColumn Header="Actions" Width="180">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                <!-- Pause -->
+                                <Button Command="{Binding PauseCommand}"
+                                        IsVisible="{Binding CanPause}"
+                                        Background="Transparent"
+                                        BorderThickness="0"
+                                        Padding="8,4"
+                                        ToolTip.Tip="Pause">
+                                    <TextBlock Text="⏸" FontSize="16" Foreground="#FFC107"/>
+                                </Button>
+                                
+                                <!-- Resume -->
+                                <Button Command="{Binding ResumeCommand}"
+                                        IsVisible="{Binding CanResume}"
+                                        Background="Transparent"
+                                        BorderThickness="0"
+                                        Padding="8,4"
+                                        ToolTip.Tip="Resume">
+                                    <TextBlock Text="▶" FontSize="16" Foreground="#4CAF50"/>
+                                </Button>
+                                
+                                <!-- Cancel -->
+                                <Button Command="{Binding CancelCommand}"
+                                        IsVisible="{Binding CanCancel}"
+                                        Background="Transparent"
+                                        BorderThickness="0"
+                                        Padding="8,4"
+                                        ToolTip.Tip="Cancel">
+                                    <TextBlock Text="⏹" FontSize="16" Foreground="#F44336"/>
+                                </Button>
+                                
+                                <!-- Hard Retry -->
+                                <Button Command="{Binding FindNewVersionCommand}"
+                                        IsVisible="{Binding CanHardRetry}"
+                                        Background="Transparent"
+                                        BorderThickness="0"
+                                        Padding="8,4"
+                                        ToolTip.Tip="Find New Version">
+                                    <TextBlock Text="♻" FontSize="16" Foreground="#FF9800" FontWeight="Bold"/>
+                                </Button>
+                                
+                                <!-- Delete -->
+                                <Button Command="{Binding DataContext.DeleteTrackCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                        CommandParameter="{Binding}"
+                                        IsVisible="{Binding CanDeleteFile}"
+                                        Background="Transparent"
+                                        BorderThickness="0"
+                                        Padding="8,4"
+                                        ToolTip.Tip="Delete File">
+                                    <TextBlock Text="🗑️" FontSize="16" Foreground="#D32F2F"/>
+                                </Button>
+                            </StackPanel>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+            </DataGrid.Columns>
+        </DataGrid>
+    </Grid>
+</UserControl>

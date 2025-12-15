@@ -205,9 +205,9 @@ public class SpotifyImportViewModel : INotifyPropertyChanged
             {
                 Id = Guid.NewGuid(),
                 PlaylistId = job.Id,
-                Title = selectable.Title,
-                Artist = selectable.Artist,
-                Album = selectable.Album,
+                Title = selectable.Title ?? "Unknown Title",
+                Artist = selectable.Artist ?? "Unknown Artist",
+                Album = selectable.Album ?? "Unknown Album",
                 TrackUniqueHash = $"{selectable.Artist}|{selectable.Title}".ToLowerInvariant(),
                 Status = TrackStatus.Missing,
                 AddedAt = DateTime.Now,

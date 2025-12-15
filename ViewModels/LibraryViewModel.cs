@@ -4,12 +4,11 @@ using System.ComponentModel;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
-using System.Windows.Input;
 using Microsoft.Extensions.Logging;
 using SLSKDONET.Models;
 using SLSKDONET.Services;
-using System.Windows.Data;
 using SLSKDONET.Views;
+using Avalonia.Threading;
 
 namespace SLSKDONET.ViewModels;
 
@@ -23,7 +22,7 @@ public class LibraryViewModel : INotifyPropertyChanged
     private readonly ImportHistoryViewModel _importHistoryViewModel;
     private readonly INavigationService _navigationService;
     private readonly IUserInputService _userInputService;
-    private MainViewModel? _mainViewModel; // Set after construction to avoid circular dependency
+    private Views.MainViewModel? _mainViewModel; // Set after construction to avoid circular dependency
 
 
     private bool FilterTracks(object obj)
@@ -55,22 +54,22 @@ public class LibraryViewModel : INotifyPropertyChanged
     private string _noProjectSelectedMessage = "Select an import job to view its tracks";
     private readonly PlaylistJob _allTracksJob = new() { Id = Guid.Empty, SourceTitle = "All Tracks", SourceType = "Global Library" };
 
-    public ICommand HardRetryCommand { get; }
-    public ICommand PauseCommand { get; }
-    public ICommand ResumeCommand { get; }
-    public ICommand CancelCommand { get; }
-    public ICommand OpenProjectCommand { get; }
-    public ICommand DeleteProjectCommand { get; }
-    public ICommand RefreshLibraryCommand { get; }
-    public ICommand PauseProjectCommand { get; }
-    public ICommand ResumeProjectCommand { get; }
-    public ICommand LoadAllTracksCommand { get; }
-    public ICommand OpenFolderCommand { get; }
-    public ICommand RemoveTrackCommand { get; }
-    public ICommand AddPlaylistCommand { get; }
-    public ICommand PlayTrackCommand { get; }
+    public System.Windows.Input.ICommand HardRetryCommand { get; }
+    public System.Windows.Input.ICommand PauseCommand { get; }
+    public System.Windows.Input.ICommand ResumeCommand { get; }
+    public System.Windows.Input.ICommand CancelCommand { get; }
+    public System.Windows.Input.ICommand OpenProjectCommand { get; }
+    public System.Windows.Input.ICommand DeleteProjectCommand { get; }
+    public System.Windows.Input.ICommand RefreshLibraryCommand { get; }
+    public System.Windows.Input.ICommand PauseProjectCommand { get; }
+    public System.Windows.Input.ICommand ResumeProjectCommand { get; }
+    public System.Windows.Input.ICommand LoadAllTracksCommand { get; }
+    public System.Windows.Input.ICommand OpenFolderCommand { get; }
+    public System.Windows.Input.ICommand RemoveTrackCommand { get; }
+    public System.Windows.Input.ICommand AddPlaylistCommand { get; }
+    public System.Windows.Input.ICommand PlayTrackCommand { get; }
 
-    public ICommand ViewHistoryCommand { get; }
+    public System.Windows.Input.ICommand ViewHistoryCommand { get; }
 
     // Master List: All import jobs/projects
     public ObservableCollection<PlaylistJob> AllProjects
@@ -89,11 +88,24 @@ public class LibraryViewModel : INotifyPropertyChanged
             {
                 _selectedProject = value;
                 OnPropertyChanged();
+                OnPropertyChanged(nameof(HasSelectedProject));
+                OnPropertyChanged(nameof(CanDeleteProject));
+                
+                // LAZY LOAD: Load tracks only when playlist is selected
                 if (value != null)
+                {
                     _ = LoadProjectTracksAsync(value);
+                }
+                else
+                {
+                    CurrentProjectTracks.Clear();
+                }
             }
         }
     }
+
+    public bool HasSelectedProject => SelectedProject != null;
+    public bool CanDeleteProject => SelectedProject != null && !IsEditMode;
 
     public ObservableCollection<PlaylistTrackViewModel> CurrentProjectTracks
     {
@@ -102,24 +114,201 @@ public class LibraryViewModel : INotifyPropertyChanged
         { 
             _currentProjectTracks = value; 
             OnPropertyChanged();
-            
-            // Re-create Filtered View when collection changes
-            var filteredView = new ListCollectionView(_currentProjectTracks);
-            filteredView.Filter = FilterTracks;
-            filteredView.IsLiveFiltering = true;
-            filteredView.LiveFilteringProperties.Add(nameof(PlaylistTrackViewModel.State));
-            filteredView.LiveFilteringProperties.Add(nameof(PlaylistTrackViewModel.Artist));
-            filteredView.LiveFilteringProperties.Add(nameof(PlaylistTrackViewModel.Title));
-            
-            FilteredTracks = filteredView;
-            OnPropertyChanged(nameof(FilteredTracks));
+            RefreshFilteredTracks();
         }
     }
 
-    public ICollectionView? FilteredTracks { get; private set; }
-    public ICollectionView ActiveDownloadsView { get; private set; } // For HUD
+    private ObservableCollection<PlaylistTrackViewModel> _filteredTracks = new();
+    public ObservableCollection<PlaylistTrackViewModel> FilteredTracks
+    {
+        get => _filteredTracks;
+        private set
+        {
+            if (_filteredTracks != value)
+            {
+                _filteredTracks = value;
+                OnPropertyChanged();
+            }
+        }
+    }
 
-    private string _searchText = "";
+    // Liked Songs - Smart Playlist
+    private ObservableCollection<PlaylistTrackViewModel> _likedTracks = new();
+    public ObservableCollection<PlaylistTrackViewModel> LikedTracks
+    {
+        get => _likedTracks;
+        set
+        {
+            if (_likedTracks != value)
+            {
+                _likedTracks = value;
+                OnPropertyChanged();
+            }
+        }
+    }
+
+    // Smart Playlists
+    private ObservableCollection<SmartPlaylist> _smartPlaylists = new();
+    public ObservableCollection<SmartPlaylist> SmartPlaylists
+    {
+        get => _smartPlaylists;
+        set
+        {
+            if (_smartPlaylists != value)
+            {
+                _smartPlaylists = value;
+                OnPropertyChanged();
+            }
+        }
+    }
+
+    private SmartPlaylist? _selectedSmartPlaylist;
+    public SmartPlaylist? SelectedSmartPlaylist
+    {
+        get => _selectedSmartPlaylist;
+        set
+        {
+            if (_selectedSmartPlaylist != value)
+            {
+                _selectedSmartPlaylist = value;
+                OnPropertyChanged();
+                if (value != null)
+                    RefreshSmartPlaylist(value);
+            }
+        }
+    }
+
+    private void RefreshFilteredTracks()
+    {
+        var filtered = CurrentProjectTracks.Where(FilterTracks).ToList();
+        
+        _logger.LogInformation("🔍 RefreshFilteredTracks:");
+        _logger.LogInformation("  - Input: {Input} tracks", CurrentProjectTracks.Count);
+        _logger.LogInformation("  - Filtered: {Filtered} tracks", filtered.Count);
+        _logger.LogInformation("  - Filters: All={All}, Downloaded={Down}, Pending={Pend}", 
+            IsFilterAll, IsFilterDownloaded, IsFilterPending);
+        
+        if (filtered.Any())
+        {
+            var sample = filtered.First();
+            _logger.LogInformation("  - Sample: {Artist} - {Title} (State: {State})", 
+                sample.Artist, sample.Title, sample.State);
+        }
+        
+        FilteredTracks.Clear();
+        foreach (var track in filtered)
+            FilteredTracks.Add(track);
+            
+        _logger.LogInformation("✅ FilteredTracks.Count = {Count}", FilteredTracks.Count);
+    }
+
+    private void RefreshLikedTracks()
+    {
+        // Get all liked tracks from all playlists
+        var allLikedTracks = new List<PlaylistTrackViewModel>();
+        
+        foreach (var playlist in _libraryService.Playlists)
+        {
+            var likedInPlaylist = playlist.PlaylistTracks
+                .Where(t => t.IsLiked)
+                .Select(t => new PlaylistTrackViewModel(t))
+                .ToList();
+                
+            allLikedTracks.AddRange(likedInPlaylist);
+        }
+        
+        _likedTracks.Clear();
+        foreach (var track in allLikedTracks.OrderByDescending(t => t.Model.AddedAt))
+        {
+            _likedTracks.Add(track);
+        }
+        
+        OnPropertyChanged(nameof(LikedTracks));
+    }
+
+    private void RefreshSmartPlaylist(SmartPlaylist smartPlaylist)
+    {
+        // Get all tracks from all playlists
+        var allTracks = new List<PlaylistTrack>();
+        foreach (var playlist in _libraryService.Playlists)
+        {
+            allTracks.AddRange(playlist.PlaylistTracks);
+        }
+
+        // Apply filter and sort
+        var filteredTracks = smartPlaylist.Filter(allTracks);
+        var sortedTracks = smartPlaylist.Sort(filteredTracks);
+
+        // Update CurrentProjectTracks
+        CurrentProjectTracks.Clear();
+        foreach (var track in sortedTracks)
+        {
+            CurrentProjectTracks.Add(new PlaylistTrackViewModel(track));
+        }
+    }
+
+    private void InitializeSmartPlaylists()
+    {
+        var now = DateTime.UtcNow;
+        var thirtyDaysAgo = now.AddDays(-30);
+
+        SmartPlaylists.Clear();
+
+        // Recently Added
+        SmartPlaylists.Add(new SmartPlaylist
+        {
+            Name = "Recently Added",
+            Icon = "🆕",
+            Description = "Tracks added in the last 30 days",
+            Filter = tracks => tracks.Where(t => t.AddedAt >= thirtyDaysAgo),
+            Sort = tracks => tracks.OrderByDescending(t => t.AddedAt)
+        });
+
+        // Most Played
+        SmartPlaylists.Add(new SmartPlaylist
+        {
+            Name = "Most Played",
+            Icon = "🔥",
+            Description = "Your top 50 most played tracks",
+            Filter = tracks => tracks.Where(t => t.PlayCount > 0).Take(50),
+            Sort = tracks => tracks.OrderByDescending(t => t.PlayCount)
+        });
+
+        // High Quality
+        SmartPlaylists.Add(new SmartPlaylist
+        {
+            Name = "High Quality",
+            Icon = "💎",
+            Description = "FLAC files with high bitrate",
+            Filter = tracks => tracks.Where(t => 
+                t.ResolvedFilePath != null && 
+                t.ResolvedFilePath.EndsWith(".flac", StringComparison.OrdinalIgnoreCase)),
+            Sort = tracks => tracks.OrderByDescending(t => t.AddedAt)
+        });
+
+        // Failed Downloads
+        SmartPlaylists.Add(new SmartPlaylist
+        {
+            Name = "Failed Downloads",
+            Icon = "❌",
+            Description = "Tracks that failed to download",
+            Filter = tracks => tracks.Where(t => t.Status == TrackStatus.Failed),
+            Sort = tracks => tracks.OrderByDescending(t => t.AddedAt)
+        });
+
+        // Never Played
+        SmartPlaylists.Add(new SmartPlaylist
+        {
+            Name = "Never Played",
+            Icon = "🎧",
+            Description = "Discover tracks you haven't played yet",
+            Filter = tracks => tracks.Where(t => t.PlayCount == 0 && t.Status == TrackStatus.Downloaded),
+            Sort = tracks => tracks.OrderBy(t => t.AddedAt)
+        });
+    }
+
+    // Search filter
+    private string _searchText = string.Empty;
     public string SearchText
     {
         get => _searchText;
@@ -129,12 +318,12 @@ public class LibraryViewModel : INotifyPropertyChanged
             {
                 _searchText = value;
                 OnPropertyChanged();
-                FilteredTracks?.Refresh();
+                RefreshFilteredTracks();
             }
         }
     }
-    
-    // Filter state properties
+
+    // Filter buttons (radio button behavior)
     private bool _isFilterAll = true;
     public bool IsFilterAll
     {
@@ -145,7 +334,7 @@ public class LibraryViewModel : INotifyPropertyChanged
             {
                 _isFilterAll = value;
                 OnPropertyChanged();
-                if (value) FilteredTracks?.Refresh();
+                RefreshFilteredTracks();
             }
         }
     }
@@ -160,7 +349,7 @@ public class LibraryViewModel : INotifyPropertyChanged
             {
                 _isFilterDownloaded = value;
                 OnPropertyChanged();
-                if (value) FilteredTracks?.Refresh();
+                RefreshFilteredTracks();
             }
         }
     }
@@ -175,7 +364,7 @@ public class LibraryViewModel : INotifyPropertyChanged
             {
                 _isFilterPending = value;
                 OnPropertyChanged();
-                if (value) FilteredTracks?.Refresh();
+                RefreshFilteredTracks();
             }
         }
     }
@@ -195,7 +384,7 @@ public class LibraryViewModel : INotifyPropertyChanged
         }
     }
     
-    public ICommand ToggleActiveDownloadsCommand { get; }
+    public System.Windows.Input.ICommand ToggleActiveDownloadsCommand { get; }
 
     public int MaxDownloads 
     {
@@ -247,12 +436,12 @@ public class LibraryViewModel : INotifyPropertyChanged
 
     public bool IsDataGridReadOnly => !IsEditMode;
 
-    public ICommand ToggleEditModeCommand { get; }
+    public System.Windows.Input.ICommand ToggleEditModeCommand { get; }
 
     private bool _initialLoadCompleted = false;
 
     // Public setter to inject MainViewModel after construction (avoids circular dependency)
-    public void SetMainViewModel(MainViewModel mainViewModel)
+    public void SetMainViewModel(Views.MainViewModel mainViewModel)
     {
         _mainViewModel = mainViewModel;
     }
@@ -295,13 +484,6 @@ public class LibraryViewModel : INotifyPropertyChanged
         OpenFolderCommand = new RelayCommand<object>(_ => { /* TODO: Implement Open Folder */ });
         RemoveTrackCommand = new RelayCommand<PlaylistTrackViewModel>(ExecuteRemoveTrack); // Replaced TODO
 
-        // Initialize Views
-        var activeView = new ListCollectionView(_downloadManager.AllGlobalTracks);
-        activeView.Filter = o => (o as PlaylistTrackViewModel)?.IsActive == true;
-        activeView.IsLiveFiltering = true;
-        activeView.LiveFilteringProperties.Add(nameof(PlaylistTrackViewModel.IsActive));
-        ActiveDownloadsView = activeView;
-
         // Subscribe to global track updates for live project track status
         _downloadManager.TrackUpdated += OnGlobalTrackUpdated;
 
@@ -323,9 +505,7 @@ public class LibraryViewModel : INotifyPropertyChanged
         var updatedJob = await _libraryService.FindPlaylistJobAsync(jobId);
         if (updatedJob == null) return;
 
-        if (System.Windows.Application.Current is null) return;
-        
-        await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+        await Dispatcher.UIThread.InvokeAsync(() =>
         {
             // Update the existing object in the list so the UI binding triggers
             var existingJob = AllProjects.FirstOrDefault(j => j.Id == jobId);
@@ -344,9 +524,8 @@ public class LibraryViewModel : INotifyPropertyChanged
     private async void OnProjectDeleted(object? sender, Guid projectId)
     {
         _logger.LogInformation("OnProjectDeleted event received for job {JobId}", projectId);
-        if (System.Windows.Application.Current is null) return;
 
-        await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+        await Dispatcher.UIThread.InvokeAsync(() =>
         {
             var jobToRemove = AllProjects.FirstOrDefault(p => p.Id == projectId);
             if (jobToRemove != null)
@@ -362,20 +541,7 @@ public class LibraryViewModel : INotifyPropertyChanged
     
     private async Task ExecuteRefreshAsync()
     {
-        // Confirmation dialog for intensive operation
-        var result = System.Windows.MessageBox.Show(
-            "This will scan your download folder and resolve missing file paths.\n\n" +
-            "On large libraries, this may take some time.\n\n" +
-            "Continue with refresh?",
-            "Confirm Refresh",
-            System.Windows.MessageBoxButton.YesNo,
-            System.Windows.MessageBoxImage.Question);
-        
-        if (result != System.Windows.MessageBoxResult.Yes)
-        {
-            _logger.LogInformation("Refresh cancelled by user");
-            return;
-        }
+        // Proceed without WPF MessageBox prompt in Avalonia stub
         
         _logger.LogInformation("Manual refresh requested - reloading projects and resolving file paths");
         
@@ -546,9 +712,8 @@ public class LibraryViewModel : INotifyPropertyChanged
     private async void OnProjectAdded(object? sender, ProjectEventArgs e)
     {
         _logger.LogInformation("OnProjectAdded ENTRY for job {JobId}. Current project count: {ProjectCount}, Global track count: {TrackCount}", e.Job.Id, AllProjects.Count, _downloadManager.AllGlobalTracks.Count);
-        if (System.Windows.Application.Current is null) return;
         
-        await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+        await Dispatcher.UIThread.InvokeAsync(() =>
         {
             // Check if the job already exists in the collection (race condition safety)
             if (AllProjects.Any(j => j.Id == e.Job.Id))
@@ -636,8 +801,6 @@ public class LibraryViewModel : INotifyPropertyChanged
     {
         if (vm == null) return;
 
-        _logger.LogInformation("Cancel requested for {Artist} - {Title}", vm.Artist, vm.Title);
-        _downloadManager.CancelTrack(vm.GlobalId);
         _logger.LogInformation("Cancel requested for {Artist} - {Title}", vm.Artist, vm.Title);
         _downloadManager.CancelTrack(vm.GlobalId);
     }
@@ -882,13 +1045,9 @@ public class LibraryViewModel : INotifyPropertyChanged
              return; 
         }
 
-        var result = System.Windows.MessageBox.Show(
-            $"Remove '{track.Title}' from playlist?", 
-            "Confirm Remove", 
-            System.Windows.MessageBoxButton.YesNo, 
-            System.Windows.MessageBoxImage.Question);
-
-        if (result != System.Windows.MessageBoxResult.Yes) return;
+        // Proceed without modal prompt in Avalonia migration; consider adding custom dialog if needed.
+        var confirmed = true;
+        if (!confirmed) return;
 
         try
         {
@@ -1001,11 +1160,9 @@ public class LibraryViewModel : INotifyPropertyChanged
                 }
             }
 
-            if (System.Windows.Application.Current is null) return;
-            await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
-            {
-                CurrentProjectTracks = tracks;
-            });
+            // Update UI - we're already on UI thread, no need for Dispatcher
+            CurrentProjectTracks = tracks;
+            RefreshFilteredTracks(); // Update FilteredTracks so DataGrid displays the tracks
             _logger.LogInformation("Loaded {Count} tracks for project {Title}", tracks.Count, job.SourceTitle);
         }
         catch (Exception ex)
@@ -1020,98 +1177,78 @@ public class LibraryViewModel : INotifyPropertyChanged
         {
             _logger.LogInformation("LoadProjectsAsync ENTRY. Current AllProjects.Count: {Count}", AllProjects.Count);
             _logger.LogInformation("Loading all playlist jobs from database...");
-
-            var jobs = await _libraryService.LoadAllPlaylistJobsAsync();
             
+            var jobs = await _libraryService.LoadAllPlaylistJobsAsync();
             _logger.LogInformation("LoadProjectsAsync: Loaded {Count} jobs from database", jobs.Count);
+
             foreach (var job in jobs)
             {
-                _logger.LogInformation("  - Job {JobId}: '{Title}' with {TrackCount} tracks, Created: {Created}", 
+                _logger.LogInformation("  - Job {Id}: '{Title}' with {TrackCount} tracks, Created: {Created}", 
                     job.Id, job.SourceTitle, job.TotalTracks, job.CreatedAt);
             }
 
-            if (System.Windows.Application.Current is null) return;
-            await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+            if (_initialLoadCompleted)
             {
-                if (_initialLoadCompleted)
-                {
-                    _logger.LogWarning("LoadProjectsAsync called after initial load, performing a safe sync.");
-                    // Safe sync: add missing, remove deleted, then re-sort
-                    var loadedJobIds = new HashSet<Guid>(jobs.Select(j => j.Id));
-                    var currentJobIds = new HashSet<Guid>(AllProjects.Select(j => j.Id));
+                _logger.LogWarning("LoadProjectsAsync called after initial load, performing a safe sync.");
+                // Safe sync: add missing, remove deleted, then re-sort
+                var loadedJobIds = new HashSet<Guid>(jobs.Select(j => j.Id));
+                var currentJobIds = new HashSet<Guid>(AllProjects.Select(j => j.Id));
 
-                    // Add new jobs not in the current collection
-                    foreach (var job in jobs)
-                    {
-                        if (!currentJobIds.Contains(job.Id))
-                        {
-                            _logger.LogInformation("Adding missing job {JobId} to AllProjects", job.Id);
-                            AllProjects.Add(job);
-                        }
-                    }
-
-                    // Remove jobs from collection that are no longer in the database
-                    var jobsToRemove = AllProjects.Where(j => !loadedJobIds.Contains(j.Id)).ToList();
-                    foreach (var job in jobsToRemove)
-                    {
-                        _logger.LogInformation("Removing deleted job {JobId} from AllProjects", job.Id);
-                        AllProjects.Remove(job);
-                    }
-                }
-                else
+                // Add new jobs not in the current collection
+                foreach (var job in jobs)
                 {
-                    // Initial load: clear and add all
-                    _logger.LogInformation("Initial load: clearing AllProjects and adding {Count} jobs", jobs.Count);
-                    AllProjects.Clear();
-                    foreach (var job in jobs)
+                    if (!currentJobIds.Contains(job.Id))
                     {
+                        _logger.LogInformation("Adding missing job {JobId} to AllProjects", job.Id);
                         AllProjects.Add(job);
                     }
                 }
 
-                // Re-sort the entire collection to ensure order is correct
+                // Remove jobs from collection that are no longer in the database
+                var jobsToRemove = AllProjects.Where(j => !loadedJobIds.Contains(j.Id)).ToList();
+                foreach (var job in jobsToRemove)
+                {
+                    _logger.LogInformation("Removing deleted job {JobId} from AllProjects", job.Id);
+                    AllProjects.Remove(job);
+                }
+
+                // Re-sort by CreatedAt descending
                 var sorted = AllProjects.OrderByDescending(j => j.CreatedAt).ToList();
-                for (int i = 0; i < sorted.Count; i++)
+                AllProjects.Clear();
+                foreach (var job in sorted)
                 {
-                    var job = sorted[i];
-                    int currentIndex = AllProjects.IndexOf(job);
-                    if (currentIndex != i)
-                    {
-                        AllProjects.Move(currentIndex, i);
-                    }
+                    AllProjects.Add(job);
+                }
+            }
+            else
+            {
+                // CRITICAL FIX: Only load playlist metadata, NOT tracks
+                // Tracks will be loaded on-demand when user selects a playlist
+                
+                // Don't use Dispatcher - we're already on UI thread
+                // Using Dispatcher here causes deadlock when SelectedProject setter triggers
+                AllProjects.Clear();
+                foreach (var job in jobs.OrderByDescending(j => j.CreatedAt))
+                {
+                    AllProjects.Add(job);
                 }
 
-                // OPTIMIZATION: Don't load tracks on initial startup
-                // Set the selected project without triggering track load
-                if (SelectedProject == null && AllProjects.Any() && !_initialLoadCompleted)
-                {
-                    _selectedProject = AllProjects.First(); // Direct field assignment to avoid triggering setter
-                    OnPropertyChanged(nameof(SelectedProject));
-                }
-                else if (SelectedProject == null && AllProjects.Any())
-                {
-                    SelectedProject = AllProjects.First(); // Normal assignment after initial load
-                }
-
-                if (!_initialLoadCompleted)
-                {
-                    _initialLoadCompleted = true;
-                    _logger.LogInformation("Initial load of {count} projects completed (tracks deferred).", AllProjects.Count);
-                }
-            });
+                _initialLoadCompleted = true;
+                _logger.LogInformation("Initial load completed. Loaded {Count} playlists (tracks will load on-demand)", AllProjects.Count);
+            }
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to load playlist jobs");
+            _logger.LogError(ex, "Failed to load projects");
         }
     }
+
     private void OnGlobalTrackUpdated(object? sender, PlaylistTrackViewModel? updatedTrack)
     {
         if (updatedTrack == null || CurrentProjectTracks == null) return;
 
-        if (System.Windows.Application.Current is null) return;
         // Use Dispatcher for UI thread safety
-        System.Windows.Application.Current.Dispatcher.Invoke(() =>
+        Dispatcher.UIThread.Post(() =>
         {
             var localTrack = CurrentProjectTracks
                 .FirstOrDefault(t => t.GlobalId == updatedTrack.GlobalId);

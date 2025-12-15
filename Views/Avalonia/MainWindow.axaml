@@ -1,0 +1,245 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:vm="clr-namespace:SLSKDONET.Views"
+        xmlns:views="clr-namespace:SLSKDONET.Views.Avalonia"
+        mc:Ignorable="d" d:DesignWidth="1400" d:DesignHeight="900"
+        x:Class="SLSKDONET.Views.Avalonia.MainWindow"
+        x:DataType="vm:MainViewModel"
+        Title="QMusic SLSK"
+        Width="1400" Height="900"
+        MinWidth="360" MinHeight="500"
+        Background="#1E1E1E">
+
+    <Window.Styles>
+        <StyleInclude Source="/Themes/AvaloniaTheme.axaml"/>
+    </Window.Styles>
+    
+    <!-- Keyboard Shortcuts -->
+    <Window.KeyBindings>
+        <!-- Ctrl+F: Focus Search -->
+        <KeyBinding Gesture="Ctrl+F" Command="{Binding NavigateSearchCommand}"/>
+        
+        <!-- Ctrl+L: Go to Library -->
+        <KeyBinding Gesture="Ctrl+L" Command="{Binding NavigateLibraryCommand}"/>
+        
+        <!-- Ctrl+D: Go to Downloads -->
+        <KeyBinding Gesture="Ctrl+D" Command="{Binding NavigateDownloadsCommand}"/>
+        
+        <!-- Ctrl+Shift+S: Go to Settings (Ctrl+S conflicts with save) -->
+        <KeyBinding Gesture="Ctrl+Shift+S" Command="{Binding NavigateSettingsCommand}"/>
+        
+        <!-- Ctrl+Q: Quit -->
+        <KeyBinding Gesture="Ctrl+Q" Command="{Binding QuitApplicationCommand}"/>
+        
+        <!-- Ctrl+P: Toggle Player -->
+        <KeyBinding Gesture="Ctrl+P" Command="{Binding TogglePlayerCommand}"/>
+        
+        <!-- Ctrl+N: Toggle Navigation -->
+        <KeyBinding Gesture="Ctrl+N" Command="{Binding ToggleNavigationCommand}"/>
+    </Window.KeyBindings>
+    
+    <Grid RowDefinitions="Auto,*">
+        <!-- Top Status Bar -->
+        <Border Grid.Row="0" Background="#252526" Padding="16,8">
+            <Grid ColumnDefinitions="Auto,*,Auto">
+                <!-- Left: Navigation Toggle + Connection Status -->
+                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Spacing="12">
+                    <Button Command="{Binding ToggleNavigationCommand}" 
+                            Background="Transparent" 
+                            BorderThickness="0" 
+                            Padding="8,4"
+                            ToolTip.Tip="Toggle Navigation">
+                        <TextBlock Text="☰" FontSize="18" Foreground="#A0A0A0"/>
+                    </Button>
+                    
+                    <Border Width="1" Height="20" Background="#404040"/>
+                    
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <TextBlock Text="●" FontSize="12" Foreground="#4EC9B0" IsVisible="{Binding IsConnected}"/>
+                        <TextBlock Text="●" FontSize="12" Foreground="#666666" IsVisible="{Binding !IsConnected}"/>
+                        <TextBlock Text="{Binding ConnectionStatus}" Foreground="#A0A0A0" FontSize="12"/>
+                    </StackPanel>
+                    
+                    <Button Content="Disconnect" 
+                            Command="{Binding DisconnectCommand}"
+                            Background="Transparent"
+                            Foreground="#A0A0A0"
+                            BorderThickness="0"
+                            Padding="8,4"
+                            FontSize="11"
+                            IsVisible="{Binding IsConnected}"/>
+                </StackPanel>
+
+                <!-- Center: Status Message + Version -->
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="20">
+                    <TextBlock Text="{Binding StatusText}" 
+                               Foreground="#A0A0A0"
+                               FontSize="12"/>
+                    
+                    <TextBlock Text="{Binding ApplicationVersion, StringFormat='v{0}'}" 
+                               Foreground="#666666"
+                               FontSize="11"
+                               FontStyle="Italic"/>
+                </StackPanel>
+
+                <!-- Right: Download Progress + Player Toggle -->
+                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Spacing="12">
+                    <TextBlock Text="{Binding TodoCount, StringFormat='📥 {0} in progress'}" 
+                               Foreground="#A0A0A0" FontSize="11"/>
+                    <TextBlock Text="{Binding SuccessfulCount, StringFormat='✓ {0} completed'}" 
+                               Foreground="#A0A0A0" FontSize="11"/>
+                    <TextBlock Text="{Binding FailedCount, StringFormat='✗ {0} failed'}" 
+                               Foreground="#A0A0A0" FontSize="11"/>
+                    
+                    <Border Width="1" Height="14" Background="#404040"/>
+
+                    <Button Command="{Binding TogglePlayerCommand}" 
+                            Background="Transparent" 
+                            BorderThickness="0" 
+                            Padding="6,2"
+                            ToolTip.Tip="Toggle Music Player">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <TextBlock Text="🎵" FontSize="14" Foreground="#A0A0A0"/>
+                            <TextBlock Text="Player" FontSize="11" Foreground="#A0A0A0" FontWeight="SemiBold"/>
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Main Content Area with Sidebars -->
+        <Grid Grid.Row="1" ColumnDefinitions="Auto,*,Auto">
+            
+            <!-- Left Navigation Sidebar -->
+            <Border Grid.Column="0" 
+                    Background="#252526" 
+                    BorderBrush="#3E3E3E" 
+                    BorderThickness="0,0,1,0"
+                    Width="220"
+                    IsVisible="{Binding !IsNavigationCollapsed}">
+                <StackPanel Margin="0,16,0,0">
+                    <Button Classes="nav" Command="{Binding NavigateSearchCommand}">
+                        <StackPanel Orientation="Horizontal" Spacing="12">
+                            <TextBlock Text="🔍" FontSize="16"/>
+                            <TextBlock Text="Search" FontSize="14"/>
+                        </StackPanel>
+                    </Button>
+                    
+                    <Button Classes="nav" Command="{Binding NavigateLibraryCommand}">
+                        <StackPanel Orientation="Horizontal" Spacing="12">
+                            <TextBlock Text="📚" FontSize="16"/>
+                            <TextBlock Text="Library" FontSize="14"/>
+                        </StackPanel>
+                    </Button>
+                    
+                    <Button Classes="nav" Command="{Binding NavigateDownloadsCommand}">
+                        <StackPanel Orientation="Horizontal" Spacing="12">
+                            <TextBlock Text="⬇️" FontSize="16"/>
+                            <TextBlock Text="Downloads" FontSize="14"/>
+                        </StackPanel>
+                    </Button>
+                    
+                    <Button Classes="nav" Command="{Binding NavigateSettingsCommand}">
+                        <StackPanel Orientation="Horizontal" Spacing="12">
+                            <TextBlock Text="⚙️" FontSize="16"/>
+                            <TextBlock Text="Settings" FontSize="14"/>
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+            </Border>
+
+            <!-- Center Content Area -->
+            <ContentControl Grid.Column="1" 
+                            Content="{Binding CurrentPage}" 
+                            Background="#1E1E1E"/>
+
+            <!-- Right Player Sidebar -->
+            <Border Grid.Column="2" 
+                    Background="#252526" 
+                    BorderBrush="#3E3E3E" 
+                    BorderThickness="1,0,0,0"
+                    Width="300"
+                    IsVisible="{Binding IsPlayerSidebarVisible}">
+                <views:PlayerControl DataContext="{Binding PlayerViewModel}"/>
+            </Border>
+        </Grid>
+
+        <!-- Login Overlay -->
+        <Grid Grid.RowSpan="2" 
+              Background="#DD000000" 
+              IsVisible="{Binding IsLoginOverlayVisible}" 
+              ZIndex="1000">
+            <Border Background="#252526" 
+                    CornerRadius="8" 
+                    Padding="32"
+                    Width="420"
+                    HorizontalAlignment="Center" 
+                    VerticalAlignment="Center"
+                    BorderBrush="#404040"
+                    BorderThickness="1">
+                <StackPanel Spacing="12">
+                    <TextBlock Text="Sign in to Soulseek" 
+                               FontSize="20" 
+                               FontWeight="Bold" 
+                               Foreground="White" 
+                               Margin="0,0,0,12"
+                               HorizontalAlignment="Center"/>
+
+                    <TextBlock Text="Username" Foreground="#A0A0A0" FontSize="12"/>
+                    <TextBox Text="{Binding Username, Mode=TwoWay}" 
+                             Watermark="Username"
+                             Padding="12,8"
+                             FontSize="14"/>
+
+                    <TextBlock Text="Password" Foreground="#A0A0A0" FontSize="12"/>
+                    <TextBox x:Name="LoginPasswordBox" 
+                             Watermark="Password"
+                             PasswordChar="●"
+                             Padding="12,8"
+                             FontSize="14"/>
+
+                    <StackPanel Orientation="Horizontal" Spacing="12">
+                        <CheckBox Content="Remember me" 
+                                  IsChecked="{Binding RememberPassword, Mode=TwoWay}" 
+                                  Foreground="White"/>
+                        <CheckBox Content="Auto-connect" 
+                                  IsChecked="{Binding AutoConnectEnabled, Mode=TwoWay}" 
+                                  Foreground="White"/>
+                    </StackPanel>
+
+                    <Button Classes="primary"
+                            Content="Connect" 
+                            Command="{Binding LoginCommand}" 
+                            CommandParameter="{Binding #LoginPasswordBox.Text}"
+                            Height="44"
+                            FontSize="14"
+                            FontWeight="SemiBold"
+                            Margin="0,8,0,0"/>
+                    
+                    <Button Content="Maybe Later" 
+                            Command="{Binding DismissLoginCommand}"
+                            Background="Transparent" 
+                            Foreground="#A0A0A0" 
+                            FontSize="12"
+                            BorderThickness="0" 
+                            Padding="0,12"
+                            HorizontalContentAlignment="Center">
+                        <Button.Styles>
+                            <Style Selector="Button:pointerover">
+                                <Setter Property="Foreground" Value="White"/>
+                            </Style>
+                        </Button.Styles>
+                    </Button>
+
+                    <TextBlock Text="{Binding StatusText}" 
+                               Foreground="#FFB347" 
+                               FontSize="12" 
+                               TextWrapping="Wrap"
+                               HorizontalAlignment="Center"/>
+                </StackPanel>
+            </Border>
+        </Grid>
+    </Grid>
+</Window>

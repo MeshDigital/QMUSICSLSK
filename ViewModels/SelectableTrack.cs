@@ -1,3 +1,4 @@
+using System;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using SLSKDONET.Models;
@@ -5,15 +6,41 @@ using SLSKDONET.Models;
 namespace SLSKDONET.ViewModels;
 
 /// <summary>
-/// Wrapper for Track with selection state for Spotify import UI.
+/// Wrapper for Track model to handle UI selection state and notifications.
 /// </summary>
 public class SelectableTrack : INotifyPropertyChanged
 {
-    private bool _isSelected = true;
-    private int _trackNumber;
-
-    public Track Track { get; set; }
+    public Track Model { get; }
+    public Track Track => Model; // Alias for compatibility
     
+    private bool _isSelected;
+    public bool IsSelected
+    {
+        get => _isSelected;
+        set
+        {
+            if (_isSelected != value)
+            {
+                _isSelected = value;
+                Model.IsSelected = value; // Sync with model
+                OnPropertyChanged();
+                
+                // Notify listener (ViewModel)
+                OnSelectionChanged?.Invoke();
+            }
+        }
+    }
+
+    public Action? OnSelectionChanged { get; set; }
+
+    public event PropertyChangedEventHandler? PropertyChanged;
+
+    // Proxied properties for compatibility
+    public string? Artist => Model.Artist;
+    public string? Title => Model.Title;
+    public string? Album => Model.Album;
+    
+    private int _trackNumber;
     public int TrackNumber
     {
         get => _trackNumber;
@@ -26,39 +53,20 @@ public class SelectableTrack : INotifyPropertyChanged
             }
         }
     }
-    
-    public bool IsSelected
+
+    public SelectableTrack(Track track, bool isSelected = false)
     {
-        get => _isSelected;
-        set
-        {
-            if (_isSelected != value)
-            {
-                _isSelected = value;
-                OnPropertyChanged();
-            }
-        }
+        Model = track;
+        _isSelected = isSelected;
+        Model.IsSelected = isSelected;
     }
 
-    // Convenience properties for UI binding
-    public string Title => Track?.Title ?? "";
-    public string Artist => Track?.Artist ?? "";
-    public string Album => Track?.Album ?? "";
-    public string AlbumArt => ""; // TODO: Add album art support to Track model
-    public int Duration => Track?.Length ?? 0;
-    
-    public string DurationFormatted => Duration > 0 
-        ? TimeSpan.FromSeconds(Duration).ToString(@"mm\:ss") 
-        : "--:--";
-
-    public SelectableTrack(Track track, int trackNumber = 1)
+    // Constructor for SpotifyImportViewModel compatibility
+    public SelectableTrack(Track track, int trackNumber) : this(track, false)
     {
-        Track = track;
         TrackNumber = trackNumber;
     }
 
-    public event PropertyChangedEventHandler? PropertyChanged;
-    
     protected void OnPropertyChanged([CallerMemberName] string? propertyName = null)
     {
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));

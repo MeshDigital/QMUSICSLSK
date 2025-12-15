@@ -1,0 +1,50 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:converters="clr-namespace:SLSKDONET.Views.Avalonia.Converters"
+             x:Class="SLSKDONET.App"
+             RequestedThemeVariant="Dark">
+    
+    <Application.Resources>
+        <!-- Like/Heart Converters -->
+        <converters:BoolToHeartConverter x:Key="BoolToHeartConverter"/>
+        <converters:BoolToHeartColorConverter x:Key="BoolToHeartColorConverter"/>
+        
+        <!-- Boolean State Converters -->
+        <converters:BoolToColorConverter x:Key="BoolToColorConverter"/>
+        <converters:BoolToLibraryStatusColorConverter x:Key="BoolToLibraryStatusColorConverter"/>
+        <converters:BoolToLibraryStatusTextConverter x:Key="BoolToLibraryStatusTextConverter"/>
+        <converters:BoolToEditModeTextConverter x:Key="BoolToEditModeTextConverter"/>
+        <converters:BoolToPlayPauseTextConverter x:Key="BoolToPlayPauseTextConverter"/>
+        <converters:BoolToPlayPauseIconConverter x:Key="BoolToPlayPauseIconConverter"/>
+        <converters:BoolToBackgroundConverter x:Key="BoolToBackgroundConverter"/>
+        
+        <!-- Utility Converters -->
+        <converters:RepeatModeIconConverter x:Key="RepeatModeIconConverter"/>
+        <converters:RepeatModeColorConverter x:Key="RepeatModeColorConverter"/>
+        <converters:EqualityConverter x:Key="EqualityConverter"/>
+        <converters:WidthToVisibilityConverter x:Key="WidthToVisibilityConverter"/>
+        <converters:PlayerLocationConverter x:Key="PlayerLocationConverter"/>
+        <converters:PlayerDockIconConverter x:Key="PlayerDockIconConverter"/>
+    </Application.Resources>
+    
+    <Application.Styles>
+        <FluentTheme/>
+        <StyleInclude Source="avares://SLSKDONET/Themes/AvaloniaTheme.axaml"/>
+    </Application.Styles>
+    
+    <!-- System Tray Icon -->
+    <TrayIcon.Icons>
+        <TrayIcons>
+            <TrayIcon ToolTipText="SLSKDONET - Soulseek Music Downloader">
+                <TrayIcon.Menu>
+                    <NativeMenu>
+                        <NativeMenuItem Header="Show Window" Click="ShowWindow_Click"/>
+                        <NativeMenuItem Header="Hide Window" Click="HideWindow_Click"/>
+                        <NativeMenuItemSeparator/>
+                        <NativeMenuItem Header="Exit" Click="Exit_Click"/>
+                    </NativeMenu>
+                </TrayIcon.Menu>
+            </TrayIcon>
+        </TrayIcons>
+    </TrayIcon.Icons>
+</Application>

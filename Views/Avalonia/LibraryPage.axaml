@@ -1,0 +1,363 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="1200" d:DesignHeight="800"
+             x:Class="SLSKDONET.Views.Avalonia.LibraryPage"
+             Background="#1E1E1E" Foreground="White">
+    
+    <Grid ColumnDefinitions="280,*">
+        
+        <!-- LEFT PANEL: Playlist List -->
+        <Border Grid.Column="0" Background="#252526" BorderBrush="#3E3E3E" BorderThickness="0,0,1,0">
+            <Grid RowDefinitions="Auto,Auto,*,Auto">
+                
+                <!-- Header -->
+                <StackPanel Grid.Row="0" Margin="16,16,16,12">
+                    <TextBlock Text="Library" FontSize="18" FontWeight="Bold" Foreground="White"/>
+                    <TextBlock Text="Imported Playlists" FontSize="12" Foreground="#A0A0A0" Margin="0,4,0,0"/>
+                </StackPanel>
+                
+                <!-- Actions -->
+                <StackPanel Grid.Row="1" Margin="16,0,16,12" Spacing="8">
+                    <Button Command="{Binding AddPlaylistCommand}" 
+                            Classes="nav"
+                            HorizontalContentAlignment="Left"
+                            Padding="12,10">
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <TextBlock Text="➕" FontSize="16"/>
+                            <TextBlock Text="New Playlist" FontSize="13"/>
+                        </StackPanel>
+                    </Button>
+                    
+                    <Button Command="{Binding ViewHistoryCommand}" 
+                            Classes="nav"
+                            HorizontalContentAlignment="Left"
+                            Padding="12,10">
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <TextBlock Text="📜" FontSize="16"/>
+                            <TextBlock Text="Import History" FontSize="13"/>
+                        </StackPanel>
+                    </Button>
+                    
+                    <!-- Delete Playlist Button -->
+                    <Button Command="{Binding DeleteProjectCommand}" 
+                            CommandParameter="{Binding SelectedProject}"
+                            Classes="nav"
+                            HorizontalContentAlignment="Left"
+                            Padding="12,10"
+                            IsEnabled="{Binding !!SelectedProject}"
+                            ToolTip.Tip="Delete selected playlist">
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <TextBlock Text="🗑️" FontSize="16"/>
+                            <TextBlock Text="Delete Playlist" FontSize="13" Foreground="#FF6B6B"/>
+                        </StackPanel>
+                    </Button>
+                    
+                </StackPanel>
+                
+                <!-- Playlist List -->
+                <ListBox Grid.Row="2" 
+                         ItemsSource="{Binding AllProjects}"
+                         SelectedItem="{Binding SelectedProject, Mode=TwoWay}"
+                         Background="Transparent"
+                         BorderThickness="0"
+                         Padding="12">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <!-- Modern Card Design -->
+                            <Border Background="#2D2D2D" 
+                                    BorderBrush="#3E3E3E" 
+                                    BorderThickness="1"
+                                    CornerRadius="8" 
+                                    Padding="16,14" 
+                                    Margin="0,0,0,8">
+                                <Border.Styles>
+                                    <Style Selector="Border:pointerover">
+                                        <Setter Property="Background" Value="#333333"/>
+                                        <Setter Property="BorderBrush" Value="#0078D4"/>
+                                    </Style>
+                                </Border.Styles>
+                                
+                                <Grid RowDefinitions="Auto,Auto,Auto,Auto">
+                                    <!-- Playlist Title -->
+                                    <TextBlock Grid.Row="0" 
+                                               Text="{Binding SourceTitle}" 
+                                               FontWeight="SemiBold" 
+                                               FontSize="14"
+                                               Foreground="White"
+                                               TextTrimming="CharacterEllipsis"/>
+                                    
+                                    <!-- Source Type Badge -->
+                                    <Border Grid.Row="1"
+                                            Background="#1A0078D4"
+                                            BorderBrush="#0078D4"
+                                            BorderThickness="1"
+                                            CornerRadius="4"
+                                            Padding="6,2"
+                                            Margin="0,6,0,0"
+                                            HorizontalAlignment="Left">
+                                        <TextBlock Text="{Binding SourceType}" 
+                                                   FontSize="10" 
+                                                   Foreground="#0078D4"
+                                                   FontWeight="Medium"/>
+                                    </Border>
+                                    
+                                    <!-- Track Count -->
+                                    <TextBlock Grid.Row="2" 
+                                               Margin="0,8,0,0"
+                                               FontSize="12" 
+                                               Foreground="#A0A0A0">
+                                        <Run Text="{Binding TotalTracks}"/>
+                                        <Run Text=" tracks"/>
+                                    </TextBlock>
+                                    
+                                    <!-- Progress Info -->
+                                    <StackPanel Grid.Row="3" Orientation="Horizontal" Spacing="8" Margin="0,4,0,0">
+                                        <TextBlock FontSize="11" Foreground="#4CAF50">
+                                            <Run Text="✓"/>
+                                            <Run Text="{Binding SuccessfulCount}"/>
+                                        </TextBlock>
+                                        <TextBlock FontSize="11" Foreground="#FF6B6B">
+                                            <Run Text="✗"/>
+                                            <Run Text="{Binding FailedCount}"/>
+                                        </TextBlock>
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+                
+                <!-- Bottom Actions -->
+                <StackPanel Grid.Row="3" Margin="16,12,16,16" Spacing="8">
+                    <Button Command="{Binding RefreshLibraryCommand}" 
+                            Background="#0078D4" 
+                            Foreground="White" 
+                            Padding="12,8"
+                            HorizontalContentAlignment="Center">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <TextBlock Text="🔄"/>
+                            <TextBlock Text="Refresh Library"/>
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+            </Grid>
+        </Border>
+        
+        <!-- RIGHT PANEL: Track List -->
+        <Grid Grid.Column="1" RowDefinitions="Auto,Auto,*">
+            
+            <!-- Toolbar -->
+            <Border Grid.Row="0" Background="#252526" BorderBrush="#3E3E3E" BorderThickness="0,0,0,1" Padding="20,16">
+                <Grid ColumnDefinitions="*,Auto">
+                    <!-- Left: Search and Filters -->
+                    <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="16">
+                        <!-- Modern Search Box -->
+                        <Border Background="#2D2D2D" 
+                                BorderBrush="#3E3E3E" 
+                                BorderThickness="1"
+                                CornerRadius="8"
+                                Padding="12,0"
+                                Width="300">
+                            <Grid ColumnDefinitions="Auto,*">
+                                <TextBlock Grid.Column="0" 
+                                          Text="🔍" 
+                                          FontSize="14" 
+                                          VerticalAlignment="Center"
+                                          Margin="0,0,8,0"
+                                          Foreground="#888"/>
+                                <TextBox Grid.Column="1"
+                                        Text="{Binding SearchText, Mode=TwoWay}" 
+                                        Watermark="Search tracks..." 
+                                        Background="Transparent"
+                                        BorderThickness="0"
+                                        Padding="0,10"
+                                        Foreground="White"/>
+                            </Grid>
+                        </Border>
+                        
+                        <!-- Chip-style Filters -->
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <ToggleButton Content="All" 
+                                         IsChecked="{Binding IsFilterAll, Mode=TwoWay}"
+                                         Classes="chip"
+                                         Padding="16,8"/>
+                            <ToggleButton Content="Downloaded" 
+                                         IsChecked="{Binding IsFilterDownloaded, Mode=TwoWay}"
+                                         Classes="chip"
+                                         Padding="16,8"/>
+                            <ToggleButton Content="Pending" 
+                                         IsChecked="{Binding IsFilterPending, Mode=TwoWay}"
+                                         Classes="chip"
+                                         Padding="16,8"/>
+                        </StackPanel>
+                    </StackPanel>
+                    
+                    <!-- Right: Icon Actions -->
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                        <Button Command="{Binding SelectAllTracksCommand}"
+                                Classes="icon-button"
+                                IsVisible="{Binding !!FilteredTracks.Count}"
+                                ToolTip.Tip="Select All">
+                            <TextBlock Text="☑️" FontSize="16"/>
+                        </Button>
+                        
+                        <Button Command="{Binding DeselectAllTracksCommand}"
+                                Classes="icon-button"
+                                IsVisible="{Binding HasSelectedTracks}"
+                                ToolTip.Tip="Deselect All">
+                            <TextBlock Text="☐" FontSize="16"/>
+                        </Button>
+                        
+                        <Button Command="{Binding ToggleEditModeCommand}"
+                                Classes="icon-button"
+                                ToolTip.Tip="Toggle Edit Mode">
+                            <TextBlock Text="✏️" FontSize="16"/>
+                        </Button>
+                        
+                        <Button Command="{Binding RefreshLibraryCommand}"
+                                Classes="icon-button"
+                                ToolTip.Tip="Refresh Library">
+                            <TextBlock Text="🔄" FontSize="16"/>
+                        </Button>
+                    </StackPanel>
+                </Grid>
+            </Border>
+            
+            <!-- Active Downloads HUD -->
+            <Border Grid.Row="1" 
+                    Background="#1A4CAF50" 
+                    BorderBrush="#4CAF50" 
+                    BorderThickness="0,0,0,1" 
+                    Padding="16,12"
+                    IsVisible="{Binding IsActiveDownloadsVisible}">
+                <Grid ColumnDefinitions="Auto,*,Auto">
+                    <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="12">
+                        <TextBlock Text="⬇️ Active Downloads" FontWeight="Bold" Foreground="White"/>
+                        <TextBlock Text="{Binding MaxDownloads, StringFormat='Max: {0}'}" Foreground="#A0A0A0"/>
+                    </StackPanel>
+                    
+                    <Button Grid.Column="2" 
+                            Command="{Binding ToggleActiveDownloadsCommand}"
+                            Background="Transparent"
+                            BorderThickness="0"
+                            Foreground="White"
+                            Padding="8,4">
+                        <TextBlock Text="✕"/>
+                    </Button>
+                </Grid>
+            </Border>
+            
+            <!-- Track DataGrid -->
+            <DataGrid Grid.Row="2"
+                      x:Name="TrackDataGrid"
+                      ItemsSource="{Binding FilteredTracks}"
+                      AutoGenerateColumns="False"
+                      Background="Transparent"
+                      BorderThickness="0"
+                      GridLinesVisibility="Horizontal"
+                      RowBackground="Transparent"
+                      Foreground="#DDD"
+                      HeadersVisibility="Column"
+                      CanUserReorderColumns="False"
+                      CanUserResizeColumns="True"
+                      CanUserSortColumns="False"
+                      IsReadOnly="{Binding IsDataGridReadOnly}"
+                      DragDrop.AllowDrop="True">
+                
+                <!-- Row Styles for Visual Feedback -->
+                <DataGrid.Styles>
+                    <Style Selector="DataGridRow:pointerover">
+                        <Setter Property="Background" Value="#1AFFFFFF"/>
+                        <Setter Property="Cursor" Value="Hand"/>
+                    </Style>
+                    <Style Selector="DataGridRow:selected">
+                        <Setter Property="Background" Value="#2A0078D4"/>
+                    </Style>
+                </DataGrid.Styles>
+                
+                <DataGrid.Columns>
+                    <!-- # -->
+                    <DataGridTextColumn Header="#" 
+                                        Binding="{Binding SortOrder}" 
+                                        Width="50" 
+                                        IsReadOnly="True"/>
+                    
+                    <!-- Title -->
+                    <DataGridTextColumn Header="Title" 
+                                        Binding="{Binding Title}" 
+                                        Width="3*"/>
+                    
+                    <!-- Artist -->
+                    <DataGridTextColumn Header="Artist" 
+                                        Binding="{Binding Artist}" 
+                                        Width="2*"/>
+                    
+                    <!-- Album -->
+                    <DataGridTextColumn Header="Album" 
+                                        Binding="{Binding Album}" 
+                                        Width="2*"/>
+                    
+                    <!-- Status -->
+                    <DataGridTemplateColumn Header="Status" Width="120">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <Border CornerRadius="4" 
+                                        Padding="8,4" 
+                                        Background="{Binding StatusColor}"
+                                        HorizontalAlignment="Left">
+                                    <TextBlock Text="{Binding State}" 
+                                               FontSize="11" 
+                                               Foreground="White"/>
+                                </Border>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                    
+                    <!-- Progress -->
+                    <DataGridTemplateColumn Header="Progress" Width="100">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <ProgressBar Value="{Binding Progress}" 
+                                             Maximum="1" 
+                                             Height="6" 
+                                             Background="#333" 
+                                             Foreground="#4CAF50"
+                                             BorderThickness="0"/>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                    
+                    <!-- Actions -->
+                    <DataGridTemplateColumn Header="Actions" Width="200">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <StackPanel Orientation="Horizontal" Spacing="4">
+                                    <Button Command="{Binding $parent[DataGrid].((vm:LibraryViewModel)DataContext).PlayTrackCommand}"
+                                            CommandParameter="{Binding}"
+                                            Background="#0078D4"
+                                            Foreground="White"
+                                            Padding="6,4"
+                                            ToolTip.Tip="Play">
+                                        <TextBlock Text="▶️" FontSize="12"/>
+                                    </Button>
+                                    
+                                    <Button Command="{Binding $parent[DataGrid].((vm:LibraryViewModel)DataContext).RemoveTrackCommand}"
+                                            CommandParameter="{Binding}"
+                                            Background="#F44336"
+                                            Foreground="White"
+                                            Padding="6,4"
+                                            ToolTip.Tip="Remove"
+                                            IsVisible="{Binding $parent[DataGrid].((vm:LibraryViewModel)DataContext).IsEditMode}">
+                                        <TextBlock Text="🗑️" FontSize="12"/>
+                                    </Button>
+                                </StackPanel>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                </DataGrid.Columns>
+            </DataGrid>
+        </Grid>
+    </Grid>
+</UserControl>
