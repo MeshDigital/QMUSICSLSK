@@ -159,8 +159,15 @@ public class ImportPreviewViewModel : INotifyPropertyChanged
         // Group by album for display
         GroupByAlbum();
         StatusMessage = $"Loaded {ImportedTracks.Count} tracks";
-        _logger.LogInformation("Import preview initialized with {Count} tracks from {Source}", 
-            ImportedTracks.Count, sourceTitle);
+        
+        // Force UI update
+        OnPropertyChanged(nameof(ImportedTracks));
+        OnPropertyChanged(nameof(TrackCount));
+        
+        _logger.LogInformation("Import preview initialized with {Count} tracks from {Source}. First track: {Artist} - {Title}", 
+            ImportedTracks.Count, sourceTitle, 
+            ImportedTracks.FirstOrDefault()?.Artist ?? "None", 
+            ImportedTracks.FirstOrDefault()?.Title ?? "None");
     }
 
     /// <summary>
