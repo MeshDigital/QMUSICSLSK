@@ -19,6 +19,7 @@
 - **[SLSKDONET_LEARNINGS.md](SLSKDONET_LEARNINGS.md)** - Implementation patterns and decisions
 - **[BUILD_REFERENCE.md](BUILD_REFERENCE.md)** - Quick build and project reference
 - **[IMPLEMENTATION_SUMMARY.md](IMPLEMENTATION_SUMMARY.md)** - Complete feature matrix
+- **[DOCS/FILE_PATH_RESOLUTION.md](DOCS/FILE_PATH_RESOLUTION.md)** - File path resolution with fuzzy matching ✨
 
 #### Phase 4 (Modern UI) ✨
 - **[PHASE4_QUICK_REFERENCE.md](PHASE4_QUICK_REFERENCE.md)** - 5-minute overview
@@ -181,6 +182,13 @@ SLSKDONET/
 - **Overview:** [IMPLEMENTATION_SUMMARY.md](IMPLEMENTATION_SUMMARY.md) → Configuration Management
 - **Integration:** [PHASE4_UI_IMPLEMENTATION.md](PHASE4_UI_IMPLEMENTATION.md) → Configuration Integration
 - **Files:** `Configuration/AppConfig.cs` + `Configuration/ConfigManager.cs`
+
+### File Path Resolution & Fuzzy Matching ✨ NEW
+- **Complete Guide:** [DOCS/FILE_PATH_RESOLUTION.md](DOCS/FILE_PATH_RESOLUTION.md)
+- **Overview:** File resolution for moved/renamed files with Levenshtein distance
+- **Code:** `Utils/StringDistanceUtils.cs` + `Services/LibraryService.cs`
+- **Configuration:** `AppConfig.LibraryRootPaths`, `EnableFilePathResolution`, `FuzzyMatchThreshold`
+- **Roadmap:** [ROADMAP.md](ROADMAP.md) → File Path Resolution (Completed)
 
 ---
 

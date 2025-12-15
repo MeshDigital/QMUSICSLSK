@@ -2,6 +2,15 @@
 
 This roadmap outlines the strategic steps to elevate SLSKDONET from a functional prototype to a robust, "daily driver" application.
 
+## 0. File Path Resolution (Priority: 🟢 Completed)
+**Current State**: **Implemented**. Advanced file path resolution with fuzzy matching is live.
+**What Was Implemented**:
+- [x] **Levenshtein Distance Algorithm**: Fuzzy string matching utility for finding similar filenames.
+- [x] **Multi-Step Resolution**: Fast check → Filename search → Fuzzy metadata matching.
+- [x] **Configuration**: LibraryRootPaths, EnableFilePathResolution, FuzzyMatchThreshold settings.
+- [x] **Database Tracking**: OriginalFilePath and FilePathUpdatedAt fields for audit trail.
+- [x] **Documentation**: Comprehensive guide in `DOCS/FILE_PATH_RESOLUTION.md`.
+
 ## 1. The Stability Layer: Persistence (Priority: 🟢 Completed)
 **Current State**: **Implemented**. SQLite integration is live. Library and Download Manager share a unified persistence layer.
 **The Plan**:
