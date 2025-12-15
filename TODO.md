@@ -261,33 +261,31 @@
 
 ---
 
-## Phase 1: Critical Features (6 hours) 🔴
+## Phase 1: Critical Features ✅ 80% COMPLETE (was 0%)
 
-### 1.1 Queue Management (2 hours)
+### 1.1 Queue Management ✅ 90% COMPLETE (was 0%)
 **Priority**: ⭐⭐⭐ CRITICAL
 
-**What to Build**:
-- [ ] Play queue view (right sidebar or bottom panel)
-- [ ] Add to queue button (context menu + search results)
-- [ ] Clear queue button
-- [ ] Drag-drop reorder queue
-- [ ] Remove from queue
+**Completed Today**:
+- [x] Play queue view (QueuePanel.axaml in right sidebar)
+- [x] Add to queue button (context menu + 📋 button + drag-drop)
+- [x] Clear queue button
+- [x] Drag-drop reorder queue (custom ghost items)
+- [x] Remove from queue
+- [x] Drag-to-player for immediate playback
+- [x] MoveTrack(globalId, targetIndex) method
 
-**Files to Create/Modify**:
-- `ViewModels/QueueViewModel.cs` (new)
-- `Views/Avalonia/QueuePanel.axaml` (new)
-- `PlayerViewModel.cs` (add queue management)
-- `MainWindow.axaml` (add queue panel)
+**Remaining**:
+- [ ] Persist queue order to database (10%)
+- [ ] Restore queue on app restart
 
-**Backend Status**: ⚠️ Partial (PlayerViewModel exists, needs queue logic)
+**Files Created**:
+- ✅ `Views/Avalonia/Controls/QueuePanel.axaml`
+- ✅ `Views/Avalonia/Controls/QueuePanel.axaml.cs`
+- ✅ `Services/DragAdornerService.cs`
+- ✅ `Views/Avalonia/PlayerControl.axaml.cs`
 
-**Implementation Steps**:
-1. Create `QueueViewModel` with `ObservableCollection<PlaylistTrackViewModel>`
-2. Add `AddToQueue()`, `RemoveFromQueue()`, `ClearQueue()` methods
-3. Create `QueuePanel.axaml` UI component
-4. Wire up to PlayerViewModel
-5. Add context menu "Add to Queue" option
-6. Test queue playback flow
+**Backend Status**: ✅ Complete (PlayerViewModel has full queue logic)
 
 ---
 
