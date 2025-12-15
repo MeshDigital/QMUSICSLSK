@@ -12,6 +12,9 @@ namespace SLSKDONET.Views.Avalonia
         public MainWindow()
         {
             InitializeComponent();
+#if DEBUG
+            this.AttachDevTools();
+#endif
             
             // Get config from DataContext (MainViewModel will set it)
             this.Opened += OnWindowOpened;
