@@ -23,6 +23,8 @@ public class SearchViewModel : INotifyPropertyChanged
     private readonly IEnumerable<IImportProvider> _importProviders;
     private readonly DownloadManager _downloadManager;
     private readonly INavigationService _navigationService;
+    private readonly IFileInteractionService _fileInteractionService;
+    private readonly IClipboardService _clipboardService;
 
     // Import Preview VM is needed for setting up the view, but orchestration happens via ImportOrchestrator
     public ImportPreviewViewModel ImportPreviewViewModel { get; }
@@ -87,7 +89,7 @@ public class SearchViewModel : INotifyPropertyChanged
     public ICommand PasteTracklistCommand { get; }
     public ICommand CancelSearchCommand { get; }
     public ICommand AddToDownloadsCommand { get; }
-    public ICommand DownloadAlbumCommand { get; } // Handled per-item but property needed for binding if at root? No, typically ItemTemplate binds to Item.
+    public ICommand DownloadAlbumCommand { get; } 
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
@@ -98,7 +100,9 @@ public class SearchViewModel : INotifyPropertyChanged
         IEnumerable<IImportProvider> importProviders,
         ImportPreviewViewModel importPreviewViewModel,
         DownloadManager downloadManager,
-        INavigationService navigationService)
+        INavigationService navigationService,
+        IFileInteractionService fileInteractionService,
+        IClipboardService clipboardService)
     {
         _logger = logger;
         _soulseek = soulseek;
@@ -107,6 +111,8 @@ public class SearchViewModel : INotifyPropertyChanged
         ImportPreviewViewModel = importPreviewViewModel;
         _downloadManager = downloadManager;
         _navigationService = navigationService;
+        _fileInteractionService = fileInteractionService;
+        _clipboardService = clipboardService;
 
         UnifiedSearchCommand = new AsyncRelayCommand(ExecuteUnifiedSearchAsync, () => CanSearch);
         ClearSearchCommand = new RelayCommand(() => SearchQuery = "");
@@ -128,45 +134,30 @@ public class SearchViewModel : INotifyPropertyChanged
 
         try
         {
-            // 1. Check for Spotify or URL Imports
-            if (SearchQuery.Contains("spotify.com") || SearchQuery.Contains("open.spotify"))
+            // 1. Check if any registered Import Provider can handle this input
+            var provider = _importProviders.FirstOrDefault(p => p.CanHandle(SearchQuery));
+            if (provider != null)
             {
-                var provider = _importProviders.FirstOrDefault(p => p.Name.Contains("Spotify"));
-                if (provider != null)
-                {
-                    StatusText = "Importing from Spotify...";
-                    await _importOrchestrator.StartImportWithPreviewAsync(provider, SearchQuery);
-                    IsSearching = false;
-                    return;
-                }
+                StatusText = $"Importing via {provider.Name}...";
+                await _importOrchestrator.StartImportWithPreviewAsync(provider, SearchQuery);
+                IsSearching = false;
+                StatusText = "Import ready";
+                return;
             }
 
-            // 2. Check for File Imports (CSV)
-            if (SearchQuery.EndsWith(".csv", StringComparison.OrdinalIgnoreCase))
-            {
-                 var provider = _importProviders.FirstOrDefault(p => p.Name.Contains("CSV"));
-                 if (provider != null)
-                 {
-                     StatusText = "Reading CSV...";
-                     await _importOrchestrator.StartImportWithPreviewAsync(provider, SearchQuery);
-                     IsSearching = false;
-                     return;
-                 }
-            }
-
-            // 3. Default: Soulseek Search
+            // 2. Default: Soulseek Search
             StatusText = $"Searching Soulseek for '{SearchQuery}'...";
             
             // Pass the callback to handle results as they stream in
             await _soulseek.SearchAsync(
                 SearchQuery,
-                formatFilter: null, // TODO: Add format filter support
+                formatFilter: null,
                 bitrateFilter: (MinBitrate, MaxBitrate),
                 mode: IsAlbumSearch ? DownloadMode.Album : DownloadMode.Normal,
                 onTracksFound: OnTracksFound
             );
             
-            // Auto-hide spinner after 5 seconds
+            // Auto-hide spinner after 5 seconds if results found
             _ = Task.Delay(5000).ContinueWith(_ => 
             {
                 Dispatcher.UIThread.Post(() => 
@@ -175,7 +166,6 @@ public class SearchViewModel : INotifyPropertyChanged
                         IsSearching = false;
                 });
             });
-
         }
         catch (Exception ex)
         {
@@ -201,24 +191,62 @@ public class SearchViewModel : INotifyPropertyChanged
 
     private async Task ExecuteBrowseCsvAsync()
     {
-        // Need IOpenFileService, assumed implemented in View layer or similar
-        // For now, logging to indicate flow
-        _logger.LogWarning("Browse CSV not fully implemented yet - requires IOpenFileService");
+        try
+        {
+            var path = await _fileInteractionService.OpenFileDialogAsync("Select CSV File", new[] 
+            { 
+                new FileDialogFilter("CSV Files", new List<string> { "csv" }),
+                new FileDialogFilter("All Files", new List<string> { "*" })
+            });
+
+            if (!string.IsNullOrEmpty(path))
+            {
+                SearchQuery = path; 
+                await ExecuteUnifiedSearchAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error browsing for CSV");
+            StatusText = "Error selecting file";
+        }
     }
 
     private async Task ExecutePasteTracklistAsync()
     {
-         var provider = _importProviders.FirstOrDefault(p => p.Name.Contains("Tracklist"));
-         // Input needs to come from clipboard...
-         // Requires IClipboardService
-         _logger.LogWarning("Paste Tracklist not fully implemented yet - requires IClipboardService");
+        try 
+        {
+            var text = await _clipboardService.GetTextAsync();
+            if (string.IsNullOrWhiteSpace(text)) 
+            {
+                StatusText = "Clipboard is empty";
+                return;
+            }
+
+            // Check if any provider can handle this text
+            var provider = _importProviders.FirstOrDefault(p => p.CanHandle(text));
+            if (provider != null)
+            {
+                 StatusText = $"Importing from Clipboard ({provider.Name})...";
+                 await _importOrchestrator.StartImportWithPreviewAsync(provider, text);
+            }
+            else
+            {
+                StatusText = "Clipboard content recognition failed.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error pasting from clipboard");
+            StatusText = "Clipboard error";
+        }
     }
 
     private void ExecuteCancelSearch()
     {
         IsSearching = false;
         StatusText = "Cancelled";
-        // _soulseek.CancelSearch(); // If supported
+        // _soulseek.CancelSearch(); // If/when supported by adapter
     }
 
     private async Task ExecuteAddToDownloadsAsync()
@@ -231,6 +259,7 @@ public class SearchViewModel : INotifyPropertyChanged
              _downloadManager.EnqueueTrack(track.Model);
         }
         StatusText = $"Queued {selected.Count} downloads";
+        await Task.CompletedTask;
     }
 
     protected void OnPropertyChanged([CallerMemberName] string? propertyName = null)

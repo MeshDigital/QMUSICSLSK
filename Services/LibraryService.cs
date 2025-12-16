@@ -1,8 +1,6 @@
-using Avalonia;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
@@ -10,36 +8,26 @@ using SLSKDONET.Configuration;
 using SLSKDONET.Data;
 using SLSKDONET.Models;
 using SLSKDONET.Utils;
-using Avalonia.Threading;
 
 namespace SLSKDONET.Services;
 
 /// <summary>
 /// Concrete implementation of ILibraryService.
-/// Manages three persistent indexes:
-/// 1. LibraryEntry (main global index of unique files)
-/// 2. PlaylistJob (playlist headers) - Database backed
-/// 3. PlaylistTrack (relational index linking playlists to tracks) - Database backed
+/// Manages persistent library data (LibraryEntry, PlaylistJob, PlaylistTrack).
+/// Now UI-agnostic and focused purely on data management.
 /// </summary>
 public class LibraryService : ILibraryService
 {
     private readonly ILogger<LibraryService> _logger;
     private readonly DatabaseService _databaseService;
     private readonly AppConfig _appConfig;
-    // private bool _isInitialized; // Unused
 
     public event EventHandler<Guid>? ProjectDeleted;
-    
     // Unused event required by interface - marking to suppress warning
     #pragma warning disable CS0067
     public event EventHandler<ProjectEventArgs>? ProjectUpdated;
     #pragma warning restore CS0067
-
-    /// <summary>
-    /// Reactive observable collection of all playlists - single source of truth.
-    /// Auto-syncs with SQLite database.
-    /// </summary>
-    public ObservableCollection<PlaylistJob> Playlists { get; } = new();
+    public event EventHandler<PlaylistJob>? PlaylistAdded;
 
     public LibraryService(ILogger<LibraryService> logger, DatabaseService databaseService, AppConfig appConfig)
     {
@@ -47,12 +35,8 @@ public class LibraryService : ILibraryService
         _databaseService = databaseService;
         _appConfig = appConfig;
 
-        _logger.LogDebug("LibraryService initialized with database persistence for playlists");
-    
-        // Playlists will be loaded on-demand when accessed
+        _logger.LogDebug("LibraryService initialized (Data Only)");
     }
-
-    public Task RefreshPlaylistsAsync() => InitializePlaylistsAsync();
 
     public async Task LogPlaylistActivityAsync(Guid playlistId, string action, string details)
     {
@@ -66,7 +50,7 @@ public class LibraryService : ILibraryService
                 Details = details,
                 Timestamp = DateTime.UtcNow
             };
-            await _databaseService.LogActivityAsync(log);
+            await _databaseService.LogActivityAsync(log).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -74,42 +58,17 @@ public class LibraryService : ILibraryService
         }
     }
 
-    private async Task InitializePlaylistsAsync()
-    {
-        try
-        {
-            _logger.LogInformation("Loading playlists from database...");
-            var jobs = await _databaseService.LoadAllPlaylistJobsAsync();
-            
-            Dispatcher.UIThread.Post(() =>
-            {
-                Playlists.Clear();
-                foreach (var job in jobs)
-                {
-                    Playlists.Add(EntityToPlaylistJob(job));
-                }
-            });
-            
-            // _isInitialized = true;
-            _logger.LogInformation("Loaded {Count} playlists from database", jobs.Count);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to initialize playlists from database");
-        }
-    }
-
     // ===== INDEX 1: LibraryEntry (Main Global Index - DB backed) =====
 
     public async Task<LibraryEntry?> FindLibraryEntryAsync(string uniqueHash)
     {
-        var entity = await _databaseService.FindLibraryEntryAsync(uniqueHash);
+        var entity = await _databaseService.FindLibraryEntryAsync(uniqueHash).ConfigureAwait(false);
         return entity != null ? EntityToLibraryEntry(entity) : null;
     }
 
     public async Task<List<LibraryEntry>> LoadAllLibraryEntriesAsync()
     {
-        var entities = await _databaseService.LoadAllLibraryEntriesAsync();
+        var entities = await _databaseService.LoadAllLibraryEntriesAsync().ConfigureAwait(false);
         return entities.Select(EntityToLibraryEntry).ToList();
     }
 
@@ -120,10 +79,7 @@ public class LibraryService : ILibraryService
             var entity = LibraryEntryToEntity(entry);
             entity.LastUsedAt = DateTime.UtcNow;
 
-            // This call will perform an atomic upsert (INSERT or UPDATE)
-            // assuming the underlying DatabaseService uses EF Core's Update() or equivalent.
-            // If the PK is not found, it will be an INSERT; otherwise, an UPDATE.
-            await _databaseService.SaveLibraryEntryAsync(entity);
+            await _databaseService.SaveLibraryEntryAsync(entity).ConfigureAwait(false);
             _logger.LogDebug("Upserted library entry: {Hash}", entry.UniqueHash);
         }
         catch (Exception ex)
@@ -137,22 +93,9 @@ public class LibraryService : ILibraryService
 
     public async Task<List<PlaylistJob>> GetHistoricalJobsAsync()
     {
-        // "History" means completed, failed, or cancelled jobs.
-        // For now, let's assume it's all jobs sorted by date, or we can filter.
-        // The user request implies "Import Job History".
-        // Let's return all jobs, and the VM can filter active vs history?
-        // Or better: Let's fetch all jobs that have "CompletedAt" or are "Deleted" (soft) maybe?
-        // Actually, LoadAllPlaylistJobsAsync() filters out IsDeleted.
-        // Let's add a method to get even deleted ones? Or just non-active?
-        
-        // Simpler for Phase 1: Return ALL jobs, filtering is done in VM or use existing method.
-        // User asked for "GetHistoricalJobsAsync", specifically for Import History.
-        
         try 
         {
-            var entities = await _databaseService.LoadAllPlaylistJobsAsync();
-            // Optional: Filter logic if we defined "Historical" strictly.
-            // For now, return all so the user can see everything.
+            var entities = await _databaseService.LoadAllPlaylistJobsAsync().ConfigureAwait(false);
             return entities.Select(EntityToPlaylistJob).OrderByDescending(j => j.CreatedAt).ToList();
         }
         catch (Exception ex)
@@ -166,7 +109,7 @@ public class LibraryService : ILibraryService
     {
         try
         {
-            var entities = await _databaseService.LoadAllPlaylistJobsAsync();
+            var entities = await _databaseService.LoadAllPlaylistJobsAsync().ConfigureAwait(false);
             return entities.Select(EntityToPlaylistJob).ToList();
         }
         catch (Exception ex)
@@ -180,7 +123,7 @@ public class LibraryService : ILibraryService
     {
         try
         {
-            var entity = await _databaseService.LoadPlaylistJobAsync(playlistId);
+            var entity = await _databaseService.LoadPlaylistJobAsync(playlistId).ConfigureAwait(false);
             return entity != null ? EntityToPlaylistJob(entity) : null;
         }
         catch (Exception ex)
@@ -206,18 +149,11 @@ public class LibraryService : ILibraryService
                 FailedCount = 0
             };
 
-            await _databaseService.SavePlaylistJobAsync(entity);
+            await _databaseService.SavePlaylistJobAsync(entity).ConfigureAwait(false);
             _logger.LogInformation("Saved playlist job: {Title} ({Id})", job.SourceTitle, job.Id);
 
-            // REACTIVE: Auto-add to observable collection if not already there
-            Dispatcher.UIThread.Post(() =>
-            {
-                if (!Playlists.Any(p => p.Id == job.Id))
-                {
-                    Playlists.Add(job);
-                    _logger.LogInformation("Added playlist '{Title}' to reactive collection", job.SourceTitle);
-                }
-            });
+            // Notify listeners (UI updates)
+            PlaylistAdded?.Invoke(this, job);
         }
         catch (Exception ex)
         {
@@ -233,22 +169,9 @@ public class LibraryService : ILibraryService
             // 1. Save Header + Tracks to DB atomically
             await _databaseService.SavePlaylistJobWithTracksAsync(job).ConfigureAwait(false);
             
-            // 2. Update In-Memory Reactive Collection (Fire & Forget to avoid deadlock)
-            Dispatcher.UIThread.Post(() =>
-            {
-                try 
-                {
-                    if (!Playlists.Any(p => p.Id == job.Id))
-                    {
-                        Playlists.Add(job);
-                        _logger.LogInformation("Added playlist '{Title}' (with tracks) to reactive collection", job.SourceTitle);
-                    }
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Failed to update reactive collection for {Title}", job.SourceTitle);
-                }
-            });
+            // 2. Notify listeners
+            PlaylistAdded?.Invoke(this, job);
+            _logger.LogInformation("Saved playlist job with tracks and notified listeners: {Title}", job.SourceTitle);
         }
         catch (Exception ex)
         {
@@ -262,21 +185,10 @@ public class LibraryService : ILibraryService
         try
         {
             // With soft delete, we just set the flag
-            await _databaseService.SoftDeletePlaylistJobAsync(playlistId);
+            await _databaseService.SoftDeletePlaylistJobAsync(playlistId).ConfigureAwait(false);
             _logger.LogInformation("Deleted playlist job: {Id}", playlistId);
 
-            // REACTIVE: Auto-remove from observable collection
-            Dispatcher.UIThread.Post(() =>
-            {
-                var jobToRemove = Playlists.FirstOrDefault(p => p.Id == playlistId);
-                if (jobToRemove != null)
-                {
-                    Playlists.Remove(jobToRemove);
-                    _logger.LogInformation("Removed playlist '{Title}' from reactive collection", jobToRemove.SourceTitle);
-                }
-            });
-
-            // Emit the event so subscribers (like LibraryViewModel) can react.
+            // Notify listeners
             ProjectDeleted?.Invoke(this, playlistId);
         }
         catch (Exception ex)
@@ -299,7 +211,7 @@ public class LibraryService : ILibraryService
         };
 
         // Persist and update reactive collection
-        await SavePlaylistJobWithTracksAsync(job);
+        await SavePlaylistJobWithTracksAsync(job).ConfigureAwait(false);
         
         return job;
     }
@@ -310,7 +222,7 @@ public class LibraryService : ILibraryService
         {
             // Convert to models and persist batch
             var entities = tracks.Select(PlaylistTrackToEntity).ToList();
-            await _databaseService.SavePlaylistTracksAsync(entities);
+            await _databaseService.SavePlaylistTracksAsync(entities).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -325,7 +237,7 @@ public class LibraryService : ILibraryService
     {
         try
         {
-            var entities = await _databaseService.LoadPlaylistTracksAsync(playlistId);
+            var entities = await _databaseService.LoadPlaylistTracksAsync(playlistId).ConfigureAwait(false);
             return entities.Select(EntityToPlaylistTrack).ToList();
         }
         catch (Exception ex)
@@ -339,7 +251,7 @@ public class LibraryService : ILibraryService
     {
         try
         {
-            var entities = await _databaseService.GetAllPlaylistTracksAsync();
+            var entities = await _databaseService.GetAllPlaylistTracksAsync().ConfigureAwait(false);
             return entities.Select(EntityToPlaylistTrack).ToList();
         }
         catch (Exception ex)
@@ -354,7 +266,7 @@ public class LibraryService : ILibraryService
         try
         {
             var entity = PlaylistTrackToEntity(track);
-            await _databaseService.SavePlaylistTrackAsync(entity);
+            await _databaseService.SavePlaylistTrackAsync(entity).ConfigureAwait(false);
             _logger.LogDebug("Saved playlist track: {PlaylistId}/{Hash}", track.PlaylistId, track.TrackUniqueHash);
         }
         catch (Exception ex)
@@ -366,12 +278,12 @@ public class LibraryService : ILibraryService
 
     public async Task DeletePlaylistTracksAsync(Guid jobId)
     {
-         await _databaseService.DeletePlaylistTracksAsync(jobId);
+         await _databaseService.DeletePlaylistTracksAsync(jobId).ConfigureAwait(false);
     }
     
     public async Task DeletePlaylistTrackAsync(Guid playlistTrackId)
     {
-        await _databaseService.DeleteSinglePlaylistTrackAsync(playlistTrackId);
+        await _databaseService.DeleteSinglePlaylistTrackAsync(playlistTrackId).ConfigureAwait(false);
     }
 
     public async Task UpdatePlaylistTrackAsync(PlaylistTrack track)
@@ -379,7 +291,7 @@ public class LibraryService : ILibraryService
         try
         {
             var entity = PlaylistTrackToEntity(track);
-            await _databaseService.SavePlaylistTrackAsync(entity);
+            await _databaseService.SavePlaylistTrackAsync(entity).ConfigureAwait(false);
             _logger.LogDebug("Updated playlist track status: {Hash} = {Status}", track.TrackUniqueHash, track.Status);
         }
         catch (Exception ex)
@@ -389,26 +301,12 @@ public class LibraryService : ILibraryService
         }
     }
     
-    public async Task UpdateTrackFilePathAsync(string globalId, string filePath)
-    {
-        try
-        {
-            await _databaseService.UpdateTrackFilePathAsync(globalId, filePath);
-            _logger.LogDebug("Updated file path for track {GlobalId}: {Path}", globalId, filePath);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to update track file path");
-            throw;
-        }
-    }
-
     public async Task SavePlaylistTracksAsync(List<PlaylistTrack> tracks)
     {
         try
         {
             var entities = tracks.Select(PlaylistTrackToEntity).ToList();
-            await _databaseService.SavePlaylistTracksAsync(entities);
+            await _databaseService.SavePlaylistTracksAsync(entities).ConfigureAwait(false);
             _logger.LogInformation("Saved {Count} playlist tracks", tracks.Count);
         }
         catch (Exception ex)
@@ -423,7 +321,7 @@ public class LibraryService : ILibraryService
     public async Task<List<LibraryEntry>> LoadDownloadedTracksAsync()
     {
         // This now directly loads from the database. The old JSON method is gone.
-        var entities = await _databaseService.LoadAllLibraryEntriesAsync();
+        var entities = await _databaseService.LoadAllLibraryEntriesAsync().ConfigureAwait(false);
         return entities.Select(EntityToLibraryEntry).ToList();
     }
 
@@ -443,7 +341,7 @@ public class LibraryService : ILibraryService
                 Format = track.Format ?? "Unknown"
             };
 
-            await SaveOrUpdateLibraryEntryAsync(entry);
+            await SaveOrUpdateLibraryEntryAsync(entry).ConfigureAwait(false);
             _logger.LogDebug("Saved/updated track in library: {Hash}", entry.UniqueHash);
         }
         catch (Exception ex)
@@ -567,160 +465,8 @@ public class LibraryService : ILibraryService
         return entity;
     }
 
-    // ===== File Path Resolution Methods =====
 
-    /// <summary>
-    /// Attempts to find a missing track file using improved matching logic.
-    /// Uses a multi-step resolution process:
-    /// 1. Fast Check: Verify the original path still exists
-    /// 2. Filename Match: Search for the exact filename in library root paths
-    /// 3. Fuzzy Metadata Match: Use Levenshtein distance on metadata (Artist - Title)
-    /// </summary>
-    /// <param name="missingTrack">The library entry with an invalid/missing file path</param>
-    /// <returns>The newly resolved full path, or null if no match is found</returns>
-    public async Task<string?> ResolveMissingFilePathAsync(LibraryEntry missingTrack)
-    {
-        if (!_appConfig.EnableFilePathResolution)
-        {
-            _logger.LogDebug("File path resolution is disabled in configuration");
-            return null;
-        }
 
-        if (_appConfig.LibraryRootPaths == null || !_appConfig.LibraryRootPaths.Any())
-        {
-            _logger.LogWarning("No library root paths configured for file resolution");
-            return null;
-        }
-
-        // Step 0: Fast check - does the original path still exist?
-        if (File.Exists(missingTrack.FilePath))
-        {
-            return missingTrack.FilePath;
-        }
-
-        _logger.LogInformation("Attempting to resolve missing file: {Artist} - {Title} (Original: {Path})", 
-            missingTrack.Artist, missingTrack.Title, missingTrack.FilePath);
-
-        // Step 1: DIRECT FILENAME MATCH
-        // Case: File moved but kept the same filename
-        string oldFileName = Path.GetFileName(missingTrack.FilePath);
-        string? resolvedPath = await Task.Run(() => SearchByFilename(oldFileName, _appConfig.LibraryRootPaths));
-        
-        if (resolvedPath != null)
-        {
-            _logger.LogInformation("Resolved via filename match: {Path}", resolvedPath);
-            return resolvedPath;
-        }
-
-        // Step 2: FUZZY METADATA MATCH
-        // Case: File moved AND renamed, or slight metadata differences
-        resolvedPath = await Task.Run(() => SearchByFuzzyMetadata(missingTrack, _appConfig.LibraryRootPaths));
-        
-        if (resolvedPath != null)
-        {
-            _logger.LogInformation("Resolved via fuzzy metadata match: {Path}", resolvedPath);
-            return resolvedPath;
-        }
-
-        _logger.LogWarning("Could not resolve missing file: {Artist} - {Title}", 
-            missingTrack.Artist, missingTrack.Title);
-        return null;
-    }
-
-    /// <summary>
-    /// Searches for an exact filename match in the configured library root paths.
-    /// </summary>
-    private string? SearchByFilename(string fileName, IEnumerable<string> rootPaths)
-    {
-        foreach (string rootPath in rootPaths)
-        {
-            if (!Directory.Exists(rootPath))
-            {
-                _logger.LogWarning("Library root path does not exist: {Path}", rootPath);
-                continue;
-            }
-
-            try
-            {
-                // Use EnumerateFiles for potentially faster/lazy search
-                var foundPath = Directory.EnumerateFiles(rootPath, fileName, SearchOption.AllDirectories)
-                    .FirstOrDefault();
-
-                if (foundPath != null)
-                {
-                    return foundPath;
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error searching directory: {Path}", rootPath);
-            }
-        }
-
-        return null;
-    }
-
-    /// <summary>
-    /// Searches for files using fuzzy metadata matching based on Artist and Title.
-    /// Uses Levenshtein distance to find the best match above the configured threshold.
-    /// </summary>
-    private string? SearchByFuzzyMetadata(LibraryEntry missingTrack, IEnumerable<string> rootPaths)
-    {
-        // Skip fuzzy matching if metadata is missing
-        if (string.IsNullOrWhiteSpace(missingTrack.Artist) || string.IsNullOrWhiteSpace(missingTrack.Title))
-        {
-            _logger.LogDebug("Skipping fuzzy match - insufficient metadata");
-            return null;
-        }
-
-        string targetMetadata = $"{missingTrack.Artist} - {missingTrack.Title}";
-        string? bestMatchPath = null;
-        double bestMatchScore = _appConfig.FuzzyMatchThreshold;
-
-        // Common music file extensions
-        string[] musicExtensions = { ".mp3", ".flac", ".m4a", ".ogg", ".wav", ".wma", ".aac" };
-
-        foreach (string rootPath in rootPaths)
-        {
-            if (!Directory.Exists(rootPath))
-            {
-                continue;
-            }
-
-            try
-            {
-                // Enumerate all potential music files
-                var allFiles = Directory.EnumerateFiles(rootPath, "*.*", SearchOption.AllDirectories)
-                    .Where(f => musicExtensions.Any(ext => f.EndsWith(ext, StringComparison.OrdinalIgnoreCase)));
-
-                foreach (string filePath in allFiles)
-                {
-                    // Use filename as metadata proxy (faster than reading tags from every file)
-                    string currentMetadata = Path.GetFileNameWithoutExtension(filePath);
-                    double score = StringDistanceUtils.GetNormalizedMatchScore(targetMetadata, currentMetadata);
-
-                    if (score > bestMatchScore)
-                    {
-                        bestMatchScore = score;
-                        bestMatchPath = filePath;
-                        
-                        _logger.LogDebug("Found potential match: {Path} (score: {Score:F2})", filePath, score);
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error during fuzzy search in: {Path}", rootPath);
-            }
-        }
-
-        if (bestMatchPath != null)
-        {
-            _logger.LogInformation("Fuzzy match found with score {Score:F2}: {Path}", bestMatchScore, bestMatchPath);
-        }
-
-        return bestMatchPath;
-    }
 
     /// <summary>
     /// Updates the file path for a library entry and persists the change.

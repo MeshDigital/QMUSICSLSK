@@ -220,6 +220,7 @@ public partial class App : Application
 
         // Metadata and tagging service
         services.AddSingleton<ITaggerService, MetadataTaggerService>();
+        services.AddSingleton<IFilePathResolverService, FilePathResolverService>();
 
         // Rekordbox export service
         services.AddSingleton<RekordboxXmlExporter>();
@@ -236,6 +237,7 @@ public partial class App : Application
         services.AddSingleton<IUserInputService, UserInputService>();
         services.AddSingleton<IFileInteractionService, FileInteractionService>();
         services.AddSingleton<INotificationService, NotificationServiceAdapter>();
+        services.AddSingleton<IClipboardService, ClipboardService>();
 
         // ViewModels
         services.AddSingleton<MainViewModel>();

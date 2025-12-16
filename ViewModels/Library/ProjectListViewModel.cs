@@ -109,8 +109,8 @@ public class ProjectListViewModel : INotifyPropertyChanged
         LoadAllTracksCommand = new RelayCommand(() => SelectedProject = _allTracksJob);
 
         // Subscribe to events
-        _downloadManager.ProjectAdded += OnProjectAdded;
-        _downloadManager.ProjectUpdated += OnProjectUpdated;
+        _libraryService.PlaylistAdded += OnPlaylistAdded;
+        _downloadManager.ProjectUpdated += OnProjectUpdated; // Keep this for status updates during download
         _libraryService.ProjectDeleted += OnProjectDeleted;
     }
 
@@ -191,22 +191,22 @@ public class ProjectListViewModel : INotifyPropertyChanged
         }
     }
 
-    private async void OnProjectAdded(object? sender, ProjectEventArgs e)
+    private async void OnPlaylistAdded(object? sender, PlaylistJob job)
     {
-        _logger.LogInformation("OnProjectAdded event received for job {JobId}", e.Job.Id);
+        _logger.LogInformation("OnPlaylistAdded event received for job {JobId}", job.Id);
 
         await Dispatcher.UIThread.InvokeAsync(() =>
         {
-            if (AllProjects.Any(j => j.Id == e.Job.Id))
+            if (AllProjects.Any(j => j.Id == job.Id))
             {
-                _logger.LogWarning("Project {JobId} already exists, skipping add", e.Job.Id);
+                _logger.LogWarning("Project {JobId} already exists, skipping add", job.Id);
                 return;
             }
 
-            AllProjects.Add(e.Job);
-            SelectedProject = e.Job; // Auto-select new project
+            AllProjects.Add(job);
+            SelectedProject = job; // Auto-select new project
 
-            _logger.LogInformation("Project '{Title}' added to list", e.Job.SourceTitle);
+            _logger.LogInformation("Project '{Title}' added to list", job.SourceTitle);
         });
     }
 

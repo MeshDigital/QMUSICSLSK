@@ -22,13 +22,12 @@ public interface ILibraryService
     /// </summary>
     event EventHandler<ProjectEventArgs>? ProjectUpdated;
 
-    ObservableCollection<PlaylistJob> Playlists { get; }
-
     /// <summary>
-    /// Force a refresh of the playlists from the database.
-    /// Useful for debugging or manual sync.
+    /// Fired when a new playlist job is created/added.
     /// </summary>
-    Task RefreshPlaylistsAsync();
+    event EventHandler<PlaylistJob>? PlaylistAdded;
+
+
 
     // ===== INDEX 1: LibraryEntry (Main Global Index) =====
     
@@ -147,9 +146,5 @@ public interface ILibraryService
     /// </summary>
     Task AddTrackAsync(Track track, string actualFilePath, Guid sourcePlaylistId);
     
-    /// <summary>
-    /// Updates the resolved file path for a track in the global library.
-    /// Used when scanning filesystem to resolve missing paths.
-    /// </summary>
-    Task UpdateTrackFilePathAsync(string globalId, string filePath);
+
 }

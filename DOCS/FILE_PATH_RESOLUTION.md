@@ -29,8 +29,8 @@ public double FuzzyMatchThreshold { get; set; } = 0.85;
 - `EnableFilePathResolution`: Master toggle for the feature
 - `FuzzyMatchThreshold`: Minimum similarity score (0.85 = 85% match required)
 
-### 3. **LibraryService Extensions** (`Services/LibraryService.cs`)
-Added comprehensive file resolution methods:
+### 3. **FilePathResolverService** (`Services/FilePathResolverService.cs`)
+Extracted from `LibraryService` to follow Single Responsibility Principle.
 
 #### Main Method: `ResolveMissingFilePathAsync(LibraryEntry missingTrack)`
 Multi-step resolution process:
@@ -52,7 +52,10 @@ Multi-step resolution process:
 #### Helper Methods:
 - `SearchByFilename()`: Exact filename search across root paths
 - `SearchByFuzzyMetadata()`: Levenshtein-based similarity search
+
+### 3b. **LibraryService Updates** (`Services/LibraryService.cs`)
 - `UpdateLibraryEntryPathAsync()`: Persists resolved path to database
+- Delegates actual resolution logic to `IFilePathResolverService`
 
 ### 4. **TrackEntity Schema Updates** (`Data/TrackEntity.cs`)
 Enhanced `LibraryEntryEntity` with:

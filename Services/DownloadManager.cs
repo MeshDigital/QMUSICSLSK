@@ -70,7 +70,7 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
         _databaseService = databaseService;
         _metadataService = metadataService;
         _libraryService = libraryService;
-        _libraryService = libraryService;
+
 
         // Initialize from config, but allow runtime changes
         MaxActiveDownloads = _config.MaxConcurrentDownloads > 0 ? _config.MaxConcurrentDownloads : 3;
