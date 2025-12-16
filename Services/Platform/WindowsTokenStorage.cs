@@ -35,18 +35,24 @@ public class WindowsTokenStorage : ISecureTokenStorage
 
         try
         {
-            // Encrypt using DPAPI
-            var tokenBytes = Encoding.UTF8.GetBytes(refreshToken);
-            var encryptedBytes = ProtectedData.Protect(
-                tokenBytes,
-                null, // optionalEntropy
-                DataProtectionScope.CurrentUser
-            );
+            if (OperatingSystem.IsWindows())
+            {
+                // Encrypt using DPAPI
+                var tokenBytes = Encoding.UTF8.GetBytes(refreshToken);
+                var encryptedBytes = ProtectedData.Protect(
+                    tokenBytes,
+                    null, // optionalEntropy
+                    DataProtectionScope.CurrentUser
+                );
 
-            // Write to file
-            await File.WriteAllBytesAsync(_tokenFilePath, encryptedBytes);
-            
-            _logger.LogInformation("Refresh token saved securely using DPAPI");
+                // Write to file
+                await File.WriteAllBytesAsync(_tokenFilePath, encryptedBytes);
+                _logger.LogInformation("Refresh token saved securely using DPAPI");
+            }
+            else
+            {
+                 _logger.LogWarning("Secure storage not implemented for this platform yet");
+            }
         }
         catch (Exception ex)
         {
@@ -68,14 +74,24 @@ public class WindowsTokenStorage : ISecureTokenStorage
             // Read encrypted data
             var encryptedBytes = await File.ReadAllBytesAsync(_tokenFilePath);
 
-            // Decrypt using DPAPI
-            var tokenBytes = ProtectedData.Unprotect(
-                encryptedBytes,
-                null, // optionalEntropy
-                DataProtectionScope.CurrentUser
-            );
-
-            var refreshToken = Encoding.UTF8.GetString(tokenBytes);
+            string refreshToken;
+            
+            if (OperatingSystem.IsWindows())
+            {
+                // Decrypt using DPAPI
+                var tokenBytes = ProtectedData.Unprotect(
+                    encryptedBytes,
+                    null, // optionalEntropy
+                    DataProtectionScope.CurrentUser
+                );
+                refreshToken = Encoding.UTF8.GetString(tokenBytes);
+            }
+            else
+            {
+                // TODO: Implement non-Windows decryption
+                 _logger.LogWarning("Secure storage not implemented for this platform yet");
+                 return null;
+            }
             
             _logger.LogInformation("Refresh token loaded successfully");
             return refreshToken;

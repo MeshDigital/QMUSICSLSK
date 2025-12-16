@@ -78,9 +78,9 @@ public class CsvImportProvider : IImportProvider
                 // Convert SearchQuery to PlaylistTrack for enrichment
                 var playlistTracks = tracks.Select(q => new PlaylistTrack
                 {
-                    Artist = q.Artist,
-                    Title = q.Title,
-                    Album = q.Album
+                    Artist = q.Artist ?? string.Empty,
+                    Title = q.Title ?? string.Empty,
+                    Album = q.Album ?? string.Empty
                 }).ToList();
 
                 var enrichedCount = await _metadataService.EnrichTracksAsync(playlistTracks);

@@ -138,6 +138,9 @@ public class SpotifyAuthService
         if (string.IsNullOrEmpty(_currentCodeVerifier))
             throw new InvalidOperationException("Code verifier not set. Call StartAuthorizationAsync first.");
 
+        if (string.IsNullOrEmpty(_config.SpotifyClientId))
+            throw new InvalidOperationException("Spotify Client ID is not configured.");
+
         var tokenRequest = new PKCETokenRequest(_config.SpotifyClientId, authCode, new Uri(_config.SpotifyRedirectUri), _currentCodeVerifier);
 
         var config = SpotifyClientConfig.CreateDefault();
@@ -173,6 +176,9 @@ public class SpotifyAuthService
 
         try
         {
+            if (string.IsNullOrEmpty(_config.SpotifyClientId))
+                throw new InvalidOperationException("Spotify Client ID is not configured.");
+
             var tokenRequest = new PKCETokenRefreshRequest(_config.SpotifyClientId, refreshToken);
 
             var config = SpotifyClientConfig.CreateDefault();

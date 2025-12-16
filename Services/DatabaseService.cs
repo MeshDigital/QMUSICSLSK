@@ -90,7 +90,8 @@ public class DatabaseService
             foreach (var (name, definition) in columnsToAdd)
             {
                 _logger.LogWarning("Schema Patch: Adding missing column '{Column}' to PlaylistTracks", name);
-                await context.Database.ExecuteSqlRawAsync($"ALTER TABLE PlaylistTracks ADD COLUMN {definition}");
+                var sql = $"ALTER TABLE PlaylistTracks ADD COLUMN {definition}";
+                await context.Database.ExecuteSqlRawAsync(sql);
             }
             
             // Check PlaylistJobs table
