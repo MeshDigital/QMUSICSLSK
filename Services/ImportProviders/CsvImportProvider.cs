@@ -70,44 +70,6 @@ public class CsvImportProvider : IImportProvider
             _logger.LogInformation("Successfully imported {Count} tracks from CSV file '{Title}'", 
                 tracks.Count, sourceTitle);
 
-            // Phase 0: Enrich tracks with Spotify metadata
-            try
-            {
-                _logger.LogInformation("Fetching Spotify metadata for {Count} tracks...", tracks.Count);
-                
-                // Convert SearchQuery to PlaylistTrack for enrichment
-                var playlistTracks = tracks.Select(q => new PlaylistTrack
-                {
-                    Artist = q.Artist ?? string.Empty,
-                    Title = q.Title ?? string.Empty,
-                    Album = q.Album ?? string.Empty
-                }).ToList();
-
-                var enrichedCount = await _metadataService.EnrichTracksAsync(playlistTracks);
-                
-                // Copy metadata back to SearchQuery objects
-                for (int i = 0; i < tracks.Count && i < playlistTracks.Count; i++)
-                {
-                    var track = playlistTracks[i];
-                    tracks[i].SpotifyTrackId = track.SpotifyTrackId;
-                    tracks[i].SpotifyAlbumId = track.SpotifyAlbumId;
-                    tracks[i].SpotifyArtistId = track.SpotifyArtistId;
-                    tracks[i].AlbumArtUrl = track.AlbumArtUrl;
-                    tracks[i].Genres = track.Genres;
-                    tracks[i].Popularity = track.Popularity;
-                    tracks[i].CanonicalDuration = track.CanonicalDuration;
-                    tracks[i].ReleaseDate = track.ReleaseDate;
-                }
-
-                _logger.LogInformation("Enriched {EnrichedCount}/{TotalCount} tracks with Spotify metadata", 
-                    enrichedCount, tracks.Count);
-            }
-            catch (Exception ex)
-            {
-                // Don't fail the import if metadata enrichment fails
-                _logger.LogWarning(ex, "Failed to enrich tracks with Spotify metadata, continuing with import");
-            }
-
             return new ImportResult
             {
                 Success = true,

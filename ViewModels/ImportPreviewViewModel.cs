@@ -24,6 +24,7 @@ public class ImportPreviewViewModel : INotifyPropertyChanged
     private readonly DownloadManager _downloadManager;
     private readonly ILibraryService? _libraryService;
     private readonly INavigationService _navigationService;
+    private readonly ISpotifyMetadataService? _metadataService;
     
     private string _sourceTitle = "Import Preview";
     private string _sourceType = "";
@@ -99,12 +100,14 @@ public class ImportPreviewViewModel : INotifyPropertyChanged
         ILogger<ImportPreviewViewModel> logger,
         DownloadManager downloadManager,
         INavigationService navigationService,
-        ILibraryService? libraryService = null)
+        ILibraryService? libraryService = null,
+        ISpotifyMetadataService? metadataService = null)
     {
         _logger = logger;
         _downloadManager = downloadManager;
         _libraryService = libraryService;
         _navigationService = navigationService;
+        _metadataService = metadataService;
 
         AddToLibraryCommand = new AsyncRelayCommand(AddToLibraryAsync, () => CanAddToLibrary);
         SelectAllCommand = new RelayCommand(SelectAll);
@@ -208,12 +211,90 @@ public class ImportPreviewViewModel : INotifyPropertyChanged
                 ImportedTracks.Count, sourceTitle, 
                 ImportedTracks.FirstOrDefault()?.Model.Artist ?? "None", 
                 ImportedTracks.FirstOrDefault()?.Model.Title ?? "None");
+            
+            // Start background metadata enrichment
+            if (_metadataService != null)
+            {
+                _ = Task.Run(() => EnrichTracksInBackgroundAsync(ImportedTracks.Select(st => st.Model).ToList()));
+            }
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "InitializePreviewAsync FAILED for {SourceTitle}", sourceTitle);
             StatusMessage = $"Error loading preview: {ex.Message}";
             throw;
+        }
+    }
+    
+    /// <summary>
+    /// Enrich tracks with Spotify metadata in the background after UI display.
+    /// Updates happen progressively as each track is enriched.
+    /// </summary>
+    private async Task EnrichTracksInBackgroundAsync(List<Track> tracks)
+    {
+        try
+        {
+            _logger.LogInformation("Starting background metadata enrichment for {Count} tracks", tracks.Count);
+            StatusMessage = "Fetching metadata...";
+            
+            int enriched = 0;
+            foreach (var track in tracks)
+            {
+                try
+                {
+                    // Convert Track to PlaylistTrack for enrichment
+                    var playlistTrack = new PlaylistTrack
+                    {
+                        Artist = track.Artist ?? string.Empty,
+                        Title = track.Title ?? string.Empty,
+                        Album = track.Album ?? string.Empty
+                    };
+                    
+                    if (await _metadataService!.EnrichTrackAsync(playlistTrack))
+                    {
+                        // Copy metadata back to Track
+                        track.SpotifyTrackId = playlistTrack.SpotifyTrackId;
+                        track.SpotifyAlbumId = playlistTrack.SpotifyAlbumId;
+                        track.SpotifyArtistId = playlistTrack.SpotifyArtistId;
+                        track.AlbumArtUrl = playlistTrack.AlbumArtUrl;
+                        track.ArtistImageUrl = playlistTrack.ArtistImageUrl;
+                        track.Genres = playlistTrack.Genres;
+                        track.Popularity = playlistTrack.Popularity;
+                        track.CanonicalDuration = playlistTrack.CanonicalDuration;
+                        track.ReleaseDate = playlistTrack.ReleaseDate;
+                        
+                        enriched++;
+                        
+                        // Update UI on main thread
+                        await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+                        {
+                            StatusMessage = $"Enriched {enriched}/{tracks.Count} tracks";
+                        });
+                    }
+                    
+                    // Small delay to avoid API rate limits
+                    await Task.Delay(50);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to enrich track: {Artist} - {Title}", track.Artist, track.Title);
+                }
+            }
+            
+            await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                StatusMessage = $"Ready - {enriched}/{tracks.Count} tracks enriched";
+            });
+            
+            _logger.LogInformation("Background enrichment complete: {Enriched}/{Total} tracks", enriched, tracks.Count);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Background metadata enrichment failed");
+            await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                StatusMessage = "Metadata enrichment failed";
+            });
         }
     }
 
