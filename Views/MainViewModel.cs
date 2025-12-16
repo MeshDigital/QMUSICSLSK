@@ -430,7 +430,11 @@ public class MainViewModel : INotifyPropertyChanged
 
             if (_soulseek.IsConnected)
             {
-                IsLoginOverlayVisible = false;
+                Dispatcher.UIThread.Post(() => 
+                {
+                    IsLoginOverlayVisible = false;
+                    IsInitializing = false; 
+                });
                 
                 // Saving config
                 _configManager.Save(_config); // Save updated preferences
@@ -455,7 +459,7 @@ public class MainViewModel : INotifyPropertyChanged
                       // But ConnectAsync is awaited.
                       // Let's rely on exception handling for failures.
                  }
-                IsLoginOverlayVisible = false; // Hide overlay on success
+                Dispatcher.UIThread.Post(() => IsLoginOverlayVisible = false); // Hide overlay on success
                 _configManager.Save(_config);
             }
 
@@ -463,11 +467,11 @@ public class MainViewModel : INotifyPropertyChanged
         catch (Exception ex)
         {
             _logger.LogError(ex, "Login failed");
-            StatusText = $"Login error: {ex.Message}";
+            Dispatcher.UIThread.Post(() => StatusText = $"Login error: {ex.Message}");
         }
         finally
         {
-            IsInitializing = false;
+            Dispatcher.UIThread.Post(() => IsInitializing = false);
         }
     }
 
