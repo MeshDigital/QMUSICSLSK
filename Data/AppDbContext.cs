@@ -11,6 +11,7 @@ public class AppDbContext : DbContext
     public DbSet<PlaylistJobEntity> PlaylistJobs { get; set; }
     public DbSet<PlaylistTrackEntity> PlaylistTracks { get; set; }
     public DbSet<PlaylistActivityLogEntity> ActivityLogs { get; set; }
+    public DbSet<QueueItemEntity> QueueItems { get; set; } // Phase 0: Queue persistence
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {

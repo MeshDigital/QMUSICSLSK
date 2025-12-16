@@ -169,6 +169,7 @@ public partial class App : Application
         services.AddSingleton<ISecureTokenStorage>(sp => SecureTokenStorageFactory.Create(sp));
         services.AddSingleton<SpotifyAuthService>();
         services.AddSingleton<SpotifyMetadataService>();
+        services.AddSingleton<ArtworkCacheService>(); // Phase 0: Artwork caching
 
         // Input parsers
         services.AddSingleton<CsvInputSource>();
@@ -221,6 +222,13 @@ public partial class App : Application
 
         // ViewModels
         services.AddSingleton<MainViewModel>();
+        
+        // Phase 0: ViewModel Refactoring - Library child ViewModels
+        services.AddTransient<ViewModels.Library.ProjectListViewModel>();
+        services.AddTransient<ViewModels.Library.TrackListViewModel>();
+        services.AddTransient<ViewModels.Library.TrackOperationsViewModel>();
+        services.AddTransient<ViewModels.Library.SmartPlaylistViewModel>();
+        
         services.AddSingleton<LibraryViewModel>();
         services.AddSingleton<ImportPreviewViewModel>();
         services.AddSingleton<ImportHistoryViewModel>();

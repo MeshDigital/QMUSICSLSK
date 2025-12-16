@@ -230,6 +230,44 @@ public class PlaylistTrackViewModel : INotifyPropertyChanged
         }
     }
 
+    // Phase 0: Album artwork from Spotify metadata
+    private string? _albumArtPath;
+    public string? AlbumArtPath
+    {
+        get => _albumArtPath;
+        private set
+        {
+            if (_albumArtPath != value)
+            {
+                _albumArtPath = value;
+                OnPropertyChanged();
+            }
+        }
+    }
+
+    public string? AlbumArtUrl => Model.AlbumArtUrl;
+    public string? SpotifyAlbumId => Model.SpotifyAlbumId;
+
+    /// <summary>
+    /// Loads the album artwork from cache or downloads it.
+    /// Should be called by the ViewModel after construction.
+    /// </summary>
+    public async System.Threading.Tasks.Task LoadAlbumArtworkAsync(Services.ArtworkCacheService artworkCache)
+    {
+        if (string.IsNullOrWhiteSpace(AlbumArtUrl) || string.IsNullOrWhiteSpace(SpotifyAlbumId))
+            return;
+
+        try
+        {
+            AlbumArtPath = await artworkCache.GetArtworkPathAsync(AlbumArtUrl, SpotifyAlbumId);
+        }
+        catch
+        {
+            // Silently fail - artwork is optional
+            AlbumArtPath = null;
+        }
+    }
+
     public bool IsActive => State == PlaylistTrackState.Searching || 
                            State == PlaylistTrackState.Downloading || 
                            State == PlaylistTrackState.Queued;

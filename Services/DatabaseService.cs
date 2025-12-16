@@ -67,6 +67,26 @@ public class DatabaseService
             if (!existingColumns.Contains("LastPlayedAt"))
                 columnsToAdd.Add(("LastPlayedAt", "LastPlayedAt TEXT NULL"));
             
+            // Phase 0: Spotify Metadata Columns
+            if (!existingColumns.Contains("SpotifyTrackId"))
+                columnsToAdd.Add(("SpotifyTrackId", "SpotifyTrackId TEXT NULL"));
+            if (!existingColumns.Contains("SpotifyAlbumId"))
+                columnsToAdd.Add(("SpotifyAlbumId", "SpotifyAlbumId TEXT NULL"));
+            if (!existingColumns.Contains("SpotifyArtistId"))
+                columnsToAdd.Add(("SpotifyArtistId", "SpotifyArtistId TEXT NULL"));
+            if (!existingColumns.Contains("AlbumArtUrl"))
+                columnsToAdd.Add(("AlbumArtUrl", "AlbumArtUrl TEXT NULL"));
+            if (!existingColumns.Contains("ArtistImageUrl"))
+                columnsToAdd.Add(("ArtistImageUrl", "ArtistImageUrl TEXT NULL"));
+            if (!existingColumns.Contains("Genres"))
+                columnsToAdd.Add(("Genres", "Genres TEXT NULL"));
+            if (!existingColumns.Contains("Popularity"))
+                columnsToAdd.Add(("Popularity", "Popularity INTEGER NULL"));
+            if (!existingColumns.Contains("CanonicalDuration"))
+                columnsToAdd.Add(("CanonicalDuration", "CanonicalDuration INTEGER NULL"));
+            if (!existingColumns.Contains("ReleaseDate"))
+                columnsToAdd.Add(("ReleaseDate", "ReleaseDate TEXT NULL"));
+            
             foreach (var (name, definition) in columnsToAdd)
             {
                 _logger.LogWarning("Schema Patch: Adding missing column '{Column}' to PlaylistTracks", name);
@@ -113,6 +133,28 @@ public class DatabaseService
                     CREATE INDEX IF NOT EXISTS IX_ActivityLogs_PlaylistId ON ActivityLogs (PlaylistId);
                  ";
                  await context.Database.ExecuteSqlRawAsync(createTableSql);
+            }
+            
+            // Check for QueueItems table (Phase 0: Queue persistence)
+            try 
+            {
+               await context.Database.ExecuteSqlRawAsync("SELECT Id FROM QueueItems LIMIT 1");
+            }
+            catch
+            {
+                 _logger.LogWarning("Schema Patch: Creating missing table 'QueueItems'");
+                 var createQueueTableSql = @"
+                    CREATE TABLE IF NOT EXISTS QueueItems (
+                        Id TEXT NOT NULL CONSTRAINT PK_QueueItems PRIMARY KEY,
+                        PlaylistTrackId TEXT NOT NULL,
+                        QueuePosition INTEGER NOT NULL,
+                        AddedAt TEXT NOT NULL,
+                        IsCurrentTrack INTEGER NOT NULL DEFAULT 0,
+                        CONSTRAINT FK_QueueItems_PlaylistTracks_PlaylistTrackId FOREIGN KEY (PlaylistTrackId) REFERENCES PlaylistTracks (Id) ON DELETE CASCADE
+                    );
+                    CREATE INDEX IF NOT EXISTS IX_QueueItems_QueuePosition ON QueueItems (QueuePosition);
+                 ";
+                 await context.Database.ExecuteSqlRawAsync(createQueueTableSql);
             }
             
             await connection.CloseAsync();
@@ -567,7 +609,17 @@ public class DatabaseService
                     ResolvedFilePath = track.ResolvedFilePath,
                     TrackNumber = track.TrackNumber,
                     AddedAt = track.AddedAt,
-                    SortOrder = track.SortOrder
+                    SortOrder = track.SortOrder,
+                    // Phase 0: Spotify Metadata
+                    SpotifyTrackId = track.SpotifyTrackId,
+                    SpotifyAlbumId = track.SpotifyAlbumId,
+                    SpotifyArtistId = track.SpotifyArtistId,
+                    AlbumArtUrl = track.AlbumArtUrl,
+                    ArtistImageUrl = track.ArtistImageUrl,
+                    Genres = track.Genres,
+                    Popularity = track.Popularity,
+                    CanonicalDuration = track.CanonicalDuration,
+                    ReleaseDate = track.ReleaseDate
                 });
                 context.PlaylistTracks.AddRange(trackEntities);
             }
@@ -594,7 +646,17 @@ public class DatabaseService
                         ResolvedFilePath = track.ResolvedFilePath,
                         TrackNumber = track.TrackNumber,
                         AddedAt = track.AddedAt,
-                        SortOrder = track.SortOrder
+                        SortOrder = track.SortOrder,
+                        // Phase 0: Spotify Metadata
+                        SpotifyTrackId = track.SpotifyTrackId,
+                        SpotifyAlbumId = track.SpotifyAlbumId,
+                        SpotifyArtistId = track.SpotifyArtistId,
+                        AlbumArtUrl = track.AlbumArtUrl,
+                        ArtistImageUrl = track.ArtistImageUrl,
+                        Genres = track.Genres,
+                        Popularity = track.Popularity,
+                        CanonicalDuration = track.CanonicalDuration,
+                        ReleaseDate = track.ReleaseDate
                     };
 
                     if (existingTrackIdSet.Contains(track.Id))
@@ -684,5 +746,106 @@ public class DatabaseService
         using var context = new AppDbContext();
         context.ActivityLogs.Add(log);
         await context.SaveChangesAsync();
+    }
+
+    // ===== Queue Persistence Methods (Phase 0) =====
+
+    /// <summary>
+    /// Saves the current playback queue to the database.
+    /// Clears existing queue and saves the new state.
+    /// </summary>
+    public async Task SaveQueueAsync(List<(Guid trackId, int position, bool isCurrent)> queueItems)
+    {
+        using var context = new AppDbContext();
+        
+        // Clear existing queue
+        var existingQueue = await context.QueueItems.ToListAsync();
+        context.QueueItems.RemoveRange(existingQueue);
+        
+        // Add new queue items
+        foreach (var (trackId, position, isCurrent) in queueItems)
+        {
+            context.QueueItems.Add(new QueueItemEntity
+            {
+                PlaylistTrackId = trackId,
+                QueuePosition = position,
+                IsCurrentTrack = isCurrent,
+                AddedAt = DateTime.UtcNow
+            });
+        }
+        
+        await context.SaveChangesAsync();
+        _logger.LogInformation("Saved queue with {Count} items", queueItems.Count);
+    }
+
+    /// <summary>
+    /// Loads the saved playback queue from the database.
+    /// Returns queue items with their associated track data.
+    /// </summary>
+    public async Task<List<(PlaylistTrack track, bool isCurrent)>> LoadQueueAsync()
+    {
+        using var context = new AppDbContext();
+        
+        var queueItems = await context.QueueItems
+            .OrderBy(q => q.QueuePosition)
+            .ToListAsync();
+            
+        var result = new List<(PlaylistTrack, bool)>();
+        
+        foreach (var queueItem in queueItems)
+        {
+            var trackEntity = await context.PlaylistTracks
+                .AsNoTracking()
+                .FirstOrDefaultAsync(t => t.Id == queueItem.PlaylistTrackId);
+                
+            if (trackEntity != null)
+            {
+                var track = new PlaylistTrack
+                {
+                    Id = trackEntity.Id,
+                    PlaylistId = trackEntity.PlaylistId,
+                    Artist = trackEntity.Artist,
+                    Title = trackEntity.Title,
+                    Album = trackEntity.Album,
+                    TrackUniqueHash = trackEntity.TrackUniqueHash,
+                    Status = trackEntity.Status,
+                    ResolvedFilePath = trackEntity.ResolvedFilePath,
+                    TrackNumber = trackEntity.TrackNumber,
+                    AddedAt = trackEntity.AddedAt,
+                    SortOrder = trackEntity.SortOrder,
+                    Rating = trackEntity.Rating,
+                    IsLiked = trackEntity.IsLiked,
+                    PlayCount = trackEntity.PlayCount,
+                    LastPlayedAt = trackEntity.LastPlayedAt,
+                    // Spotify metadata
+                    SpotifyTrackId = trackEntity.SpotifyTrackId,
+                    SpotifyAlbumId = trackEntity.SpotifyAlbumId,
+                    SpotifyArtistId = trackEntity.SpotifyArtistId,
+                    AlbumArtUrl = trackEntity.AlbumArtUrl,
+                    ArtistImageUrl = trackEntity.ArtistImageUrl,
+                    Genres = trackEntity.Genres,
+                    Popularity = trackEntity.Popularity,
+                    CanonicalDuration = trackEntity.CanonicalDuration,
+                    ReleaseDate = trackEntity.ReleaseDate
+                };
+                
+                result.Add((track, queueItem.IsCurrentTrack));
+            }
+        }
+        
+        _logger.LogInformation("Loaded queue with {Count} items", result.Count);
+        return result;
+    }
+
+    /// <summary>
+    /// Clears the saved playback queue from the database.
+    /// </summary>
+    public async Task ClearQueueAsync()
+    {
+        using var context = new AppDbContext();
+        var existingQueue = await context.QueueItems.ToListAsync();
+        context.QueueItems.RemoveRange(existingQueue);
+        await context.SaveChangesAsync();
+        _logger.LogInformation("Cleared saved queue");
     }
 }

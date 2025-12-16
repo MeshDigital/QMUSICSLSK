@@ -14,10 +14,11 @@
 │                 │                               │            │
 │                 ▼                               ▼            │
 │        ┌─────────────────────────────────────────────────┐   │
-│        │              MainViewModel (App Brain)          │   │
-│        │  - Commands for navigation & orchestration      │   │
-│        │  - Surface collections (SearchResults, Library) │   │
-│        │  - Connection status & global state             │   │
+│        │              MainViewModel (Coordinator)        │   │
+│        │  - Coordinates navigation & global state        │   │
+│        │  - Delegates to child ViewModels                │   │
+│        │    ├─ PlayerViewModel (Playback)                │   │
+│        │    └─ LibraryViewModel (Library Management)     │   │
 │        └───────────────┬─────────────────────────────────┘   │
 └────────────────────────┼──────────────────────────────────────┘
                          │
@@ -42,7 +43,31 @@
         └─────────────────────────────┘
 ```
 
-The application uses `Microsoft.Extensions.DependencyInjection` for service wiring in `App.xaml.cs`. All services are singletons unless otherwise specified.
+The application uses `Microsoft.Extensions.DependencyInjection` for service wiring in `App.axaml.cs` (Avalonia). All services are singletons unless otherwise specified.
+
+## ViewModel Composition Pattern
+
+To maintain separation of concerns and reduce complexity (avoiding "God Objects"), the application uses a **ViewModel Composition** pattern:
+
+### 1. Coordinator ViewModels
+Top-level ViewModels like `MainViewModel` and `LibraryViewModel` act as simple **Coordinators**.
+- **Role**: Wire up events, manage high-level state (Navigation, Connection), and delegate work.
+- **Size Target**: < 400 lines.
+- **Dependencies**: Injected with child ViewModels.
+
+### 2. Child ViewModels
+Specialized ViewModels handle specific feature areas.
+- **Role**: Contain actual business logic and command implementations.
+- **Examples**:
+  - `ProjectListViewModel`: Manages the sidebar playlist list.
+  - `TrackListViewModel`: Manages the main track grid and filtering.
+  - `SmartPlaylistViewModel`: Handles logic for "Most Played", "Recently Added", etc.
+  - `TrackOperationsViewModel`: Handles Play/Pause/Download commands.
+
+### 3. Service Interactions
+Child ViewModels interact directly with services (`ILibraryService`, `DownloadManager`), keeping the Coordinators clean.
+
+---
 
 ## Navigation Shell
 

@@ -1,0 +1,180 @@
+using System;
+using System.Collections.ObjectModel;
+using System.ComponentModel;
+using System.Linq;
+using System.Runtime.CompilerServices;
+using Microsoft.Extensions.Logging;
+using SLSKDONET.Models;
+using SLSKDONET.Services;
+using SLSKDONET.Views;
+
+namespace SLSKDONET.ViewModels.Library;
+
+/// <summary>
+/// Manages smart playlists (Recently Added, Most Played, High Quality, Failed Downloads, Liked Tracks).
+/// Handles dynamic filtering and playlist refresh logic.
+/// </summary>
+public class SmartPlaylistViewModel : INotifyPropertyChanged
+{
+    private readonly ILogger<SmartPlaylistViewModel> _logger;
+    private readonly DownloadManager _downloadManager;
+
+    public ObservableCollection<SmartPlaylist> SmartPlaylists { get; } = new();
+
+    private SmartPlaylist? _selectedSmartPlaylist;
+    public SmartPlaylist? SelectedSmartPlaylist
+    {
+        get => _selectedSmartPlaylist;
+        set
+        {
+            if (_selectedSmartPlaylist != value)
+            {
+                _selectedSmartPlaylist = value;
+                OnPropertyChanged();
+                
+                // Raise event for parent to handle
+                SmartPlaylistSelected?.Invoke(this, value);
+            }
+        }
+    }
+
+    public event EventHandler<SmartPlaylist?>? SmartPlaylistSelected;
+    public event PropertyChangedEventHandler? PropertyChanged;
+
+    public SmartPlaylistViewModel(
+        ILogger<SmartPlaylistViewModel> logger,
+        DownloadManager downloadManager)
+    {
+        _logger = logger;
+        _downloadManager = downloadManager;
+
+        InitializeSmartPlaylists();
+    }
+
+    /// <summary>
+    /// Initializes the smart playlist definitions.
+    /// </summary>
+    public void InitializeSmartPlaylists()
+    {
+        SmartPlaylists.Clear();
+
+        SmartPlaylists.Add(new SmartPlaylist
+        {
+            Id = Guid.Parse("00000000-0000-0000-0000-000000000001"),
+            Name = "Recently Added",
+            Icon = "🕒",
+            Filter = tracks => tracks.OrderByDescending(t => t.Model?.AddedAt).Take(50)
+        });
+
+        SmartPlaylists.Add(new SmartPlaylist
+        {
+            Id = Guid.Parse("00000000-0000-0000-0000-000000000002"),
+            Name = "Most Played",
+            Icon = "🔥",
+            Filter = tracks => tracks
+                .Where(t => t.Model?.PlayCount > 0)
+                .OrderByDescending(t => t.Model?.PlayCount)
+                .Take(50)
+        });
+
+        SmartPlaylists.Add(new SmartPlaylist
+        {
+            Id = Guid.Parse("00000000-0000-0000-0000-000000000003"),
+            Name = "High Quality",
+            Icon = "💎",
+            Filter = tracks => tracks
+                .Where(t => t.State == PlaylistTrackState.Completed)
+                .OrderByDescending(t => t.Model?.AddedAt)
+        });
+
+        SmartPlaylists.Add(new SmartPlaylist
+        {
+            Id = Guid.Parse("00000000-0000-0000-0000-000000000004"),
+            Name = "Failed Downloads",
+            Icon = "❌",
+            Filter = tracks => tracks.Where(t => t.State == PlaylistTrackState.Failed)
+        });
+
+        SmartPlaylists.Add(new SmartPlaylist
+        {
+            Id = Guid.Parse("00000000-0000-0000-0000-000000000005"),
+            Name = "Liked Tracks",
+            Icon = "❤️",
+            Filter = tracks => tracks.Where(t => t.Model?.IsLiked == true)
+        });
+
+        _logger.LogInformation("Initialized {Count} smart playlists", SmartPlaylists.Count);
+    }
+
+    /// <summary>
+    /// Refreshes the selected smart playlist.
+    /// </summary>
+    public ObservableCollection<PlaylistTrackViewModel> RefreshSmartPlaylist(SmartPlaylist? playlist)
+    {
+        if (playlist == null)
+            return new ObservableCollection<PlaylistTrackViewModel>();
+
+        try
+        {
+            var allTracks = _downloadManager.AllGlobalTracks;
+            var filtered = playlist.Filter(allTracks).ToList();
+
+            _logger.LogInformation("Smart playlist '{Name}' has {Count} tracks", 
+                playlist.Name, filtered.Count);
+
+            var result = new ObservableCollection<PlaylistTrackViewModel>();
+            foreach (var track in filtered)
+                result.Add(track);
+
+            return result;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to refresh smart playlist: {Name}", playlist.Name);
+            return new ObservableCollection<PlaylistTrackViewModel>();
+        }
+    }
+
+    /// <summary>
+    /// Refreshes the "Liked Tracks" smart playlist specifically.
+    /// </summary>
+    public ObservableCollection<PlaylistTrackViewModel> RefreshLikedTracks()
+    {
+        try
+        {
+            var likedTracks = _downloadManager.AllGlobalTracks
+                .Where(t => t.Model?.IsLiked == true)
+                .OrderByDescending(t => t.Model?.AddedAt)
+                .ToList();
+
+            _logger.LogInformation("Found {Count} liked tracks", likedTracks.Count);
+
+            var result = new ObservableCollection<PlaylistTrackViewModel>();
+            foreach (var track in likedTracks)
+                result.Add(track);
+
+            return result;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to refresh liked tracks");
+            return new ObservableCollection<PlaylistTrackViewModel>();
+        }
+    }
+
+    protected void OnPropertyChanged([CallerMemberName] string? propertyName = null)
+    {
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+    }
+}
+
+/// <summary>
+/// Represents a smart playlist definition.
+/// </summary>
+public class SmartPlaylist
+{
+    public Guid Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string Icon { get; set; } = string.Empty;
+    public Func<IEnumerable<PlaylistTrackViewModel>, IEnumerable<PlaylistTrackViewModel>> Filter { get; set; } = _ => Enumerable.Empty<PlaylistTrackViewModel>();
+}

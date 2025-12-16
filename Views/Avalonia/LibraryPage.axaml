@@ -328,6 +328,22 @@
                 </DataGrid.Styles>
                 
                 <DataGrid.Columns>
+                    <!-- Album Art -->
+                    <DataGridTemplateColumn Header="🎨" Width="60" IsReadOnly="True">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <Border Width="40" Height="40" 
+                                        CornerRadius="4" 
+                                        ClipToBounds="True"
+                                        Background="#2D2D2D">
+                                    <Image Source="{Binding AlbumArtPath}" 
+                                           Stretch="UniformToFill"
+                                           IsVisible="{Binding AlbumArtPath, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                                </Border>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                    
                     <!-- # -->
                     <DataGridTextColumn Header="#" 
                                         Binding="{Binding SortOrder}" 

@@ -29,6 +29,7 @@ namespace SLSKDONET.ViewModels
             return true;
         }
         private readonly IAudioPlayerService _playerService;
+        private readonly DatabaseService _databaseService;
         
         private string _trackTitle = "No Track Playing";
         public string TrackTitle
@@ -155,9 +156,10 @@ namespace SLSKDONET.ViewModels
         public ICommand TogglePlayerDockCommand { get; }
         public ICommand ToggleQueueCommand { get; }
 
-        public PlayerViewModel(IAudioPlayerService playerService)
+        public PlayerViewModel(IAudioPlayerService playerService, DatabaseService databaseService)
         {
             _playerService = playerService;
+            _databaseService = databaseService;
             
             // Check if LibVLC initialized successfully
             IsPlayerInitialized = _playerService.IsInitialized;
@@ -189,6 +191,12 @@ namespace SLSKDONET.ViewModels
             ToggleRepeatCommand = new RelayCommand(ToggleRepeat);
             TogglePlayerDockCommand = new RelayCommand(TogglePlayerDock);
             ToggleQueueCommand = new RelayCommand(ToggleQueue);
+            
+            // Phase 0: Queue persistence - auto-save on changes
+            Queue.CollectionChanged += async (s, e) => await SaveQueueAsync();
+            
+            // Load saved queue on startup
+            _ = LoadQueueAsync();
         }
         
         private void ToggleQueue()
@@ -521,6 +529,72 @@ namespace SLSKDONET.ViewModels
             TrackArtist = artist;
             _playerService.Play(filePath);
             IsPlaying = true;
+        }
+
+        // Phase 0: Queue Persistence Methods
+
+        /// <summary>
+        /// Saves the current queue to the database.
+        /// </summary>
+        private async System.Threading.Tasks.Task SaveQueueAsync()
+        {
+            try
+            {
+                var queueItems = Queue.Select((track, index) => (
+                    trackId: track.Id,
+                    position: index,
+                    isCurrent: index == CurrentQueueIndex
+                )).ToList();
+
+                await _databaseService.SaveQueueAsync(queueItems);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[PlayerViewModel] Failed to save queue: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Loads the saved queue from the database on startup.
+        /// </summary>
+        private async System.Threading.Tasks.Task LoadQueueAsync()
+        {
+            try
+            {
+                var savedQueue = await _databaseService.LoadQueueAsync();
+                
+                if (!savedQueue.Any())
+                    return;
+
+                await Dispatcher.UIThread.InvokeAsync(() =>
+                {
+                    Queue.Clear();
+                    
+                    int currentIndex = -1;
+                    for (int i = 0; i < savedQueue.Count; i++)
+                    {
+                        var (track, isCurrent) = savedQueue[i];
+                        var vm = new PlaylistTrackViewModel(track);
+                        Queue.Add(vm);
+                        
+                        if (isCurrent)
+                            currentIndex = i;
+                    }
+                    
+                    // Restore current track position
+                    if (currentIndex >= 0 && currentIndex < Queue.Count)
+                    {
+                        CurrentQueueIndex = currentIndex;
+                        CurrentTrack = Queue[currentIndex];
+                    }
+                    
+                    Console.WriteLine($"[PlayerViewModel] Loaded {savedQueue.Count} tracks from saved queue");
+                });
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[PlayerViewModel] Failed to load queue: {ex.Message}");
+            }
         }
 
         // Drag & Drop

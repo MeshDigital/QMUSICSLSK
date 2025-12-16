@@ -360,7 +360,14 @@ If this project inspires you to build something with AI, give it a star! ⭐
 **Status**: Active Development  
 **Last Updated**: December 2025
 
-### Recent Updates
+### 🔄 Recent Changes (v1.0.0)
+
+- ✅ **Architectural Overhaul**: Refactored `MainViewModel` and `LibraryViewModel` (3,200+ lines removed, 86% reduction) for massive maintainability gains.
+- ✅ **New Feature**: "Add to Queue" directly from Library view.
+- ✅ Fixed database concurrency exception in drag-and-drop
+- ✅ Added UI refresh after playlist modifications
+- ✅ Implemented file path resolution from DownloadManager
+- ✅ Added taskbar icon with transparent background
 - ✅ Migrated to Avalonia UI (cross-platform)
 - ✅ Implemented responsive layout
 - ✅ Added player queue management

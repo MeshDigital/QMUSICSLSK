@@ -26,6 +26,7 @@
 - **UI Refresh**: Real-time updates from database
 - **File Path Resolution**: Smart lookup from DownloadManager
 - **Error Handling**: Comprehensive diagnostics and user feedback
+- **Architecture**: Decoupled ViewModels with Coordinator pattern (86% code reduction)
 
 ---
 

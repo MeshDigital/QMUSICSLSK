@@ -89,6 +89,11 @@ public class SearchQuery
     public string? SpotifyAlbumId { get; set; }
     public string? SpotifyArtistId { get; set; }
     public string? AlbumArtUrl { get; set; }
+    public string? ArtistImageUrl { get; set; }
+    public string? Genres { get; set; }
+    public int? Popularity { get; set; }
+    public int? CanonicalDuration { get; set; }
+    public DateTime? ReleaseDate { get; set; }
 
     /// <summary>
     /// Parses a search string into a SearchQuery.
