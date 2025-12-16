@@ -211,10 +211,22 @@ public class MainViewModel : INotifyPropertyChanged
         SoulseekAdapter soulseek,
         ISoulseekCredentialService credentialService,
         INavigationService navigationService,
+<<<<<<< Updated upstream
         PlayerViewModel playerViewModel,
         LibraryViewModel libraryViewModel,
         SearchViewModel searchViewModel,
         ConnectionViewModel connectionViewModel)
+=======
+        DownloadLogService downloadLogService,
+        INotificationService notificationService,
+        ProtectedDataService protectedDataService,
+        IUserInputService userInputService,
+        CsvInputSource csvInputSource, // Add CsvInputSource dependency
+        IFileInteractionService fileInteractionService,
+        Services.ImportProviders.TracklistImportProvider tracklistImportProvider,
+        PlayerViewModel playerViewModel,
+        IEventBus eventBus)
+>>>>>>> Stashed changes
     {
         _logger = logger;
         _config = config;
@@ -242,7 +254,27 @@ public class MainViewModel : INotifyPropertyChanged
 
 
 
+<<<<<<< Updated upstream
         // Set application version
+=======
+        ToggleNavigationCommand = new RelayCommand(() => IsNavigationCollapsed = !IsNavigationCollapsed);
+        TogglePlayerCommand = new RelayCommand(() => IsPlayerSidebarVisible = !IsPlayerSidebarVisible);
+        
+        // Subscribe to EventBus events
+        eventBus.GetEvent<TrackUpdatedEvent>().Subscribe(evt => OnTrackUpdated(this, evt.Track));
+        eventBus.GetEvent<SoulseekStateChangedEvent>().Subscribe(evt => HandleStateChange(evt.State));
+        
+        _downloadManager.AllGlobalTracks.CollectionChanged += (s, e) => 
+        {
+             OnPropertyChanged(nameof(SuccessfulCount));
+             OnPropertyChanged(nameof(FailedCount));
+             OnPropertyChanged(nameof(TodoCount));
+             OnPropertyChanged(nameof(DownloadProgressPercentage));
+        };
+        
+        
+        // Set application version from assembly
+>>>>>>> Stashed changes
         try
         {
             var version = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;

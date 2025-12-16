@@ -171,6 +171,9 @@ public partial class App : Application
             return appConfig;
         });
 
+        // EventBus - Unified event communication
+        services.AddSingleton<IEventBus, EventBusService>();
+
         // Services
         services.AddSingleton<SoulseekAdapter>();
         services.AddSingleton<FileNameFormatter>();
@@ -247,6 +250,9 @@ public partial class App : Application
         services.AddSingleton<SearchViewModel>();
         services.AddSingleton<ConnectionViewModel>();
         services.AddSingleton<SettingsViewModel>();
+        
+        // Orchestration Services
+        services.AddSingleton<SearchOrchestrationService>();
         
         // Phase 0: ViewModel Refactoring - Library child ViewModels
         services.AddTransient<ViewModels.Library.ProjectListViewModel>();

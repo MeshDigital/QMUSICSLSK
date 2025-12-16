@@ -149,12 +149,18 @@ public class SearchViewModel : INotifyPropertyChanged
             StatusText = $"Searching Soulseek for '{SearchQuery}'...";
             
             // Pass the callback to handle results as they stream in
-            await _soulseek.SearchAsync(
+            // 2. Default: Soulseek Search via Orchestrator
+            StatusText = $"Searching Soulseek for '{SearchQuery}'...";
+            
+            // Pass the callback to handle results as they stream in
+            var result = await _searchOrchestration.SearchAsync(
                 SearchQuery,
-                formatFilter: null,
-                bitrateFilter: (MinBitrate, MaxBitrate),
-                mode: IsAlbumSearch ? DownloadMode.Album : DownloadMode.Normal,
-                onTracksFound: OnTracksFound
+                PreferredFormats,
+                MinBitrate, 
+                MaxBitrate,
+                IsAlbumSearch,
+                OnTracksFound,
+                CancellationToken.None
             );
             
             // Auto-hide spinner after 5 seconds if results found

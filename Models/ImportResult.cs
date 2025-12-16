@@ -32,4 +32,9 @@ public class ImportResult
     /// Optional metadata about the import (e.g., cover art URL, description).
     /// </summary>
     public Dictionary<string, string> Metadata { get; set; } = new();
+    
+    /// <summary>
+    /// Type of import source (e.g., "Spotify", "CSV", "Pasted Tracklist").
+    /// </summary>
+    public string? SourceType { get; set; }
 }

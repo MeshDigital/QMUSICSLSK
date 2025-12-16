@@ -21,6 +21,7 @@ public class LibraryService : ILibraryService
     private readonly ILogger<LibraryService> _logger;
     private readonly DatabaseService _databaseService;
     private readonly AppConfig _appConfig;
+<<<<<<< Updated upstream
 
     public event EventHandler<Guid>? ProjectDeleted;
     // Unused event required by interface - marking to suppress warning
@@ -28,12 +29,24 @@ public class LibraryService : ILibraryService
     public event EventHandler<ProjectEventArgs>? ProjectUpdated;
     #pragma warning restore CS0067
     public event EventHandler<PlaylistJob>? PlaylistAdded;
+=======
+    private readonly IEventBus _eventBus;
 
-    public LibraryService(ILogger<LibraryService> logger, DatabaseService databaseService, AppConfig appConfig)
+    // Events now published via IEventBus (ProjectDeletedEvent, ProjectUpdatedEvent)
+
+    /// <summary>
+    /// Reactive observable collection of all playlists - single source of truth.
+    /// Auto-syncs with SQLite database.
+    /// </summary>
+    public ObservableCollection<PlaylistJob> Playlists { get; } = new();
+>>>>>>> Stashed changes
+
+    public LibraryService(ILogger<LibraryService> logger, DatabaseService databaseService, AppConfig appConfig, IEventBus eventBus)
     {
         _logger = logger;
         _databaseService = databaseService;
         _appConfig = appConfig;
+        _eventBus = eventBus;
 
         _logger.LogDebug("LibraryService initialized (Data Only)");
     }
@@ -205,8 +218,24 @@ public class LibraryService : ILibraryService
             await _databaseService.SoftDeletePlaylistJobAsync(playlistId).ConfigureAwait(false);
             _logger.LogInformation("Deleted playlist job: {Id}", playlistId);
 
+<<<<<<< Updated upstream
             // Notify listeners
             ProjectDeleted?.Invoke(this, playlistId);
+=======
+            // REACTIVE: Auto-remove from observable collection
+            Dispatcher.UIThread.Post(() =>
+            {
+                var jobToRemove = Playlists.FirstOrDefault(p => p.Id == playlistId);
+                if (jobToRemove != null)
+                {
+                    Playlists.Remove(jobToRemove);
+                    _logger.LogInformation("Removed playlist '{Title}' from reactive collection", jobToRemove.SourceTitle);
+                }
+            });
+
+            // Emit the event so subscribers (like LibraryViewModel) can react.
+            _eventBus.Publish(new ProjectDeletedEvent(playlistId));
+>>>>>>> Stashed changes
         }
         catch (Exception ex)
         {

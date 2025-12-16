@@ -33,6 +33,7 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
     private readonly DatabaseService _databaseService;
     private readonly ISpotifyMetadataService _metadataService;
     private readonly ILibraryService _libraryService;
+    private readonly IEventBus _eventBus;
 
     // Concurrency control
     private readonly CancellationTokenSource _globalCts = new();
@@ -43,11 +44,7 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
     public ObservableCollection<PlaylistTrackViewModel> AllGlobalTracks { get; } = new();
     private readonly object _collectionLock = new object();
     
-    // Event for new project creation
-    public event EventHandler<ProjectEventArgs>? ProjectAdded;
-
-    // Event for project status update (used by LibraryViewModel to refresh counts)
-    public event EventHandler<Guid>? ProjectUpdated;
+    // Events now published via IEventBus (ProjectAddedEvent, ProjectUpdatedEvent)
     
     // Expose download directory from config
     public string? DownloadDirectory => _config.DownloadDirectory;
@@ -59,8 +56,14 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
         FileNameFormatter fileNameFormatter,
         ITaggerService taggerService,
         DatabaseService databaseService,
+<<<<<<< Updated upstream
         ISpotifyMetadataService metadataService,
         ILibraryService libraryService)
+=======
+        IMetadataService metadataService,
+        ILibraryService libraryService,
+        IEventBus eventBus)
+>>>>>>> Stashed changes
     {
         _logger = logger;
         _config = config;
@@ -70,7 +73,11 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
         _databaseService = databaseService;
         _metadataService = metadataService;
         _libraryService = libraryService;
+<<<<<<< Updated upstream
 
+=======
+        _eventBus = eventBus;
+>>>>>>> Stashed changes
 
         // Initialize from config, but allow runtime changes
         MaxActiveDownloads = _config.MaxConcurrentDownloads > 0 ? _config.MaxConcurrentDownloads : 3;
@@ -126,8 +133,7 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
     }
 
 
-    // Event for external listeners (UI, Notifications)
-    public event EventHandler<PlaylistTrackViewModel>? TrackUpdated;
+    // Track updates now published via IEventBus (TrackUpdatedEvent)
 
     /// <summary>
     /// Queues a project (a PlaylistJob) for processing and persists the job header and tracks.
@@ -196,7 +202,7 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
             QueueTracks(job.PlaylistTracks);
             
             // 4. Fire event for Library UI to refresh
-            ProjectAdded?.Invoke(this, new ProjectEventArgs(job));
+            _eventBus.Publish(new ProjectAddedEvent(job.Id));
         }
     }
 
@@ -300,8 +306,8 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
     {
         if (sender is PlaylistTrackViewModel vm)
         {
-            // Re-fire as a global event
-            TrackUpdated?.Invoke(this, vm);
+            // Publish track update via EventBus
+            _eventBus.Publish(new TrackUpdatedEvent(vm));
             
             // Persist state changes
             if (e.PropertyName == nameof(PlaylistTrackViewModel.State) || 
@@ -336,7 +342,7 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
                         // 3. Notify the Library UI to refresh the specific Project Header
                         foreach (var jobId in updatedJobIds)
                         {
-                            ProjectUpdated?.Invoke(this, jobId);
+                            _eventBus.Publish(new ProjectUpdatedEvent(jobId));
                         }
                     }
                     catch (Exception ex)

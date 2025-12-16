@@ -16,15 +16,14 @@ public class SoulseekAdapter : IDisposable
 {
     private readonly ILogger<SoulseekAdapter> _logger;
     private readonly AppConfig _config;
+    private readonly IEventBus _eventBus;
     private SoulseekClient? _client;
 
-    // Events as observables for reactive programming
-    public Subject<(string eventType, object data)> EventBus { get; } = new();
-
-    public SoulseekAdapter(ILogger<SoulseekAdapter> logger, AppConfig config)
+    public SoulseekAdapter(ILogger<SoulseekAdapter> logger, AppConfig config, IEventBus eventBus)
     {
         _logger = logger;
         _config = config;
+        _eventBus = eventBus;
     }
 
     public async Task ConnectAsync(string? password = null, CancellationToken ct = default)
@@ -52,14 +51,13 @@ public class SoulseekAdapter : IDisposable
             {
                 _logger.LogInformation("Soulseek state changed: {State} (was {PreviousState})", 
                     args.State, args.PreviousState);
-                EventBus.OnNext(("state_changed", new { 
-                    state = args.State.ToString(), 
-                    previousState = args.PreviousState.ToString() 
-                }));
+                _eventBus.Publish(new SoulseekStateChangedEvent(
+                    args.State.ToString(), 
+                    args.State.HasFlag(SoulseekClientStates.Connected)));
             };
             
             _logger.LogInformation("Successfully connected to Soulseek as {Username}", _config.Username);
-            EventBus.OnNext(("connection_status", new { status = "connected", username = _config.Username }));
+            _eventBus.Publish(new SoulseekConnectionStatusEvent("connected", _config.Username));
         }
         catch (Exception ex)
         {
@@ -484,37 +482,37 @@ public class SoulseekAdapter : IDisposable
 
             this._logger.LogInformation("Download completed: {Filename}", filename);
             progress?.Report(1.0);
-            this.EventBus.OnNext(("transfer_finished", new { filename, username }));
+            _eventBus.Publish(new TransferFinishedEvent(filename, username));
             return true;
         }
         catch (OperationCanceledException)
         {
             this._logger.LogWarning("Download cancelled: {Filename}", filename);
-            this.EventBus.OnNext(("transfer_cancelled", new { filename, username }));
+            _eventBus.Publish(new TransferCancelledEvent(filename, username));
             throw; 
         }
         catch (TimeoutException ex)
         {
             this._logger.LogWarning("Download timeout: {Filename} from {Username} - {Message}", filename, username, ex.Message);
-            this.EventBus.OnNext(("transfer_failed", new { filename, username, error = "Connection timeout" }));
+            _eventBus.Publish(new TransferFailedEvent(filename, username, "Connection timeout"));
             return false;
         }
         catch (IOException ex)
         {
             this._logger.LogError(ex, "I/O error during download: {Filename} from {Username}", filename, username);
-            this.EventBus.OnNext(("transfer_failed", new { filename, username, error = "I/O error: " + ex.Message }));
+            _eventBus.Publish(new TransferFailedEvent(filename, username, "I/O error: " + ex.Message));
             return false;
         }
         catch (Exception ex) when (ex.Message.Contains("refused") || ex.Message.Contains("aborted") || ex.Message.Contains("Unable to read"))
         {
             this._logger.LogWarning("Network error during download: {Filename} from {Username} - {Message}", filename, username, ex.Message);
-            this.EventBus.OnNext(("transfer_failed", new { filename, username, error = "Connection failed" }));
+            _eventBus.Publish(new TransferFailedEvent(filename, username, "Connection failed"));
             return false;
         }
         catch (Exception ex)
         {
             this._logger.LogError(ex, "Download failed: {Message}", ex.Message);
-            this.EventBus.OnNext(("transfer_failed", new { filename, username, error = ex.Message }));
+            _eventBus.Publish(new TransferFailedEvent(filename, username, ex.Message));
             return false;
         }
     }
@@ -530,7 +528,6 @@ public class SoulseekAdapter : IDisposable
         {
             _logger.LogWarning(ex, "Error disposing SoulseekClient");
         }
-        EventBus?.Dispose();
     }
 
     public bool IsConnected => _client?.State.HasFlag(SoulseekClientStates.Connected) == true;

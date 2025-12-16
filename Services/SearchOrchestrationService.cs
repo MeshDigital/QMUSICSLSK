@@ -1,0 +1,194 @@
+using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using Avalonia.Threading;
+using Microsoft.Extensions.Logging;
+using SLSKDONET.Configuration;
+using SLSKDONET.Models;
+using SLSKDONET.Services.InputParsers;
+using SLSKDONET.Utils;
+
+namespace SLSKDONET.Services;
+
+/// <summary>
+/// Orchestrates search operations including Soulseek searches, result ranking, and album grouping.
+/// Extracted from MainViewModel to separate business logic from UI coordination.
+/// </summary>
+public class SearchOrchestrationService
+{
+    private readonly ILogger<SearchOrchestrationService> _logger;
+    private readonly SoulseekAdapter _soulseek;
+    private readonly SearchQueryNormalizer _searchQueryNormalizer;
+    private readonly AppConfig _config;
+    
+    public SearchOrchestrationService(
+        ILogger<SearchOrchestrationService> logger,
+        SoulseekAdapter soulseek,
+        SearchQueryNormalizer searchQueryNormalizer,
+        AppConfig config)
+    {
+        _logger = logger;
+        _soulseek = soulseek;
+        _searchQueryNormalizer = searchQueryNormalizer;
+        _config = config;
+    }
+    
+    /// <summary>
+    /// Execute a search with the given parameters and return ranked results.
+    /// </summary>
+    public async Task<SearchResult> SearchAsync(
+        string query,
+        string preferredFormats,
+        int minBitrate,
+        int maxBitrate,
+        bool isAlbumSearch,
+        Action<IEnumerable<Track>>? onPartialResults,
+        CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Search started for: {Query}", query);
+        
+        var normalizedQuery = _searchQueryNormalizer.RemoveFeatArtists(query);
+        normalizedQuery = _searchQueryNormalizer.RemoveYoutubeMarkers(normalizedQuery);
+        _logger.LogInformation("Normalized query: {Query}", normalizedQuery);
+
+        var formatFilter = preferredFormats.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        _logger.LogInformation("Format filter: {Formats}", string.Join(", ", formatFilter));
+        _logger.LogInformation("Bitrate filter: Min={Min}, Max={Max}", minBitrate, maxBitrate);
+
+        var resultsBuffer = new ConcurrentBag<Track>();
+        var allResults = new List<Track>();
+        
+        // Execute the Soulseek search
+        var actualCount = await _soulseek.SearchAsync(
+            normalizedQuery, 
+            formatFilter, 
+            (minBitrate, maxBitrate), 
+            DownloadMode.Normal, 
+            tracks =>
+            {
+                foreach (var track in tracks)
+                {
+                    resultsBuffer.Add(track);
+                    allResults.Add(track);
+                }
+                
+                onPartialResults?.Invoke(tracks);
+            }, 
+            cancellationToken);
+        
+        _logger.LogInformation("Search completed with {Count} raw results", actualCount);
+        
+        // Rank and group results
+        if (isAlbumSearch)
+        {
+            var albums = GroupResultsByAlbum(allResults);
+            return new SearchResult
+            {
+                TotalCount = actualCount,
+                Albums = albums,
+                IsAlbumSearch = true
+            };
+        }
+        else
+        {
+            var rankedTracks = RankTrackResults(allResults, normalizedQuery, formatFilter, minBitrate, maxBitrate);
+            return new SearchResult
+            {
+                TotalCount = actualCount,
+                Tracks = rankedTracks,
+                IsAlbumSearch = false
+            };
+        }
+    }
+    
+    private List<Track> RankTrackResults(
+        List<Track> results, 
+        string normalizedQuery, 
+        string[] formatFilter, 
+        int minBitrate, 
+        int maxBitrate)
+    {
+        if (results.Count == 0)
+            return results;
+            
+        _logger.LogInformation("Ranking {Count} search results", results.Count);
+        
+        // Create search track from query for ranking
+        var searchTrack = new Track { Title = normalizedQuery };
+        
+        // Create evaluator based on current filter settings
+        var evaluator = new FileConditionEvaluator();
+        if (formatFilter.Length > 0)
+        {
+            evaluator.AddRequired(new FormatCondition { AllowedFormats = formatFilter.ToList() });
+        }
+        
+        if (minBitrate > 0 || maxBitrate > 0)
+        {
+            evaluator.AddPreferred(new BitrateCondition 
+            { 
+                MinBitrate = minBitrate > 0 ? minBitrate : null, 
+                MaxBitrate = maxBitrate > 0 ? maxBitrate : null 
+            });
+        }
+        
+        // Rank the results
+        var rankedResults = ResultSorter.OrderResults(results, searchTrack, evaluator);
+        
+        _logger.LogInformation("Results ranked successfully");
+        return rankedResults.ToList();
+    }
+    
+    private List<AlbumSearchResult> GroupResultsByAlbum(List<Track> tracks)
+    {
+        _logger.LogInformation("Grouping {Count} tracks into albums", tracks.Count);
+        
+        // Group by Album + Artist
+        var grouped = tracks
+            .Where(t => !string.IsNullOrEmpty(t.Album))
+            .GroupBy(t => new { t.Album, t.Artist })
+            .Select(g => new AlbumSearchResult
+            {
+                Album = g.Key.Album ?? "Unknown Album",
+                Artist = g.Key.Artist ?? "Unknown Artist",
+                TrackCount = g.Count(),
+                Tracks = g.ToList(),
+                // Use the highest bitrate track's info for album metadata
+                AverageBitrate = (int)g.Average(t => t.Bitrate),
+                Format = g.OrderByDescending(t => t.Bitrate).First().Format
+            })
+            .OrderByDescending(a => a.TrackCount)
+            .ThenByDescending(a => a.AverageBitrate)
+            .ToList();
+        
+        _logger.LogInformation("Grouped into {Count} albums", grouped.Count);
+        return grouped;
+    }
+}
+
+/// <summary>
+/// Result of a search operation.
+/// </summary>
+public class SearchResult
+{
+    public int TotalCount { get; set; }
+    public List<Track> Tracks { get; set; } = new();
+    public List<AlbumSearchResult> Albums { get; set; } = new();
+    public bool IsAlbumSearch { get; set; }
+}
+
+/// <summary>
+/// Represents an album in search results.
+/// </summary>
+public class AlbumSearchResult
+{
+    public string Album { get; set; } = string.Empty;
+    public string Artist { get; set; } = string.Empty;
+    public int TrackCount { get; set; }
+    public int AverageBitrate { get; set; }
+    public string? Format { get; set; }
+    public List<Track> Tracks { get; set; } = new();
+}

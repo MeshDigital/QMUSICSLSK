@@ -12,15 +12,7 @@ namespace SLSKDONET.Services;
 /// </summary>
 public interface ILibraryService
 {
-    /// <summary>
-    /// Fired when a playlist job is successfully soft-deleted.
-    /// </summary>
-    event EventHandler<Guid>? ProjectDeleted;
-
-    /// <summary>
-    /// Fired whenever a playlist job's progress or metadata changes.
-    /// </summary>
-    event EventHandler<ProjectEventArgs>? ProjectUpdated;
+    // Events now published via IEventBus (ProjectDeletedEvent, ProjectUpdatedEvent)
 
     /// <summary>
     /// Fired when a new playlist job is created/added.
