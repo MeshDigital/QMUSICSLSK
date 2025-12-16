@@ -77,10 +77,10 @@ public partial class App : Application
                         await downloadManager.InitAsync();
                         _ = downloadManager.StartAsync();
                         
-                        // Initialize LibraryViewModel
-                        var libraryViewModel = Services.GetRequiredService<LibraryViewModel>();
-                        libraryViewModel.SetMainViewModel(mainVm);
-                        await libraryViewModel.LoadProjectsAsync();
+                        // Load projects into the LibraryViewModel that's bound to UI
+                        // CRITICAL: Use mainVm.LibraryViewModel (the one shown in UI)
+                        // not a new instance from DI
+                        await mainVm.LibraryViewModel.LoadProjectsAsync();
                         
                         // Update UI on completion
                         await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
