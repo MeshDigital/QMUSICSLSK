@@ -115,7 +115,7 @@
                 <!-- Playlist List -->
                 <ListBox Grid.Row="2" 
                          x:Name="PlaylistListBox"
-                         ItemsSource="{Binding AllProjects}"
+                         ItemsSource="{Binding Projects.AllProjects}"
                          SelectedItem="{Binding SelectedProject, Mode=TwoWay}"
                          Background="Transparent"
                          BorderThickness="0"
