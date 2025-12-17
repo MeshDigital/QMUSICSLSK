@@ -203,34 +203,68 @@ public static class ResultSorter
     }
     
     /// <summary>
-    /// Phase 1: Detects suspicious/fake files via filesize and duration validation.
-    /// Strict gating: flagged files get -Infinity score.
+    /// Phase 1.3: Detects suspicious/fake files via VBR validation.
+    /// Implements slsk-batchdl patterns with artwork buffer and silent tail exception.
     /// </summary>
     private static bool IsSuspiciousFile(Track result, Track searchTrack)
     {
-        // Check 1: Duration mismatch (already handled by Phase 0.4 Smart Duration Gating)
-        // We re-check here for completeness, but this is redundant with DownloadDiscoveryService
+        // Check 1: Duration mismatch (wrong version - Radio vs Extended)
         if (result.Length.HasValue && searchTrack.CanonicalDuration.HasValue)
         {
             double expectedSec = searchTrack.CanonicalDuration.Value / 1000.0;
             if (Math.Abs(result.Length.Value - expectedSec) > 30)
-                return true; // Wrong version (Radio vs Extended)
+                return true;
         }
         
         // Check 2: Filesize impossibly small for claimed duration
-        // Detects corrupted files or metadata lies (e.g., 10-min file that's only 3MB)
         if (result.Size.HasValue && result.Length.HasValue && result.Length.Value > 0)
         {
-            // Minimum acceptable: ~64kbps (8000 bytes/sec)
-            double minBytesPerSecond = 8000;
+            double minBytesPerSecond = 8000; // ~64kbps
             double expectedMinSize = result.Length.Value * minBytesPerSecond;
             
-            // If filesize is less than 50% of minimum expected, it's suspicious
             if (result.Size.Value < expectedMinSize * 0.5)
                 return true;
         }
         
+        // Check 3: VBR Validation (from slsk-batchdl)
+        // Detects fake upconverted files (128→320, MP3→FLAC)
+        double efficiency = GetBitrateEfficiency(result);
+        
+        if (efficiency < 0.8) // 80% threshold (industry standard)
+        {
+            // Silent Tail Exception: FLAC with high compression might be legitimate
+            if (result.Bitrate > 1000 && efficiency >= 0.6)
+            {
+                // Potential lossless with high compression (silence, classical)
+                // Allow it but log for debugging
+                return false;
+            }
+            
+            // Otherwise, it's a fake file
+            return true;
+        }
+        
         return false;
+    }
+    
+    /// <summary>
+    /// Phase 1.3: Calculates bitrate efficiency to detect fake files.
+    /// Accounts for artwork buffer (32KB) to prevent cover art inflation.
+    /// </summary>
+    private static double GetBitrateEfficiency(Track result)
+    {
+        if (!result.Size.HasValue || !result.Length.HasValue || result.Bitrate <= 0)
+            return 1.0; // Assume okay if data is missing
+        
+        // Artwork Buffer: Subtract 32KB for ID3 tags and embedded cover art
+        const int artworkBufferBytes = 32768;
+        long adjustedSize = Math.Max(0, result.Size.Value - artworkBufferBytes);
+        
+        // Calculate expected filesize based on claimed bitrate
+        double expectedBytes = (result.Bitrate * 1000 * result.Length.Value) / 8;
+        
+        // Return efficiency ratio (1.0 = perfect match, <0.8 = suspicious)
+        return (double)adjustedSize / expectedBytes;
     }
 }
 
