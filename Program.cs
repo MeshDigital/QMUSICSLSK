@@ -30,7 +30,7 @@ namespace SLSKDONET
 
             try
             {
-                Log.Information("Starting QMUSICSLSK application");
+                Log.Information("Starting ORBIT application");
                 BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
             }
             catch (Exception ex)

@@ -13,7 +13,7 @@ namespace SLSKDONET.Services.Platform;
 public class MacOSTokenStorage : ISecureTokenStorage
 {
     private readonly ILogger<MacOSTokenStorage> _logger;
-    private const string ServiceName = "QMUSICSLSK";
+    private const string ServiceName = "ORBIT";
     private const string AccountName = "spotify_refresh_token";
 
     public MacOSTokenStorage(ILogger<MacOSTokenStorage> logger)

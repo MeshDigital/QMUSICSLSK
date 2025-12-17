@@ -1,6 +1,6 @@
 # The Brain: Smart Music Intelligence
 
-**Antigravity** isn't just a downloader; it's a music intelligence engine. "The Brain" refers to the suite of features that leverage canonical metadata (from Spotify) to make smart decisions about file selection, organization, and tagging.
+**ORBIT** isn't just a downloader; it's a music intelligence engine. "The Brain" refers to the suite of features that leverage canonical metadata (from Spotify) to make smart decisions about file selection, organization, and tagging.
 
 ## Feature: Smart Duration Gating (Phase 0.4)
 
@@ -13,8 +13,8 @@ When searching for a track on peer-to-peer networks like Soulseek, filenames are
 Legacy downloaders typically sort by **Bitrate** or **File Size**. If the 10-minute version is 320kbps and the 3-minute version is also 320kbps, the downloader has no way of knowing which one you *actually* want. You might end up with a Radio Edit when you wanted the extended journey, or vice versa.
 
 ### The Solution: Metadata-Driven Filtering
-Antigravity solves this by using the **Canonical Duration** from your source library (Spotify).
-- If you liked the **Radio Edit** on Spotify (Duration: 3:34), Antigravity knows you are looking for a file that is approximately 3 minutes and 34 seconds long.
+ORBIT solves this by using the **Canonical Duration** from your source library (Spotify).
+- If you liked the **Radio Edit** on Spotify (Duration: 3:34), ORBIT knows you are looking for a file that is approximately 3 minutes and 34 seconds long.
 - It will **actively reject** the 10-minute Club Mix, even if it has a high bitrate, because it doesn't match the *identity* of the track you requested.
 
 ### How It Works (Technical)
@@ -48,4 +48,4 @@ var smartMatches = candidates
 You can see "The Brain" in action in the application logs:
 > `[INF] 🧠 BRAIN: Smart Match Active! Found 3 candidates matching duration 214s (+/- 15s)`
 
-This feature transforms Antigravity from a passive tool into an active curator, ensuring your local library perfectly mirrors the intent of your digital collection.
+This feature transforms ORBIT from a passive tool into an active curator, ensuring your local library perfectly mirrors the intent of your digital collection.

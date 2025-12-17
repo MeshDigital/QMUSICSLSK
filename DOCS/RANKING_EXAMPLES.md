@@ -1,6 +1,6 @@
 # Phase 1: Intelligent Ranking - Scoring Examples
 
-This document shows concrete examples of how different files are scored by Antigravity's ranking system.
+This document shows concrete examples of how different files are scored by ORBIT's ranking system.
 
 ## Scoring Components
 

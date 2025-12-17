@@ -8,8 +8,8 @@ namespace SLSKDONET.Services
     public static class DragContext
     {
         // Data format identifiers
-        public const string QueueTrackFormat = "QMUSICSLSK_QueueTrack";
-        public const string LibraryTrackFormat = "QMUSICSLSK_LibraryTrack";
+        public const string QueueTrackFormat = "ORBIT_QueueTrack";
+        public const string LibraryTrackFormat = "ORBIT_LibraryTrack";
         
         /// <summary>
         /// Temporary storage for drag data (fallback for platforms that don't support custom formats).

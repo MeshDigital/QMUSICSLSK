@@ -1,6 +1,6 @@
 # The Gravity Well: Metadata Persistence & DJ Compatibility
 
-**Antigravity** doesn't just download files; it enriches them with "Musical Intelligence" and seals that data into the file itself. This ensures that your library is portable, professional, and "Self-Healing."
+**ORBIT** doesn't just download files; it enriches them with "Musical Intelligence" and seals that data into the file itself. This ensures that your library is portable, professional, and "Self-Healing."
 
 ## Feature: DJ-Ready Tagging (Phase 0.5)
 
@@ -9,7 +9,7 @@ Standard downloads usually only contain basic tags: Artist, Title, Album.
 Professional DJs need more: **Key**, **BPM**, and **IDs**. Without these, you have to re-analyze every track in Rekordbox or Serato, and you lose the "Sonic Identity" if you move the file.
 
 ### The Solution: The Gravity Well
-Antigravity fetches rich metadata from Spotify (Phase 0.2) and now **persists** it permanently in two places:
+ORBIT fetches rich metadata from Spotify (Phase 0.2) and now **persists** it permanently in two places:
 
 1.  **The Database (Local Library)**
     *   Stores `MusicalKey` (e.g., "8A"), `BPM` (e.g., 128.0), and `AnalysisOffset`.

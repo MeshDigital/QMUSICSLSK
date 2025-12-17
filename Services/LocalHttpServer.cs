@@ -184,7 +184,7 @@ public class LocalHttpServer : IDisposable
         <div class='checkmark'>✓</div>
         <h1>Success!</h1>
         <p>You have successfully signed in with Spotify.</p>
-        <p>You can close this window and return to QMUSICSLSK.</p>
+        <p>You can close this window and return to ORBIT.</p>
     </div>
 </body>
 </html>";
@@ -243,7 +243,7 @@ public class LocalHttpServer : IDisposable
         <div class='error-icon'>✗</div>
         <h1>Authorization Failed</h1>
         <p>There was a problem signing in with Spotify.</p>
-        <p>Please close this window and try again in QMUSICSLSK.</p>
+        <p>Please close this window and try again in ORBIT.</p>
         <div class='error-details'>
             <strong>Error:</strong> {error}<br>
             {(string.IsNullOrEmpty(description) ? "" : $"<strong>Details:</strong> {description}")}

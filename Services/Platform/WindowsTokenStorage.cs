@@ -22,7 +22,7 @@ public class WindowsTokenStorage : ISecureTokenStorage
         
         // Store in user's AppData\Local folder
         var appDataPath = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        var appFolder = Path.Combine(appDataPath, "QMUSICSLSK");
+        var appFolder = Path.Combine(appDataPath, "ORBIT");
         Directory.CreateDirectory(appFolder);
         
         _tokenFilePath = Path.Combine(appFolder, "spotify_token.dat");
