@@ -62,11 +62,11 @@
 > **Why First**: Adding Spotify IDs later requires database migrations, import refactoring, and metadata backfill for existing tracks. Build the gravity well now, everything else orbits around it.
 
 #### 2. Spotify OAuth Authentication (Anchorless Beacon)
-- User sign-in with Spotify (PKCE flow) ✅ Core complete
+- User sign-in with Spotify (PKCE flow) ✅ Complete (See `DOCS/SPOTIFY_AUTH.md`)
 - Access private playlists and collections
 - Saved/liked tracks import
 - Secure cross-platform token storage ✅ Complete
-- **Status**: 40% complete (auth core done, UI pending)
+- **Status**: Core complete, UI integrated
 - **Impact**: Unlocks user's entire Spotify library
 
 #### 3. Critical Bug Fixes (Orbit Correction)
@@ -75,6 +75,12 @@
 - Replace WPF dialogs with Avalonia
 - Complete album download logic
 - **Impact**: Stability and compilation
+
+#### 4. Architecture Refactoring (Technical Debt Reduction)
+- **DownloadManager**: Split into Discovery, Orchestration, and Enrichment services
+- **Input Processing**: Abstract input handling from ViewModels
+- **OAuth Server**: Generic loopback server for future integrations
+- **Impact**: Maintainability and Testability
 
 #### 2. Album Download Completion
 - Recursive directory parsing for album mode

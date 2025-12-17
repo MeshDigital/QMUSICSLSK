@@ -25,6 +25,22 @@ public class SpotifyAuthService
     private PKCETokenResponse? _currentTokenResponse;
     private DateTime _tokenExpiresAt;
 
+    public event EventHandler<bool>? AuthenticationChanged;
+
+    private bool _isAuthenticated;
+    public bool IsAuthenticated
+    {
+        get => _isAuthenticated;
+        private set
+        {
+            if (_isAuthenticated != value)
+            {
+                _isAuthenticated = value;
+                AuthenticationChanged?.Invoke(this, value);
+            }
+        }
+    }
+
     public SpotifyAuthService(
         ILogger<SpotifyAuthService> logger,
         AppConfig config,
@@ -35,6 +51,19 @@ public class SpotifyAuthService
         _config = config;
         _httpServer = httpServer;
         _tokenStorage = tokenStorage;
+        
+        // Fire and forget initial check
+        Task.Run(async () => 
+        {
+            try
+            {
+                IsAuthenticated = await IsAuthenticatedAsync();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to check initial Spotify auth state");
+            }
+        });
     }
 
     /// <summary>
@@ -156,8 +185,9 @@ public class SpotifyAuthService
             _logger.LogInformation("Refresh token stored securely");
         }
 
-        // Create authenticated client
+    // Create authenticated client
         _authenticatedClient = new SpotifyClient(tokenResponse.AccessToken);
+        IsAuthenticated = true;
 
         _logger.LogInformation("Successfully exchanged authorization code for tokens");
     }
@@ -195,6 +225,7 @@ public class SpotifyAuthService
 
             // Create new authenticated client
             _authenticatedClient = new SpotifyClient(tokenResponse.AccessToken);
+            IsAuthenticated = true;
 
             _logger.LogInformation("Successfully refreshed access token");
         }
@@ -233,6 +264,7 @@ public class SpotifyAuthService
         _authenticatedClient = null;
         _currentTokenResponse = null;
         _currentCodeVerifier = null;
+        IsAuthenticated = false;
 
         _logger.LogInformation("User signed out, tokens cleared");
     }

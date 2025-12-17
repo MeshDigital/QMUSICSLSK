@@ -432,7 +432,56 @@
 
 ---
 
-## Phase 3: Polish Features (22 hours) 🟢
+---
+
+## Phase 3: Architecture & Refactoring (12 hours) 🟣 TECHNICAL
+
+### 3.1 DownloadManager Refactor (4 hours)
+**Priority**: ⭐⭐⭐ HIGH
+**Goal**: Split "God Object" into focused services.
+
+**What to Build**:
+- [ ] `DownloadDiscoveryService`: Handle search & selection logic
+- [ ] `MetadataEnrichmentOrchestrator`: dedicated background enrichment
+- [ ] `DownloadStateMachine`: Manage Pending -> Searching -> Downloading transitions
+
+**Files**:
+- `Services/DownloadDiscoveryService.cs` (new)
+- `Services/MetadataEnrichmentOrchestrator.cs` (new)
+- `Services/DownloadManager.cs` (cleanup)
+
+### 3.2 Input Processing Service (3 hours)
+**Priority**: ⭐⭐ MEDIUM
+**Goal**: Decouple ViewModels from specific input formats.
+
+**What to Build**:
+- [ ] `InputAbstractionService`: Unify CSV, Clipboard, and URL handling
+- [ ] `SearchIntent`: Standardized input object
+
+**Files**:
+- `Services/InputAbstractionService.cs` (new)
+- `Models/SearchIntent.cs` (new)
+
+### 3.3 Generic OAuth Loopback (2 hours)
+**Priority**: ⭐⭐
+**Goal**: Reusable OAuth listener for future integrations.
+
+**What to Build**:
+- [ ] Generic `OAuthLoopbackServer`
+- [ ] Configurable HTML success/failure pages
+- [ ] `NameValueCollection` return type
+
+### 3.4 Database Mapping Extensions (1 hour)
+**Priority**: ⭐ LOW
+**Goal**: Cleaner service code.
+
+**What to Build**:
+- [ ] `Extensions/MappingExtensions.cs`
+- [ ] Extension methods for Entity <-> Model conversion
+
+---
+
+## Phase 4: Polish Features (22 hours) 🟢
 
 ### 3.1 Lyrics Display (4 hours)
 - [ ] Fetch lyrics from API (Genius, Musixmatch)

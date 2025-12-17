@@ -61,6 +61,12 @@
                         <TextBlock Text="●" FontSize="12" Foreground="#4EC9B0" IsVisible="{Binding ConnectionViewModel.IsConnected}"/>
                         <TextBlock Text="●" FontSize="12" Foreground="#666666" IsVisible="{Binding !ConnectionViewModel.IsConnected}"/>
                         <TextBlock Text="{Binding ConnectionViewModel.StatusText}" Foreground="#A0A0A0" FontSize="12"/>
+
+                        <Border Width="1" Height="14" Background="#404040" Margin="8,0"/>
+
+                        <TextBlock Text="●" FontSize="12" Foreground="#1DB954" IsVisible="{Binding ConnectionViewModel.IsSpotifyConnected}"/>
+                        <TextBlock Text="●" FontSize="12" Foreground="#666666" IsVisible="{Binding !ConnectionViewModel.IsSpotifyConnected}"/>
+                        <TextBlock Text="Spotify" Foreground="#A0A0A0" FontSize="12"/>
                     </StackPanel>
                     
                     <Button Content="Disconnect" 

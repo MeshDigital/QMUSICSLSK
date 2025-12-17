@@ -20,6 +20,7 @@ public class ConnectionViewModel : INotifyPropertyChanged
     private readonly ConfigManager _configManager;
     private readonly ISoulseekAdapter _soulseek;
     private readonly ISoulseekCredentialService _credentialService;
+    private readonly SpotifyAuthService _spotifyAuthService;
 
     // Connection State
     private string _username = "";
@@ -34,6 +35,13 @@ public class ConnectionViewModel : INotifyPropertyChanged
     {
         get => _isConnected;
         set => SetProperty(ref _isConnected, value);
+    }
+
+    private bool _isSpotifyConnected;
+    public bool IsSpotifyConnected
+    {
+        get => _isSpotifyConnected;
+        set => SetProperty(ref _isSpotifyConnected, value);
     }
 
     private string _statusText = "Disconnected";
@@ -85,6 +93,7 @@ public class ConnectionViewModel : INotifyPropertyChanged
         ConfigManager configManager,
         ISoulseekAdapter soulseek,
         ISoulseekCredentialService credentialService,
+        SpotifyAuthService spotifyAuthService,
         IEventBus eventBus)
     {
         _logger = logger;
@@ -92,6 +101,7 @@ public class ConnectionViewModel : INotifyPropertyChanged
         _configManager = configManager;
         _soulseek = soulseek;
         _credentialService = credentialService;
+        _spotifyAuthService = spotifyAuthService;
 
         // Initialize state from config
         Username = _config.Username ?? "";
@@ -134,8 +144,20 @@ public class ConnectionViewModel : INotifyPropertyChanged
         }
         else if (RememberPassword)
         {
+        }
+        else if (RememberPassword)
+        {
              Dispatcher.UIThread.Post(async () => await LoadUsernameOnly());
         }
+
+        // Subscribe to Spotify auth changes
+        _spotifyAuthService.AuthenticationChanged += (s, isAuthenticated) => 
+        {
+            Dispatcher.UIThread.Post(() => IsSpotifyConnected = isAuthenticated);
+        };
+        
+        // Initialize Spotify status (use Post to avoid blocking constructor)
+        Dispatcher.UIThread.Post(() => IsSpotifyConnected = _spotifyAuthService.IsAuthenticated);
     }
 
     private async Task AttemptAutoConnect()

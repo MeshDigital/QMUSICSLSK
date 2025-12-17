@@ -36,10 +36,28 @@ public class LocalHttpServer : IDisposable
         try
         {
             _listener = new HttpListener();
-            _listener.Prefixes.Add(redirectUri);
-            _listener.Start();
             
-            _logger.LogInformation("OAuth callback server started on {RedirectUri}", redirectUri);
+            // 1. Ensure the prefix ends with a slash (required by HttpListener)
+            var listenerUri = redirectUri;
+            if (!listenerUri.EndsWith("/")) 
+                listenerUri += "/";
+            
+            // 2. Add the primary prefix
+            _listener.Prefixes.Add(listenerUri);
+            
+            // 3. Add both localhost and 127.0.0.1 to handle redirect hostname variations
+            if (listenerUri.Contains("localhost"))
+            {
+                _listener.Prefixes.Add(listenerUri.Replace("localhost", "127.0.0.1"));
+            }
+            else if (listenerUri.Contains("127.0.0.1"))
+            {
+                _listener.Prefixes.Add(listenerUri.Replace("127.0.0.1", "localhost"));
+            }
+
+            _listener.Start();
+            _logger.LogInformation("OAuth callback server listening on prefixes: {Prefixes}", 
+                string.Join(", ", _listener.Prefixes));
 
             // Wait for the callback request
             var contextTask = _listener.GetContextAsync();
@@ -47,7 +65,7 @@ public class LocalHttpServer : IDisposable
 
             if (cancellationToken.IsCancellationRequested)
             {
-                _logger.LogWarning("OAuth callback cancelled by user");
+                _logger.LogWarning("OAuth callback cancelled by user or timeout");
                 return null;
             }
 
@@ -55,7 +73,8 @@ public class LocalHttpServer : IDisposable
             var request = context.Request;
             var response = context.Response;
 
-            _logger.LogInformation("Received OAuth callback from {RemoteEndPoint}", request.RemoteEndPoint);
+            _logger.LogInformation("Received request from {RemoteEndPoint} for {Url}", 
+                request.RemoteEndPoint, request.Url);
 
             // Extract authorization code or error
             var code = request.QueryString["code"];

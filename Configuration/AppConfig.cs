@@ -38,7 +38,7 @@ public class AppConfig
     public bool SpotifyUseApi { get; set; } = false; // Enable Spotify API integration (requires auth)
     
     // Spotify OAuth settings
-    public string SpotifyRedirectUri { get; set; } = "http://localhost:5000/callback/";
+    public string SpotifyRedirectUri { get; set; } = "http://127.0.0.1:5000/callback";
     public int SpotifyCallbackPort { get; set; } = 5000;
     public bool SpotifyRememberAuth { get; set; } = true; // Store refresh token by default
     
