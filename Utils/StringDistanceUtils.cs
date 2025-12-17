@@ -21,6 +21,11 @@ public static class StringDistanceUtils
         if (string.IsNullOrEmpty(s)) return string.IsNullOrEmpty(t) ? 0 : t.Length;
         if (string.IsNullOrEmpty(t)) return s.Length;
 
+        // Phase 1.1: Apply filename noise stripping BEFORE normalization
+        // This removes uploader tags, video quality markers, etc.
+        s = FilenameNormalizer.Normalize(s);
+        t = FilenameNormalizer.Normalize(t);
+
         // Normalize strings (case-insensitive, remove non-alphanumeric for robust matching)
         s = new string(s.Where(char.IsLetterOrDigit).ToArray()).ToLowerInvariant();
         t = new string(t.Where(char.IsLetterOrDigit).ToArray()).ToLowerInvariant();
@@ -79,6 +84,9 @@ public static class StringDistanceUtils
     public static string Normalize(string input)
     {
         if (string.IsNullOrEmpty(input)) return string.Empty;
-        return new string(input.Where(char.IsLetterOrDigit).ToArray()).ToLowerInvariant();
+        
+        // Phase 1.1: Use FilenameNormalizer for comprehensive noise stripping
+        string cleaned = FilenameNormalizer.Normalize(input);
+        return new string(cleaned.Where(char.IsLetterOrDigit).ToArray()).ToLowerInvariant();
     }
 }

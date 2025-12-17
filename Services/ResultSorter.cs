@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using SLSKDONET.Models;
+using SLSKDONET.Utils;
 using Soulseek;
 
 namespace SLSKDONET.Services;
@@ -100,6 +101,33 @@ public static class ResultSorter
     }
 
     /// <summary>
+    /// Phase 1: Calculates BPM proximity score based on filename parsing.
+    /// Returns 0.5 (neutral) if no BPM found in filename (no penalty for casual files).
+    /// </summary>
+    private static double CalculateBpmProximity(Track result, Track searchTrack)
+    {
+        if (!searchTrack.BPM.HasValue) return 0.5; // Neutral if target has no BPM
+        
+        // Phase 1.1: Use path-based extraction with confidence scoring
+        string fullPath = $"{result.Directory}/{result.Filename}";
+        double? fileBpm = FilenameNormalizer.ExtractBpmFromPath(fullPath, out double confidence);
+        
+        if (!fileBpm.HasValue) return 0.5; // Neutral if no BPM in filename (common for casual music)
+        
+        double diff = Math.Abs(fileBpm.Value - searchTrack.BPM.Value);
+        
+        // Base proximity score
+        double proximityScore;
+        if (diff < 2.0) proximityScore = 1.0;   // Perfect match
+        else if (diff < 5.0) proximityScore = 0.75;  // Close match
+        else if (diff < 10.0) proximityScore = 0.5;  // Acceptable
+        else proximityScore = 0.0;  // Mismatch
+        
+        // Apply confidence decay for path-based matches
+        return proximityScore * confidence;
+    }
+
+    /// <summary>
     /// Calculates length match score (0-1, where 1 is perfect match).
     /// </summary>
     private static double CalculateLengthScore(Track result, Track searchTrack)
@@ -172,51 +200,6 @@ public static class ResultSorter
         }
 
         return d[s1.Length, s2.Length];
-    }
-    
-    /// <summary>
-    /// Phase 1: Calculates BPM proximity score based on filename parsing.
-    /// Returns 0.5 (neutral) if no BPM found in filename (no penalty for casual files).
-    /// </summary>
-    private static double CalculateBpmProximity(Track result, Track searchTrack)
-    {
-        if (!searchTrack.BPM.HasValue) return 0.5; // Neutral if target has no BPM
-        
-        // Extract BPM from filename (e.g., "124bpm", "124 BPM", "(124)")
-        double? fileBpm = ExtractBpmFromFilename(result.Filename ?? "");
-        if (!fileBpm.HasValue) return 0.5; // Neutral if no BPM in filename (common for casual music)
-        
-        double diff = Math.Abs(fileBpm.Value - searchTrack.BPM.Value);
-        if (diff < 2.0) return 1.0;   // Perfect match (+300 pts in OverallScore)
-        if (diff < 5.0) return 0.75;  // Close match (+225 pts)
-        if (diff < 10.0) return 0.5;  // Acceptable (+150 pts)
-        return 0.0;                   // Mismatch (0 pts)
-    }
-    
-    /// <summary>
-    /// Phase 1: Extracts BPM from filename using common patterns.
-    /// Patterns: "128bpm", "128 BPM", "(128)", "[128]"
-    /// </summary>
-    private static double? ExtractBpmFromFilename(string filename)
-    {
-        if (string.IsNullOrEmpty(filename)) return null;
-        
-        // Pattern 1: "128bpm" or "128 bpm" (case insensitive)
-        var bpmMatch = System.Text.RegularExpressions.Regex.Match(filename, @"(\d{2,3})\s*bpm", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-        if (bpmMatch.Success && double.TryParse(bpmMatch.Groups[1].Value, out double bpm1))
-            return bpm1;
-        
-        // Pattern 2: Standalone number in parentheses/brackets near end of filename
-        // (Common DJ convention: "Artist - Title (128).mp3")
-        var bracketMatch = System.Text.RegularExpressions.Regex.Match(filename, @"[\(\[](\d{2,3})[\)\]]");
-        if (bracketMatch.Success && double.TryParse(bracketMatch.Groups[1].Value, out double bpm2))
-        {
-            // Sanity check: BPM typically 60-200 for most music
-            if (bpm2 >= 60 && bpm2 <= 200)
-                return bpm2;
-        }
-        
-        return null;
     }
     
     /// <summary>
