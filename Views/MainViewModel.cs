@@ -28,6 +28,7 @@ public class MainViewModel : INotifyPropertyChanged
     private readonly INavigationService _navigationService;
     private readonly IEventBus _eventBus;
     private readonly DownloadManager _downloadManager;
+    private readonly ISpotifyMetadataService _spotifyMetadata;
 
     // Child ViewModels
     public PlayerViewModel PlayerViewModel { get; }
@@ -63,7 +64,8 @@ public class MainViewModel : INotifyPropertyChanged
         ConnectionViewModel connectionViewModel,
         SettingsViewModel settingsViewModel,
         IEventBus eventBus,
-        DownloadManager downloadManager)
+        DownloadManager downloadManager,
+        ISpotifyMetadataService spotifyMetadata)
     {
         _logger = logger;
         _config = config;
@@ -75,6 +77,7 @@ public class MainViewModel : INotifyPropertyChanged
         // Assign missing fields
         _eventBus = eventBus;
         _downloadManager = downloadManager;
+        _spotifyMetadata = spotifyMetadata;
 
         PlayerViewModel = playerViewModel;
         LibraryViewModel = libraryViewModel;
@@ -135,6 +138,9 @@ public class MainViewModel : INotifyPropertyChanged
 
         // Navigate to Search page by default
         NavigateToSearch();
+
+        // Phase 0.3: Brain Command
+        ExecuteBrainTestCommand = new AsyncRelayCommand(ExecuteBrainTestAsync);
     }
 
     private void NavigateToSettings()
@@ -242,6 +248,7 @@ public class MainViewModel : INotifyPropertyChanged
     public ICommand ZoomInCommand { get; }
     public ICommand ZoomOutCommand { get; }
     public ICommand ResetZoomCommand { get; }
+    public ICommand ExecuteBrainTestCommand { get; }
 
     // Page instances (lazy-loaded)
     private object? _searchPage;
@@ -381,5 +388,44 @@ public class MainViewModel : INotifyPropertyChanged
         field = value;
         OnPropertyChanged(propertyName);
         return true;
+    }
+
+
+    private async Task ExecuteBrainTestAsync()
+    {
+        try 
+        {
+            StatusText = "🧠 Running Brain Test...";
+            _logger.LogInformation("================ BRAIN TEST STARTED ================");
+
+            // Gauntlet 1: Strobe (Radio Edit) - 3:34 (214000ms)
+            // Goal: Should match "Strobe - Radio Edit" or similar, NOT Extended Club Mix (10:37)
+            _logger.LogInformation("[Test 1] Strobe (Radio Edit) - Expecting ~3m30s match");
+            await _spotifyMetadata.FindTrackAsync("deadmau5", "Strobe", 214000);
+
+            // Gauntlet 2: Strobe (Club Edit) - 10:37 (637000ms)
+            // Goal: Should match Extended Version
+            _logger.LogInformation("[Test 2] Strobe (Club Edit) - Expecting ~10m match");
+            await _spotifyMetadata.FindTrackAsync("deadmau5", "Strobe", 637000);
+
+            // Gauntlet 3: Daft Punk - Around the World (Radio Edit) - 3:11
+            _logger.LogInformation("[Test 3] Daft Punk - Around the World - Expecting Exact Match");
+            await _spotifyMetadata.FindTrackAsync("Daft Punk", "Around the World", 191000);
+
+            // Gauntlet 4: Cache Hit Verify (Run Test 3 again immediately)
+            _logger.LogInformation("[Test 4] Cache Verification (Zero Latency Expected)");
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            await _spotifyMetadata.FindTrackAsync("Daft Punk", "Around the World", 191000);
+            sw.Stop();
+            _logger.LogInformation($"Cache Check took {sw.ElapsedMilliseconds}ms");
+
+            StatusText = "🧠 Brain Test Complete - Check Logs";
+            _logger.LogInformation("================ BRAIN TEST COMPLETE ================");
+        }
+        catch (Exception ex)
+        {
+            StatusText = "🧠 Brain Test Failed";
+            _logger.LogError(ex, "Brain Test Verification Failed");
+        }
     }
 }

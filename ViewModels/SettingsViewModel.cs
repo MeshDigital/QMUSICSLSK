@@ -18,6 +18,7 @@ public class SettingsViewModel : INotifyPropertyChanged
     private readonly ConfigManager _configManager;
     private readonly IFileInteractionService _fileInteractionService;
     private readonly SpotifyAuthService _spotifyAuthService;
+    private readonly ISpotifyMetadataService _spotifyMetadataService;
 
     // Hardcoded public client ID provided by user/project
     // Ideally this would be in a secured config, but for this desktop app scenario it's acceptable as a default.
@@ -136,19 +137,22 @@ public class SettingsViewModel : INotifyPropertyChanged
     public ICommand BrowseSharedFolderCommand { get; }
     public ICommand ConnectSpotifyCommand { get; }
     public ICommand DisconnectSpotifyCommand { get; }
+    public ICommand ClearSpotifyCacheCommand { get; }
 
     public SettingsViewModel(
         ILogger<SettingsViewModel> logger,
         AppConfig config,
         ConfigManager configManager,
         IFileInteractionService fileInteractionService,
-        SpotifyAuthService spotifyAuthService)
+        SpotifyAuthService spotifyAuthService,
+        ISpotifyMetadataService spotifyMetadataService)
     {
         _logger = logger;
         _config = config;
         _configManager = configManager;
         _fileInteractionService = fileInteractionService;
         _spotifyAuthService = spotifyAuthService;
+        _spotifyMetadataService = spotifyMetadataService;
 
         // Ensure default Client ID is set if empty
         if (string.IsNullOrEmpty(_config.SpotifyClientId))
@@ -163,6 +167,7 @@ public class SettingsViewModel : INotifyPropertyChanged
         BrowseSharedFolderCommand = new AsyncRelayCommand(BrowseSharedFolderAsync);
         ConnectSpotifyCommand = new AsyncRelayCommand(ConnectSpotifyAsync, () => !IsAuthenticating);
         DisconnectSpotifyCommand = new AsyncRelayCommand(DisconnectSpotifyAsync);
+        ClearSpotifyCacheCommand = new AsyncRelayCommand(ClearSpotifyCacheAsync);
 
         // check initial connection status
         _ = CheckSpotifyConnectionStatusAsync();
@@ -262,6 +267,20 @@ public class SettingsViewModel : INotifyPropertyChanged
         if (!string.IsNullOrEmpty(path))
         {
             SharedFolderPath = path;
+        }
+    }
+
+    private async Task ClearSpotifyCacheAsync()
+    {
+        try
+        {
+            await _spotifyMetadataService.ClearCacheAsync();
+            // Optional: NotificationService usage here if available, for now just log
+            _logger.LogInformation("Cache cleared via Settings");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to clear cache via Settings");
         }
     }
 

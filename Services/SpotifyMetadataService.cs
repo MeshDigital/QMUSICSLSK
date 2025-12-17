@@ -170,6 +170,7 @@ public class SpotifyMetadataService : ISpotifyMetadataService
                 return null;
 
             // Smart Matching Logic
+            // Smart Matching Logic
             var candidates = response.Tracks.Items;
             FullTrack? bestMatch = null;
             double bestScore = 0;
@@ -182,11 +183,22 @@ public class SpotifyMetadataService : ISpotifyMetadataService
                 
                 double matchScore = (titleScore * 0.6) + (artistScore * 0.4);
 
-                // 2. Duration Validation (The "DJ Secret")
-                if (durationMs.HasValue && Math.Abs(candidate.DurationMs - durationMs.Value) > 5000)
+                // 2. Duration Validation (The "DJ Secret") - Critical for Versioning
+                if (durationMs.HasValue)
                 {
-                    // Penalty for duration mismatch (> 5 seconds diff)
-                    matchScore *= 0.5; 
+                    double diffSeconds = Math.Abs(candidate.DurationMs - durationMs.Value) / 1000.0;
+                    
+                    if (diffSeconds > 5.0)
+                    {
+                        // Heavy penalty for duration mismatch > 5s (likely Radio Edit vs Club Mix)
+                        matchScore *= 0.5;
+                        _logger.LogTrace("Match penalty (Duration): {Title} ({Diff:F1}s diff)", candidate.Name, diffSeconds);
+                    }
+                    else if (diffSeconds <= 2.0 && matchScore > 0.9)
+                    {
+                        // Boost for tight duration match (<2s) on already high score
+                        matchScore = Math.Min(1.0, matchScore + 0.05);
+                    }
                 }
 
                 if (matchScore > bestScore)
@@ -196,11 +208,15 @@ public class SpotifyMetadataService : ISpotifyMetadataService
                 }
             }
 
-            // Threshold: Reject matches below 80% confidence
-            if (bestMatch != null && bestScore >= 0.8)
+            // Threshold: Reject matches below high confidence
+            // > 0.85 = Very Good match
+            // > 0.70 = Plausible but risky
+            if (bestMatch != null && bestScore >= 0.75)
             {
-                _logger.LogInformation("Smart Match: '{Input}' -> '{Result}' (Score: {Score:P0})", 
+                var logLevel = bestScore >= 0.9 ? LogLevel.Information : LogLevel.Warning;
+                _logger.Log(logLevel, "Smart Match Found: '{Input}' -> '{Result}' (Score: {Score:P0})", 
                     $"{artist} - {title}", $"{bestMatch.Artists[0].Name} - {bestMatch.Name}", bestScore);
+                
                 return bestMatch;
             }
             
@@ -275,6 +291,23 @@ public class SpotifyMetadataService : ISpotifyMetadataService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Cache write failed for {Key}", key);
+        }
+    }
+
+    public async Task ClearCacheAsync()
+    {
+        try
+        {
+            using var context = new AppDbContext();
+            // Truncate table or remove all
+            // EF Core doesn't have Truncate, so we use raw SQL or remove range
+            context.SpotifyMetadataCache.RemoveRange(context.SpotifyMetadataCache);
+            await context.SaveChangesAsync();
+            _logger.LogInformation("Spotify metadata cache cleared.");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to clear Spotify metadata cache");
         }
     }
 }
