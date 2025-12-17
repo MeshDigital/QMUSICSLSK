@@ -170,16 +170,21 @@ public class SpotifyMetadataService : ISpotifyMetadataService
                 return null;
 
             // Smart Matching Logic
-            // Smart Matching Logic
             var candidates = response.Tracks.Items;
             FullTrack? bestMatch = null;
             double bestScore = 0;
 
             foreach (var candidate in candidates)
             {
-                // 1. Name Match Score
-                double titleScore = StringDistanceUtils.GetNormalizedMatchScore(title, candidate.Name);
-                double artistScore = StringDistanceUtils.GetNormalizedMatchScore(artist, candidate.Artists.FirstOrDefault()?.Name ?? "");
+                // Phase 0.2 Refinement: Apply FilenameNormalizer for better matching
+                string normalizedTitle = FilenameNormalizer.Normalize(title);
+                string normalizedCandidateName = FilenameNormalizer.Normalize(candidate.Name);
+                string normalizedArtist = FilenameNormalizer.Normalize(artist);
+                string normalizedCandidateArtist = FilenameNormalizer.Normalize(candidate.Artists.FirstOrDefault()?.Name ?? "");
+                
+                // 1. Name Match Score (with noise stripping)
+                double titleScore = StringDistanceUtils.GetNormalizedMatchScore(normalizedTitle, normalizedCandidateName);
+                double artistScore = StringDistanceUtils.GetNormalizedMatchScore(normalizedArtist, normalizedCandidateArtist);
                 
                 double matchScore = (titleScore * 0.6) + (artistScore * 0.4);
 
@@ -194,10 +199,13 @@ public class SpotifyMetadataService : ISpotifyMetadataService
                         matchScore *= 0.5;
                         _logger.LogTrace("Match penalty (Duration): {Title} ({Diff:F1}s diff)", candidate.Name, diffSeconds);
                     }
-                    else if (diffSeconds <= 2.0 && matchScore > 0.9)
+                    else if (diffSeconds <= 3.0 && matchScore > 0.7)
                     {
-                        // Boost for tight duration match (<2s) on already high score
-                        matchScore = Math.Min(1.0, matchScore + 0.05);
+                        // Phase 0.2 Refinement: Boost confidence for duration match
+                        // If duration matches within 3s, add +40% bonus to confidence
+                        double durationBonus = 0.4 * (1.0 - (diffSeconds / 3.0)); // Linear decay
+                        matchScore = Math.Min(1.0, matchScore + durationBonus);
+                        _logger.LogTrace("Duration boost: {Title} (+{Bonus:P0}, {Diff:F1}s diff)", candidate.Name, durationBonus, diffSeconds);
                     }
                 }
 
@@ -208,10 +216,11 @@ public class SpotifyMetadataService : ISpotifyMetadataService
                 }
             }
 
-            // Threshold: Reject matches below high confidence
-            // > 0.85 = Very Good match
-            // > 0.70 = Plausible but risky
-            if (bestMatch != null && bestScore >= 0.75)
+            // Phase 0.2 Refinement: Lowered threshold from 0.75 to 0.70
+            // With FilenameNormalizer + duration boosting, 70% is now reliable
+            // > 0.90 = Excellent match
+            // > 0.70 = Good match (with duration validation)
+            if (bestMatch != null && bestScore >= 0.70)
             {
                 var logLevel = bestScore >= 0.9 ? LogLevel.Information : LogLevel.Warning;
                 _logger.Log(logLevel, "Smart Match Found: '{Input}' -> '{Result}' (Score: {Score:P0})", 
