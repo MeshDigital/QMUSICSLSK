@@ -86,10 +86,12 @@ public class MainViewModel : INotifyPropertyChanged
         SettingsViewModel = settingsViewModel;
 
         // Initialize commands
+        NavigateHomeCommand = new RelayCommand(NavigateToHome); // Phase 6D
         NavigateSearchCommand = new RelayCommand(NavigateToSearch);
         NavigateLibraryCommand = new RelayCommand(NavigateToLibrary);
         NavigateDownloadsCommand = new RelayCommand(NavigateToDownloads);
         NavigateSettingsCommand = new RelayCommand(NavigateToSettings);
+        NavigateImportCommand = new RelayCommand(NavigateToImport); // Phase 6D
         ToggleNavigationCommand = new RelayCommand(() => IsNavigationCollapsed = !IsNavigationCollapsed);
         TogglePlayerCommand = new RelayCommand(() => IsPlayerSidebarVisible = !IsPlayerSidebarVisible);
         TogglePlayerLocationCommand = new RelayCommand(() => IsPlayerAtBottom = !IsPlayerAtBottom);
@@ -238,10 +240,12 @@ public class MainViewModel : INotifyPropertyChanged
 
     // Navigation Commands
 
+    public ICommand NavigateHomeCommand { get; } // Phase 6D
     public ICommand NavigateSearchCommand { get; }
     public ICommand NavigateLibraryCommand { get; }
     public ICommand NavigateDownloadsCommand { get; }
     public ICommand NavigateSettingsCommand { get; }
+    public ICommand NavigateImportCommand { get; } // Phase 6D
     public ICommand ToggleNavigationCommand { get; }
     public ICommand TogglePlayerCommand { get; }
     public ICommand TogglePlayerLocationCommand { get; }
@@ -251,10 +255,13 @@ public class MainViewModel : INotifyPropertyChanged
     public ICommand ExecuteBrainTestCommand { get; }
 
     // Page instances (lazy-loaded)
+    // Lazy-loaded page instances
+    private object? _homePage; // Phase 6D
     private object? _searchPage;
     private object? _libraryPage;
     private object? _downloadsPage;
     private object? _settingsPage;
+    private object? _importPage; // Phase 6D
 
     private void OnNavigated(object? sender, global::Avalonia.Controls.UserControl page)
     {
@@ -262,6 +269,17 @@ public class MainViewModel : INotifyPropertyChanged
         {
             CurrentPage = page;
         }
+    }
+
+    // Navigation Methods (lazy-loading pattern)
+
+    private void NavigateToHome()
+    {
+        if (_homePage == null)
+        {
+            _homePage = new Avalonia.HomePage { DataContext = this };
+        }
+        CurrentPage = _homePage;
     }
 
     private void NavigateToSearch()
@@ -291,7 +309,14 @@ public class MainViewModel : INotifyPropertyChanged
         CurrentPage = _downloadsPage;
     }
 
-
+    private void NavigateToImport()
+    {
+        if (_importPage == null)
+        {
+            _importPage = new Avalonia.ImportPage { DataContext = this };
+        }
+        CurrentPage = _importPage;
+    }
 
 
 
