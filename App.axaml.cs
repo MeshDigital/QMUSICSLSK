@@ -58,15 +58,23 @@ public partial class App : Application
                 }
                 
                 // Phase 2.4: Load ranking strategy from config
+                // TEMPORARILY DISABLED: Causing NullReferenceException on startup
+                // TODO: Fix this after app launches
+                /*
                 var config = Services.GetRequiredService<ConfigManager>().GetCurrent();
-                ISortingStrategy strategy = config.RankingPreset switch
+                ISortingStrategy strategy = (config.RankingPreset ?? "Balanced") switch
                 {
                     "Quality First" => new QualityFirstStrategy(),
                     "DJ Mode" => new DJModeStrategy(),
                     _ => new BalancedStrategy()
                 };
                 ResultSorter.SetStrategy(strategy);
-                Serilog.Log.Information("Loaded ranking strategy: {Strategy}", config.RankingPreset);
+                Serilog.Log.Information("Loaded ranking strategy: {Strategy}", config.RankingPreset ?? "Balanced");
+                */
+                
+                // Use default strategy for now
+                ResultSorter.SetStrategy(new BalancedStrategy());
+                Serilog.Log.Information("Using default Balanced ranking strategy");
 
                 // Create main window and show it immediately
                 var mainVm = Services.GetRequiredService<MainViewModel>();
