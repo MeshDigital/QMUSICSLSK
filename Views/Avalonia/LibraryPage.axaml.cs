@@ -33,24 +33,39 @@ public partial class LibraryPage : UserControl
             DragDrop.SetAllowDrop(playlistListBox, true);
         }
         
-        // Find the track DataGrid and enable drag
-        var trackDataGrid = this.FindControl<DataGrid>("TrackDataGrid");
-        if (trackDataGrid != null)
+        // Find the track TreeDataGrid and enable drag
+        var treeDataGrid = this.FindControl<TreeDataGrid>("TracksTreeDataGrid");
+        if (treeDataGrid != null)
         {
-            trackDataGrid.AddHandler(PointerPressedEvent, OnTrackPointerPressed, RoutingStrategies.Tunnel);
-            trackDataGrid.AddHandler(PointerMovedEvent, OnTrackPointerMoved, RoutingStrategies.Tunnel);
-            trackDataGrid.AddHandler(PointerReleasedEvent, OnTrackPointerReleased, RoutingStrategies.Tunnel);
+            treeDataGrid.AddHandler(PointerPressedEvent, OnTrackPointerPressed, RoutingStrategies.Tunnel);
+            treeDataGrid.AddHandler(PointerMovedEvent, OnTrackPointerMoved, RoutingStrategies.Tunnel);
+            treeDataGrid.AddHandler(PointerReleasedEvent, OnTrackPointerReleased, RoutingStrategies.Tunnel);
+        }
+    }
+
+    private void OnTreeDataGridDoubleTapped(object? sender, TappedEventArgs e)
+    {
+        if (DataContext is LibraryViewModel vm)
+        {
+            // The clicked item is in the Source.Selection
+            var selectedItem = vm.Tracks.Hierarchical.Source.Selection.SelectedItem;
+            if (selectedItem is PlaylistTrackViewModel track)
+            {
+                vm.PlayTrackCommand.Execute(track);
+            }
         }
     }
 
     private Point? _dragStartPoint;
     private PlaylistTrackViewModel? _draggedTrack;
+    private DragAdornerService? _adornerService;
 
     private void OnTrackPointerPressed(object? sender, PointerPressedEventArgs e)
     {
         if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
         {
-            var row = (e.Source as Control)?.FindAncestorOfType<DataGridRow>();
+            // Find row in TreeDataGrid
+            var row = (e.Source as Control)?.FindAncestorOfType<TreeDataGridRow>();
             if (row?.DataContext is PlaylistTrackViewModel track)
             {
                 _dragStartPoint = e.GetPosition(this);
@@ -66,17 +81,37 @@ public partial class LibraryPage : UserControl
             var currentPoint = e.GetPosition(this);
             var diff = currentPoint - _dragStartPoint.Value;
             
+            // Move ghost if it exists
+            _adornerService?.MoveGhost(currentPoint);
+
             // Check if moved past threshold (5 pixels)
             if (Math.Abs(diff.X) > 5 || Math.Abs(diff.Y) > 5)
             {
-                // Create drag data
+                // lazy load service
+                if (_adornerService == null && Application.Current is App app)
+                {
+                    _adornerService = (app.Services?.GetService(typeof(DragAdornerService)) as DragAdornerService) 
+                                     ?? new DragAdornerService(); // fallback
+                }
+
+                // Show visual adorner
+                _adornerService?.ShowGhost((e.Source as Control)?.FindAncestorOfType<TreeDataGridRow>() ?? this, this);
+
+                // Phase 6D: Decoupled D&D Payload
                 var data = new DataObject();
                 data.Set(DragContext.LibraryTrackFormat, _draggedTrack.GlobalId);
                 
+                // Set temporary global storage for extra context (Source Project ID)
+                if (DataContext is LibraryViewModel vm)
+                {
+                    data.Set("SourceProjectId", vm.SelectedProject?.Id.ToString());
+                }
+
                 // Start drag operation
                 await DragDrop.DoDragDrop(e, data, DragDropEffects.Copy);
                 
                 // Clean up
+                _adornerService?.HideGhost();
                 _dragStartPoint = null;
                 _draggedTrack = null;
             }
@@ -85,6 +120,7 @@ public partial class LibraryPage : UserControl
 
     private void OnTrackPointerReleased(object? sender, PointerReleasedEventArgs e)
     {
+        _adornerService?.HideGhost();
         _dragStartPoint = null;
         _draggedTrack = null;
     }

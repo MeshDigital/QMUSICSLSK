@@ -17,6 +17,7 @@ public static class ResultSorter
 {
     // Phase 2.4: Strategy Pattern for user-configurable ranking
     private static ISortingStrategy _currentStrategy = new BalancedStrategy();
+    private static ScoringWeights _currentWeights = ScoringWeights.Balanced;
     
     /// <summary>
     /// Sets the current sorting strategy.
@@ -25,11 +26,24 @@ public static class ResultSorter
     {
         _currentStrategy = strategy ?? new BalancedStrategy();
     }
+
+    /// <summary>
+    /// Sets the current scoring weights.
+    /// </summary>
+    public static void SetWeights(ScoringWeights weights)
+    {
+        _currentWeights = weights ?? ScoringWeights.Balanced;
+    }
     
     /// <summary>
     /// Gets the current sorting strategy.
     /// </summary>
     public static ISortingStrategy GetCurrentStrategy() => _currentStrategy;
+
+    /// <summary>
+    /// Gets the current scoring weights.
+    /// </summary>
+    public static ScoringWeights GetCurrentWeights() => _currentWeights;
     /// <summary>
     /// Orders search results by multiple criteria for optimal download selection.
     /// Prioritizes:
@@ -348,7 +362,8 @@ public class SortingCriteria : IComparable<SortingCriteria>
                 CalculateMusicalIntelligenceScore(),
                 CalculateMetadataScore(),
                 CalculateStringMatchingScore(),
-                CalculateTiebreakerScore()
+                CalculateTiebreakerScore(),
+                ResultSorter.GetCurrentWeights()
             );
         }
     }

@@ -19,15 +19,18 @@ public class DownloadDiscoveryService
     private readonly ILogger<DownloadDiscoveryService> _logger;
     private readonly SearchOrchestrationService _searchOrchestrator;
     private readonly AppConfig _config;
+    private readonly IEventBus _eventBus;
 
     public DownloadDiscoveryService(
         ILogger<DownloadDiscoveryService> logger,
         SearchOrchestrationService searchOrchestrator,
-        AppConfig config)
+        AppConfig config,
+        IEventBus eventBus)
     {
         _logger = logger;
         _searchOrchestrator = searchOrchestrator;
         _config = config;
+        _eventBus = eventBus;
     }
 
     /// <summary>
@@ -112,6 +115,45 @@ public class DownloadDiscoveryService
         {
             _logger.LogError(ex, "Discovery failed for {Query}", query);
             return null;
+        }
+    }
+
+    /// <summary>
+    /// Performs discovery and automatically handles queueing or upgrade evaluation.
+    /// </summary>
+    public async Task DiscoverAndQueueTrackAsync(PlaylistTrack track, CancellationToken ct = default)
+    {
+        var bestMatch = await FindBestMatchAsync(new PlaylistTrackViewModel(track), ct);
+        if (bestMatch == null) return;
+
+        // Determine if this is an upgrade search based on whether the track already has a file
+        bool isUpgrade = !string.IsNullOrEmpty(track.ResolvedFilePath);
+
+        if (isUpgrade)
+        {
+            int currentBitrate = track.Bitrate ?? 0;
+            int newBitrate = bestMatch.Bitrate ?? 0;
+            
+            // Upgrade Logic: Better bitrate AND minimum gain achieved
+            if (newBitrate > currentBitrate && (newBitrate - currentBitrate) >= _config.UpgradeMinGainKbps)
+            {
+                _logger.LogInformation("Upgrade Found: {Artist} - {Title} ({New} vs {Old} kbps)", 
+                    track.Artist, track.Title, newBitrate, currentBitrate);
+
+                if (_config.UpgradeAutoQueueEnabled)
+                {
+                    _eventBus.Publish(new Events.AutoDownloadUpgradeEvent(track.TrackUniqueHash, bestMatch));
+                }
+                else
+                {
+                    _eventBus.Publish(new Events.UpgradeAvailableEvent(track.TrackUniqueHash, bestMatch));
+                }
+            }
+        }
+        else
+        {
+            // Standard missing track discovery - auto download is assumed here for automation flows
+            _eventBus.Publish(new Events.AutoDownloadTrackEvent(track.TrackUniqueHash, bestMatch));
         }
     }
 }

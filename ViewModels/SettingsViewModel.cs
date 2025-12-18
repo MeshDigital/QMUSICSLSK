@@ -58,6 +58,31 @@ public class SettingsViewModel : INotifyPropertyChanged
         set { _config.CheckForDuplicates = value; OnPropertyChanged(); }
     }
 
+    // Phase 8: Upgrade Scout
+    public bool UpgradeScoutEnabled
+    {
+        get => _config.UpgradeScoutEnabled;
+        set { _config.UpgradeScoutEnabled = value; OnPropertyChanged(); }
+    }
+
+    public int UpgradeMinBitrateThreshold
+    {
+        get => _config.UpgradeMinBitrateThreshold;
+        set { _config.UpgradeMinBitrateThreshold = value; OnPropertyChanged(); }
+    }
+
+    public int UpgradeMinGainKbps
+    {
+        get => _config.UpgradeMinGainKbps;
+        set { _config.UpgradeMinGainKbps = value; OnPropertyChanged(); }
+    }
+
+    public bool UpgradeAutoQueueEnabled
+    {
+        get => _config.UpgradeAutoQueueEnabled;
+        set { _config.UpgradeAutoQueueEnabled = value; OnPropertyChanged(); }
+    }
+
     public int MinBitrate
     {
         get => _config.PreferredMinBitrate;
@@ -103,11 +128,108 @@ public class SettingsViewModel : INotifyPropertyChanged
             if (_config.RankingPreset != value)
             {
                 _config.RankingPreset = value;
+                
+                // Sync weights when preset changes
+                if (value == "Balanced") CustomWeights = ScoringWeights.Balanced;
+                else if (value == "Quality First") CustomWeights = ScoringWeights.QualityFirst;
+                else if (value == "DJ Mode") CustomWeights = ScoringWeights.DjMode;
+                
                 ApplyRankingStrategy(value);
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(RankingModeDescription));
             }
         }
+    }
+    
+    public ScoringWeights CustomWeights
+    {
+        get => _config.CustomWeights ?? ScoringWeights.Balanced;
+        set
+        {
+            _config.CustomWeights = value;
+            ResultSorter.SetWeights(value);
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(AvailabilityWeight));
+            OnPropertyChanged(nameof(QualityWeight));
+            OnPropertyChanged(nameof(MusicalWeight));
+            OnPropertyChanged(nameof(MetadataWeight));
+            OnPropertyChanged(nameof(StringWeight));
+            OnPropertyChanged(nameof(ConditionsWeight));
+            UpdateLivePreview();
+        }
+    }
+
+    public double AvailabilityWeight
+    {
+        get => CustomWeights.AvailabilityWeight;
+        set { CustomWeights.AvailabilityWeight = value; ResultSorter.SetWeights(CustomWeights); UpdateLivePreview(); OnPropertyChanged(); }
+    }
+
+    public double QualityWeight
+    {
+        get => CustomWeights.QualityWeight;
+        set { CustomWeights.QualityWeight = value; ResultSorter.SetWeights(CustomWeights); UpdateLivePreview(); OnPropertyChanged(); }
+    }
+
+    public double MusicalWeight
+    {
+        get => CustomWeights.MusicalWeight;
+        set { CustomWeights.MusicalWeight = value; ResultSorter.SetWeights(CustomWeights); UpdateLivePreview(); OnPropertyChanged(); }
+    }
+
+    public double MetadataWeight
+    {
+        get => CustomWeights.MetadataWeight;
+        set { CustomWeights.MetadataWeight = value; ResultSorter.SetWeights(CustomWeights); UpdateLivePreview(); OnPropertyChanged(); }
+    }
+
+    public double StringWeight
+    {
+        get => CustomWeights.StringWeight;
+        set { CustomWeights.StringWeight = value; ResultSorter.SetWeights(CustomWeights); UpdateLivePreview(); OnPropertyChanged(); }
+    }
+
+    public double ConditionsWeight
+    {
+        get => CustomWeights.ConditionsWeight;
+        set { CustomWeights.ConditionsWeight = value; ResultSorter.SetWeights(CustomWeights); UpdateLivePreview(); OnPropertyChanged(); }
+    }
+
+    private List<SLSKDONET.Models.Track> _livePreviewTracks = new();
+    public List<SLSKDONET.Models.Track> LivePreviewTracks
+    {
+        get => _livePreviewTracks;
+        set => SetProperty(ref _livePreviewTracks, value);
+    }
+
+    private void UpdateLivePreview()
+    {
+        if (_livePreviewTracks == null || _livePreviewTracks.Count == 0)
+        {
+            InitializeLivePreview();
+            return;
+        }
+
+        var searchTrack = new SLSKDONET.Models.Track 
+        { 
+            Artist = "Strobe", Title = "Strobe", 
+            Length = 600, // 10 minutes
+            BPM = 128 
+        };
+        
+        LivePreviewTracks = ResultSorter.OrderResults(_livePreviewTracks, searchTrack);
+    }
+
+    private void InitializeLivePreview()
+    {
+        _livePreviewTracks = new List<SLSKDONET.Models.Track>
+        {
+            new() { Title = "Strobe (Club Mix)", Artist = "deadmau5", Bitrate = 320, Length = 600, Username = "AudiophileUser", BPM = 128 },
+            new() { Title = "Strobe (Radio Edit)", Artist = "deadmau5", Bitrate = 128, Length = 210, Username = "FastDownloader", BPM = 128 },
+            new() { Title = "Strobe (Extended Mix)", Artist = "deadmau5", Bitrate = 1011, Length = 620, Username = "LoverOfFLAC", Format = "FLAC", BPM = 128 },
+            new() { Title = "Strobe (Remix)", Artist = "OtherArtist", Bitrate = 256, Length = 450, Username = "RemixGuy", BPM = 130 }
+        };
+        UpdateLivePreview();
     }
     
     public List<string> RankingModes { get; } = new()
@@ -221,6 +343,7 @@ public class SettingsViewModel : INotifyPropertyChanged
 
         // check initial connection status
         _ = CheckSpotifyConnectionStatusAsync();
+        UpdateLivePreview();
     }
 
     private async Task CheckSpotifyConnectionStatusAsync()

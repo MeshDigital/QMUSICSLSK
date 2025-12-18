@@ -15,7 +15,7 @@ namespace SLSKDONET.ViewModels;
 /// ViewModel representing a track in the download queue.
 /// Manages state, progress, and updates for the UI.
 /// </summary>
-public class PlaylistTrackViewModel : INotifyPropertyChanged
+public class PlaylistTrackViewModel : INotifyPropertyChanged, Library.ILibraryNode
 {
     private PlaylistTrackState _state;
     private double _progress;
@@ -85,6 +85,13 @@ public class PlaylistTrackViewModel : INotifyPropertyChanged
         }
     }
     
+    public string? Duration => DurationDisplay;
+    public string? Bitrate => Model.Bitrate.HasValue ? Model.Bitrate.Value.ToString() : string.Empty;
+    public string? Status => State.ToString();
+    public int Popularity => Model.Popularity ?? 0;
+    public string? Genres => GenresDisplay;
+    // AlbumArtPath and Progress are already present in this class.
+
     // Reference to the underlying model if needed for persistence later
     public PlaylistTrack Model { get; private set; }
 
@@ -302,7 +309,6 @@ public class PlaylistTrackViewModel : INotifyPropertyChanged
     public string? SpotifyAlbumId => Model.SpotifyAlbumId;
 
     // Phase 1: UI Metadata
-    public int? Popularity => Model.Popularity;
     
     public string GenresDisplay
     {

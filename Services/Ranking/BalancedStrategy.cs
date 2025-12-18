@@ -16,15 +16,15 @@ namespace SLSKDONET.Services.Ranking
             double musicalIntelligenceScore,
             double metadataScore,
             double stringMatchingScore,
-            double tiebreakerScore)
+            double tiebreakerScore,
+            ScoringWeights weights)
         {
-            // No multipliers - use raw scores from ScoringConstants
-            return availabilityScore
-                 + conditionsScore
-                 + qualityScore
-                 + musicalIntelligenceScore
-                 + metadataScore
-                 + stringMatchingScore
+            return (availabilityScore * weights.AvailabilityWeight)
+                 + (conditionsScore * weights.ConditionsWeight)
+                 + (qualityScore * weights.QualityWeight)
+                 + (musicalIntelligenceScore * weights.MusicalWeight)
+                 + (metadataScore * weights.MetadataWeight)
+                 + (stringMatchingScore * weights.StringWeight)
                  + tiebreakerScore;
         }
     }

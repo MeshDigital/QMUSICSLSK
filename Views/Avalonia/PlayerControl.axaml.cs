@@ -29,8 +29,10 @@ public partial class PlayerControl : UserControl
 
     private void OnDragOver(object? sender, DragEventArgs e)
     {
-        // Accept tracks from library or queue
-        if (e.Data.Contains(DragContext.LibraryTrackFormat) || e.Data.Contains(DragContext.QueueTrackFormat))
+        // Accept tracks or albums from library or queue
+        if (e.Data.Contains(DragContext.LibraryTrackFormat) || 
+            e.Data.Contains(DragContext.QueueTrackFormat) ||
+            e.Data.Contains("ORBIT_LibraryAlbum"))
         {
             e.DragEffects = DragDropEffects.Copy;
             
@@ -44,8 +46,15 @@ public partial class PlayerControl : UserControl
 
     private void OnDrop(object? sender, DragEventArgs e)
     {
-        // Get the dragged track GlobalId
+        // Identify the drop zone
+        var dropTarget = e.Source as Control;
+        bool isPlayNowZone = dropTarget != null && (dropTarget.Name == "PlayNowZone" || dropTarget.FindAncestorOfType<Control>(x => x.Name == "PlayNowZone") != null);
+        bool isQueueZone = dropTarget != null && (dropTarget.Name == "QueueZone" || dropTarget.FindAncestorOfType<Control>(x => x.Name == "QueueZone") != null);
+
+        // Get the dragged track or album ID
         string? trackGlobalId = null;
+        string? albumIdStr = null;
+
         if (e.Data.Contains(DragContext.LibraryTrackFormat))
         {
             trackGlobalId = e.Data.Get(DragContext.LibraryTrackFormat) as string;
@@ -54,33 +63,68 @@ public partial class PlayerControl : UserControl
         {
             trackGlobalId = e.Data.Get(DragContext.QueueTrackFormat) as string;
         }
+        else if (e.Data.Contains("ORBIT_LibraryAlbum"))
+        {
+            albumIdStr = e.Data.Get("ORBIT_LibraryAlbum") as string;
+        }
 
-        if (string.IsNullOrEmpty(trackGlobalId))
+        if (string.IsNullOrEmpty(trackGlobalId) && string.IsNullOrEmpty(albumIdStr))
             return;
 
         if (DataContext is not PlayerViewModel playerViewModel)
             return;
 
+        var mainWindow = this.VisualRoot as MainWindow;
+        var mainViewModel = mainWindow?.DataContext as MainViewModel;
+
+        // HANDLE ALBUM DROP
+        if (!string.IsNullOrEmpty(albumIdStr) && Guid.TryParse(albumIdStr, out var albumId))
+        {
+            // We need the tracks for this album.
+            // Try to get them from the LibraryViewModel (SelectedProject or global)
+            // or just trigger PlayAlbum/DownloadAlbum logic.
+            if (mainViewModel?.LibraryViewModel != null)
+            {
+                var project = await mainViewModel.LibraryViewModel.Projects.AllProjects.FirstOrDefault(p => p.Id == albumId);
+                if (project != null)
+                {
+                    if (isPlayNowZone)
+                        await mainViewModel.LibraryViewModel.PlayAlbumCommand.ExecuteAsync(project);
+                    else if (isQueueZone)
+                        await mainViewModel.LibraryViewModel.DownloadAlbumCommand.ExecuteAsync(project); // Actually need a "Queue Album" command
+                }
+            }
+            return;
+        }
+
+        // HANDLE TRACK DROP
         // Find the track - first check queue, then try to find in library via MainViewModel
         var track = playerViewModel.Queue.FirstOrDefault(t => t.GlobalId == trackGlobalId);
         
-        if (track == null)
+        if (track == null && mainViewModel != null)
         {
             // Try to find in download manager's global tracks
-            var mainWindow = this.VisualRoot as MainWindow;
-            var mainViewModel = mainWindow?.DataContext as MainViewModel;
-            track = mainViewModel?.AllGlobalTracks
+            track = mainViewModel.AllGlobalTracks
                 .FirstOrDefault(t => t.GlobalId == trackGlobalId);
         }
 
-        if (track != null && !string.IsNullOrEmpty(track.Model?.ResolvedFilePath))
+        if (track != null)
         {
-            // Play immediately
-            playerViewModel.PlayTrack(
-                track.Model.ResolvedFilePath,
-                track.Title ?? "Unknown",
-                track.Artist ?? "Unknown Artist"
-            );
+            if (isPlayNowZone)
+            {
+                if (!string.IsNullOrEmpty(track.Model?.ResolvedFilePath))
+                {
+                    playerViewModel.PlayTrack(
+                        track.Model.ResolvedFilePath,
+                        track.Title ?? "Unknown",
+                        track.Artist ?? "Unknown Artist"
+                    );
+                }
+            }
+            else if (isQueueZone)
+            {
+                playerViewModel.AddToQueue(track);
+            }
         }
     }
 }

@@ -2,20 +2,28 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     
     <Styles.Resources>
-        <!-- Color Resources -->
-        <SolidColorBrush x:Key="PrimaryBackgroundBrush">#1E1E1E</SolidColorBrush>
-        <SolidColorBrush x:Key="SecondaryBackgroundBrush">#252526</SolidColorBrush>
-        <SolidColorBrush x:Key="TertiaryBackgroundBrush">#2D2D2D</SolidColorBrush>
-        <SolidColorBrush x:Key="AccentBrush">#0078D4</SolidColorBrush>
-        <SolidColorBrush x:Key="BorderBrush">#3E3E3E</SolidColorBrush>
-        <SolidColorBrush x:Key="TextPrimaryBrush">#FFFFFF</SolidColorBrush>
-        <SolidColorBrush x:Key="TextSecondaryBrush">#A0A0A0</SolidColorBrush>
+        <ResourceDictionary>
+            <!-- Design Tokens -->
+            <SolidColorBrush x:Key="AccentBrush" Color="#0078D4"/>
+            <SolidColorBrush x:Key="AccentSecondaryBrush" Color="#00A3FF"/>
+            <SolidColorBrush x:Key="PrimaryBackgroundBrush" Color="#1E1E1E"/>
+            <SolidColorBrush x:Key="SecondaryBackgroundBrush" Color="#252526"/>
+            <SolidColorBrush x:Key="TertiaryBackgroundBrush" Color="#2D2D2D"/>
+            <SolidColorBrush x:Key="TextPrimaryBrush" Color="#FFFFFF"/>
+            <SolidColorBrush x:Key="TextSecondaryBrush" Color="#A0A0A0"/>
+            <SolidColorBrush x:Key="BorderBrush" Color="#3E3E3E"/>
+            
+            <FontFamily x:Key="InterFont">avares://Avalonia.Fonts.Inter/Assets#Inter</FontFamily>
+            <FontFamily x:Key="CodeFont">JetBrains Mono, DejaVu Sans Mono, Menlo, Consolas, monospace</FontFamily>
+        </ResourceDictionary>
     </Styles.Resources>
     
     <!-- Window Style -->
     <Style Selector="Window">
         <Setter Property="Background" Value="{StaticResource PrimaryBackgroundBrush}"/>
         <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+        <Setter Property="FontFamily" Value="{StaticResource InterFont}"/>
+        <Setter Property="FontSize" Value="14"/>
     </Style>
     
     <!-- Primary Button Style (Blue Gradient) -->
@@ -68,6 +76,17 @@
     
     <Style Selector="Button.nav:pressed">
         <Setter Property="Background" Value="{StaticResource TertiaryBackgroundBrush}"/>
+    </Style>
+
+    <Style Selector="Button.nav.selected">
+        <Setter Property="Background" Value="{StaticResource SecondaryBackgroundBrush}"/>
+        <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+    </Style>
+
+    <Style Selector="Button.nav.selected Border#Glow">
+        <Setter Property="IsVisible" Value="True"/>
+        <Setter Property="BoxShadow" Value="0 0 15 0 #400078D4"/>
     </Style>
     
     <!-- Default Button Style -->
@@ -177,6 +196,81 @@
     
     <Style Selector="Button.icon-button:pressed">
         <Setter Property="Background" Value="#3E3E3E"/>
+    </Style>
+
+    <!-- ScrollBar Polish -->
+    <Style Selector="ScrollBar">
+        <Setter Property="AllowExternalArrowKeys" Value="True"/>
+    </Style>
+
+    <Style Selector="ScrollBar:vertical">
+        <Setter Property="Width" Value="8"/>
+        <Setter Property="MinWidth" Value="8"/>
+    </Style>
+
+    <Style Selector="ScrollBar:horizontal">
+        <Setter Property="Height" Value="8"/>
+        <Setter Property="MinHeight" Value="8"/>
+    </Style>
+
+    <Style Selector="ScrollBar /template/ Thumb">
+        <Setter Property="Background" Value="#40FFFFFF"/>
+        <Setter Property="CornerRadius" Value="4"/>
+        <Setter Property="MinHeight" Value="20"/>
+        <Setter Property="MinWidth" Value="20"/>
+    </Style>
+
+    <Style Selector="ScrollBar /template/ Thumb:pointerover">
+        <Setter Property="Background" Value="#60FFFFFF"/>
+    </Style>
+
+    <Style Selector="ScrollBar /template/ Thumb:pressed">
+        <Setter Property="Background" Value="{StaticResource AccentBrush}"/>
+    </Style>
+
+    <Style Selector="ScrollBar /template/ RepeatButton">
+        <Setter Property="IsVisible" Value="False"/>
+    </Style>
+
+    <!-- Skeleton Shimmer Effect -->
+    <Style Selector="Border.skeleton">
+        <Setter Property="Background">
+            <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,0%">
+                <GradientStop Offset="0" Color="#1AFFFFFF"/>
+                <GradientStop Offset="0.5" Color="#2AFFFFFF"/>
+                <GradientStop Offset="1" Color="#1AFFFFFF"/>
+            </LinearGradientBrush>
+        </Setter>
+        <Setter Property="CornerRadius" Value="4"/>
+        <Style.Animations>
+            <Animation Duration="0:0:1.5" IterationCount="Infinite">
+                <KeyFrame KeyTime="0:0:0">
+                    <Setter Property="Background">
+                        <LinearGradientBrush StartPoint="-100%,0%" EndPoint="0%,0%">
+                            <GradientStop Offset="0" Color="#1AFFFFFF"/>
+                            <GradientStop Offset="0.5" Color="#2AFFFFFF"/>
+                            <GradientStop Offset="1" Color="#1AFFFFFF"/>
+                        </LinearGradientBrush>
+                    </Setter>
+                </KeyFrame>
+                <KeyFrame KeyTime="0:0:1.5">
+                    <Setter Property="Background">
+                        <LinearGradientBrush StartPoint="100%,0%" EndPoint="200%,0%">
+                            <GradientStop Offset="0" Color="#1AFFFFFF"/>
+                            <GradientStop Offset="0.5" Color="#2AFFFFFF"/>
+                            <GradientStop Offset="1" Color="#1AFFFFFF"/>
+                        </LinearGradientBrush>
+                    </Setter>
+                </KeyFrame>
+            </Animation>
+        </Style.Animations>
+    </Style>
+
+    <!-- Ghost Row for Loading States -->
+    <Style Selector="StackPanel.ghost-row">
+        <Setter Property="Spacing" Value="12"/>
+        <Setter Property="Orientation" Value="Horizontal"/>
+        <Setter Property="Padding" Value="12,8"/>
     </Style>
     
 </Styles>

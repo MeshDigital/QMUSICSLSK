@@ -43,6 +43,13 @@ public class TrackEntity
     public string? AudioFingerprint { get; set; } // Chromaprint/SoundFingerprinting hash
     public int? BitrateScore { get; set; } // Quality score for replacement
     public double? AnalysisOffset { get; set; } // Silence offset for time alignment
+
+    // Phase 8: Sonic Integrity & Spectral Analysis
+    public string? SpectralHash { get; set; } // Headless frequency histogram hash
+    public double? QualityConfidence { get; set; } // 0.0 - 1.0 confidence score
+    public int? FrequencyCutoff { get; set; } // Detected frequency limit in Hz
+    public bool? IsTrustworthy { get; set; } // False if flagged as upscaled/fake
+    public string? QualityDetails { get; set; } // Analysis details
 }
 
 /// <summary>
@@ -155,6 +162,13 @@ public class PlaylistTrackEntity
     public string? AudioFingerprint { get; set; } // Chromaprint/SoundFingerprinting hash
     public int? BitrateScore { get; set; } // Quality score for replacement
     public double? AnalysisOffset { get; set; } // Silence offset for time alignment
+
+    // Phase 8: Sonic Integrity & Spectral Analysis
+    public string? SpectralHash { get; set; }
+    public double? QualityConfidence { get; set; }
+    public int? FrequencyCutoff { get; set; }
+    public bool? IsTrustworthy { get; set; }
+    public string? QualityDetails { get; set; }
     
     public PlaylistJobEntity? Job { get; set; }
 }

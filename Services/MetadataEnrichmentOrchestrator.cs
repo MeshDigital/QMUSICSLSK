@@ -24,6 +24,7 @@ public class MetadataEnrichmentOrchestrator : IDisposable
     private readonly ITaggerService _taggerService;
     private readonly DatabaseService _databaseService;
     private readonly SpotifyAuthService _spotifyAuthService; // Injected for strict auth check
+    private readonly SonicIntegrityService _sonicIntegrityService;
     private readonly IEventBus _eventBus; // Injected
 
     // Queue for tracks needing enrichment
@@ -38,6 +39,7 @@ public class MetadataEnrichmentOrchestrator : IDisposable
         ITaggerService taggerService,
         DatabaseService databaseService,
         SpotifyAuthService spotifyAuthService,
+        SonicIntegrityService sonicIntegrityService,
         IEventBus eventBus)
     {
         _logger = logger;
@@ -45,6 +47,7 @@ public class MetadataEnrichmentOrchestrator : IDisposable
         _taggerService = taggerService;
         _databaseService = databaseService;
         _spotifyAuthService = spotifyAuthService;
+        _sonicIntegrityService = sonicIntegrityService;
         _eventBus = eventBus;
     }
 
@@ -53,6 +56,58 @@ public class MetadataEnrichmentOrchestrator : IDisposable
         if (_processingTask != null) return;
         _processingTask = ProcessQueueLoop(_cts.Token);
         _logger.LogInformation("Metadata Enrichment Orchestrator started.");
+        
+        // Phase 7: Ghost Download Recovery
+        _ = RecoverPendingOrchestrationsAsync();
+    }
+
+    private async Task RecoverPendingOrchestrationsAsync()
+    {
+        try
+        {
+            var pendingIds = await _databaseService.GetPendingOrchestrationsAsync();
+            if (pendingIds.Any())
+            {
+                _logger.LogInformation("Recovering {Count} pending orchestrations...", pendingIds.Count);
+                foreach (var id in pendingIds)
+                {
+                    // Find the track in DB
+                    var trackEntity = await _databaseService.FindTrackAsync(id);
+                    if (trackEntity != null && !string.IsNullOrEmpty(trackEntity.Filename))
+                    {
+                        var track = MapEntityToModel(trackEntity);
+                        QueueForEnrichment(track);
+                    }
+                    else
+                    {
+                        // Stale orchestration, clean up
+                        await _databaseService.RemovePendingOrchestrationAsync(id);
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to recover pending orchestrations");
+        }
+    }
+
+    private PlaylistTrack MapEntityToModel(Data.TrackEntity e)
+    {
+        return new PlaylistTrack
+        {
+            TrackUniqueHash = e.GlobalId,
+            Artist = e.Artist,
+            Title = e.Title,
+            ResolvedFilePath = e.Filename,
+            SpotifyTrackId = e.SpotifyTrackId,
+            // Phase 8: Sonic Integrity
+            SpectralHash = e.SpectralHash,
+            QualityConfidence = e.QualityConfidence,
+            FrequencyCutoff = e.FrequencyCutoff,
+            IsTrustworthy = e.IsTrustworthy ?? true,
+            QualityDetails = e.QualityDetails,
+        };
     }
 
     /// <summary>
@@ -71,6 +126,9 @@ public class MetadataEnrichmentOrchestrator : IDisposable
     public async Task FinalizeDownloadedTrackAsync(PlaylistTrack track)
     {
         if (string.IsNullOrEmpty(track.ResolvedFilePath)) return;
+
+        // Phase 7: Mark as pending orchestration for reliability
+        await _databaseService.AddPendingOrchestrationAsync(track.TrackUniqueHash);
 
         try
         {
@@ -151,6 +209,24 @@ public class MetadataEnrichmentOrchestrator : IDisposable
             // 2. Attempt Enrichment
             bool success = await _metadataService.EnrichTrackAsync(track);
 
+            // Phase 8: Sonic Integrity Analysis
+            if (!string.IsNullOrEmpty(track.ResolvedFilePath))
+            {
+                try
+                {
+                    var sonicResult = await _sonicIntegrityService.AnalyzeTrackAsync(track.ResolvedFilePath);
+                    track.SpectralHash = sonicResult.SpectralHash;
+                    track.QualityConfidence = sonicResult.QualityConfidence;
+                    track.FrequencyCutoff = sonicResult.FrequencyCutoff;
+                    track.IsTrustworthy = sonicResult.IsTrustworthy;
+                    track.QualityDetails = sonicResult.Details;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning("Sonic analysis failed during enrichment for {Artist} - {Title}: {Msg}", track.Artist, track.Title, ex.Message);
+                }
+            }
+
             // 3. Validation: Verify we actually got data
             if (success)
             {
@@ -180,14 +256,26 @@ public class MetadataEnrichmentOrchestrator : IDisposable
                    AnalysisOffset = track.AnalysisOffset,
                    BitrateScore = track.BitrateScore,
                    AudioFingerprint = track.AudioFingerprint,
-                   CuePointsJson = track.CuePointsJson
-                   // Other fields as necessary
+                   CuePointsJson = track.CuePointsJson,
+                   
+                   // Phase 8: Sonic Integrity
+                   SpectralHash = track.SpectralHash,
+                   QualityConfidence = track.QualityConfidence,
+                   FrequencyCutoff = track.FrequencyCutoff,
+                   IsTrustworthy = track.IsTrustworthy
                 });
+
+                // Phase 7: Orchestration Complete
+                await _databaseService.RemovePendingOrchestrationAsync(track.TrackUniqueHash);
             }
             else
             {
                  // Enrichment failed or no match found
                  _logger.LogDebug("Metadata enrichment yielded no results for {Artist} - {Title}", track.Artist, track.Title);
+                 
+                 // If it failed to enrich but we have a file, it's technically done orchestrating 
+                 // (we can't enrich what doesn't exist on Spotify)
+                 await _databaseService.RemovePendingOrchestrationAsync(track.TrackUniqueHash);
             }
         }
         catch (Exception ex)

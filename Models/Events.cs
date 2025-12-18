@@ -32,3 +32,21 @@ public record TrackPlaybackPausedEvent();
 public record TrackPlaybackResumedEvent();
 public record TrackPlaybackStoppedEvent();
 public record PlaybackProgressEvent(TimeSpan Position, TimeSpan Duration);
+
+// Navigation & Global UI Events
+public record NavigationEvent(PageType PageType);
+public record PlayTrackRequestEvent(PlaylistTrackViewModel Track);
+public record DownloadAlbumRequestEvent(object Album); // object to handle AlbumNode or PlaylistJob
+
+// Explicit Track Events (missing in record list but used in code)
+public record TrackAddedEvent(PlaylistTrack TrackModel);
+public record TrackRemovedEvent(string TrackGlobalId);
+public record TrackMovedEvent(string TrackGlobalId, Guid OldProjectId, Guid NewProjectId);
+public record TrackStateChangedEvent(string TrackGlobalId, PlaylistTrackState State, string? Error);
+public record TrackProgressChangedEvent(string TrackGlobalId, double Progress);
+public record TrackMetadataUpdatedEvent(string TrackGlobalId);
+
+// Phase 8: Automation & Upgrade Events
+public record AutoDownloadTrackEvent(string TrackGlobalId, Track BestMatch);
+public record AutoDownloadUpgradeEvent(string TrackGlobalId, Track BestMatch);
+public record UpgradeAvailableEvent(string TrackGlobalId, Track BestMatch);

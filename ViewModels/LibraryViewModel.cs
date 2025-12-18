@@ -20,13 +20,22 @@ public class LibraryViewModel : INotifyPropertyChanged
     private readonly INavigationService _navigationService;
     private readonly ImportHistoryViewModel _importHistoryViewModel;
     private readonly ILibraryService _libraryService; // Session 1: Critical bug fixes
-    private Views.MainViewModel? _mainViewModel;
+    private readonly IEventBus _eventBus;
+    private bool _isLoading;
+
+    public bool IsLoading
+    {
+        get => _isLoading;
+        set { _isLoading = value; OnPropertyChanged(); }
+    }
 
     // Child ViewModels (Phase 0: ViewModel Refactoring)
     public Library.ProjectListViewModel Projects { get; }
     public Library.TrackListViewModel Tracks { get; }
     public Library.TrackOperationsViewModel Operations { get; }
     public Library.SmartPlaylistViewModel SmartPlaylists { get; }
+    public TrackInspectorViewModel TrackInspector { get; }
+    public UpgradeScoutViewModel UpgradeScout { get; }
 
     // Expose commonly used child properties for backward compatibility
     public PlaylistJob? SelectedProject 
@@ -72,15 +81,32 @@ public class LibraryViewModel : INotifyPropertyChanged
         }
     }
 
+    private bool _isUpgradeScoutVisible;
+    public bool IsUpgradeScoutVisible
+    {
+        get => _isUpgradeScoutVisible;
+        set
+        {
+            if (_isUpgradeScoutVisible != value)
+            {
+                _isUpgradeScoutVisible = value;
+                OnPropertyChanged();
+            }
+        }
+    }
+
     // Commands that delegate to child ViewModels or handle coordination
     public System.Windows.Input.ICommand ViewHistoryCommand { get; }
     public System.Windows.Input.ICommand ToggleEditModeCommand { get; }
     public System.Windows.Input.ICommand ToggleActiveDownloadsCommand { get; }
+    public System.Windows.Input.ICommand ToggleUpgradeScoutCommand { get; }
     
     // Session 1: Critical bug fixes (3 commands to unblock user)
     public System.Windows.Input.ICommand PlayTrackCommand { get; }
     public System.Windows.Input.ICommand RefreshLibraryCommand { get; }
     public System.Windows.Input.ICommand DeleteProjectCommand { get; }
+    public System.Windows.Input.ICommand PlayAlbumCommand { get; }
+    public System.Windows.Input.ICommand DownloadAlbumCommand { get; }
 
     public LibraryViewModel(
         ILogger<LibraryViewModel> logger,
@@ -90,12 +116,16 @@ public class LibraryViewModel : INotifyPropertyChanged
         Library.SmartPlaylistViewModel smartPlaylists,
         INavigationService navigationService,
         ImportHistoryViewModel importHistoryViewModel,
-        ILibraryService libraryService) // Session 1: Inject service
+        ILibraryService libraryService,
+        IEventBus eventBus,
+        PlayerViewModel playerViewModel,
+        UpgradeScoutViewModel upgradeScout) // Phase 8: Inject UpgradeScout
     {
         _logger = logger;
         _navigationService = navigationService;
         _importHistoryViewModel = importHistoryViewModel;
         _libraryService = libraryService;
+        _eventBus = eventBus;
         
         // Assign child ViewModels
         Projects = projects;
@@ -107,28 +137,49 @@ public class LibraryViewModel : INotifyPropertyChanged
         ViewHistoryCommand = new AsyncRelayCommand(ExecuteViewHistoryAsync);
         ToggleEditModeCommand = new RelayCommand<object>(_ => IsEditMode = !IsEditMode);
         ToggleActiveDownloadsCommand = new RelayCommand<object>(_ => IsActiveDownloadsVisible = !IsActiveDownloadsVisible);
+        ToggleUpgradeScoutCommand = new RelayCommand<object>(_ => IsUpgradeScoutVisible = !IsUpgradeScoutVisible);
         
         // Session 1: Critical bug fixes
         PlayTrackCommand = new AsyncRelayCommand<PlaylistTrackViewModel>(ExecutePlayTrackAsync);
         RefreshLibraryCommand = new AsyncRelayCommand(ExecuteRefreshLibraryAsync);
         DeleteProjectCommand = new AsyncRelayCommand<PlaylistJob>(ExecuteDeleteProjectAsync);
+        PlayAlbumCommand = new AsyncRelayCommand<PlaylistJob>(ExecutePlayAlbumAsync);
+        DownloadAlbumCommand = new AsyncRelayCommand<PlaylistJob>(ExecuteDownloadAlbumAsync);
+        
+        PlayerViewModel = playerViewModel;
+        UpgradeScout = upgradeScout;
         
         // Wire up events between child ViewModels
         Projects.ProjectSelected += OnProjectSelected;
         SmartPlaylists.SmartPlaylistSelected += OnSmartPlaylistSelected;
         
         _logger.LogInformation("LibraryViewModel initialized with child ViewModels");
+
+        TrackInspector = new TrackInspectorViewModel();
+
+        // Subscribe to selection changes in Tracks.Hierarchical.Source.Selection
+        Tracks.Hierarchical.Source.Selection.SelectionChanged += OnTrackSelectionChanged;
     }
 
-    /// <summary>
-    /// Set MainViewModel after construction to avoid circular dependency.
-    /// </summary>
-    public void SetMainViewModel(Views.MainViewModel mainViewModel)
+    private void OnTrackSelectionChanged(object? sender, Avalonia.Controls.Selection.TreeDataGridSelectionEventArgs<object> e)
     {
-        _mainViewModel = mainViewModel;
-        Tracks.SetMainViewModel(mainViewModel);
-        Operations.SetMainViewModel(mainViewModel);
-        SmartPlaylists.SetMainViewModel(mainViewModel);
+        var selectedItem = Tracks.Hierarchical.Source.Selection.SelectedItem;
+        if (selectedItem is PlaylistTrackViewModel trackVm)
+        {
+            TrackInspector.Track = trackVm.Model;
+            IsInspectorVisible = true;
+        }
+        else
+        {
+            IsInspectorVisible = false;
+        }
+    }
+
+    private bool _isInspectorVisible;
+    public bool IsInspectorVisible
+    {
+        get => _isInspectorVisible;
+        set => SetProperty(ref _isInspectorVisible, value);
     }
 
     /// <summary>
@@ -149,16 +200,22 @@ public class LibraryViewModel : INotifyPropertyChanged
         if (project == null) return;
 
         _logger.LogInformation("Project selected: {Title}", project.SourceTitle);
-        
-        // Deselect smart playlist without triggering its "Load" logic if possible.
-        // But since we can't easily suppress events without a flag, we just check properties.
-        if (SmartPlaylists.SelectedSmartPlaylist != null)
+        IsLoading = true;
+        try
         {
-            SmartPlaylists.SelectedSmartPlaylist = null;
+            // Deselect smart playlist
+            if (SmartPlaylists.SelectedSmartPlaylist != null)
+            {
+                SmartPlaylists.SelectedSmartPlaylist = null;
+            }
+            
+            // Load tracks for selected project
+            await Tracks.LoadProjectTracksAsync(project);
         }
-        
-        // Load tracks for selected project
-        await Tracks.LoadProjectTracksAsync(project);
+        finally
+        {
+            IsLoading = false;
+        }
     }
 
     /// <summary>
@@ -170,16 +227,23 @@ public class LibraryViewModel : INotifyPropertyChanged
         if (playlist == null) return;
 
         _logger.LogInformation("Smart playlist selected: {Name}", playlist.Name);
-        
-        // Deselect project
-        if (Projects.SelectedProject != null)
+        IsLoading = true;
+        try
         {
-            Projects.SelectedProject = null;
+            // Deselect project
+            if (Projects.SelectedProject != null)
+            {
+                Projects.SelectedProject = null;
+            }
+            
+            // Refresh smart playlist tracks
+            var tracks = SmartPlaylists.RefreshSmartPlaylist(playlist);
+            Tracks.CurrentProjectTracks = tracks;
         }
-        
-        // Refresh smart playlist tracks
-        var tracks = SmartPlaylists.RefreshSmartPlaylist(playlist);
-        Tracks.CurrentProjectTracks = tracks;
+        finally
+        {
+            IsLoading = false;
+        }
     }
 
     /// <summary>
@@ -234,14 +298,8 @@ public class LibraryViewModel : INotifyPropertyChanged
         {
             _logger.LogInformation("Playing track: {Title} from {Path}", track.Title, track.Model.ResolvedFilePath);
             
-            if (_mainViewModel?.PlayerViewModel != null)
-            {
-                _mainViewModel.PlayerViewModel.PlayTrack(track.Model.ResolvedFilePath, track.Title ?? "Unknown", track.Artist ?? "Unknown");
-            }
-            else
-            {
-                _logger.LogError("PlayerViewModel not available");
-            }
+            // Phase 6B: Decoupled playback request via EventBus
+            _eventBus.Publish(new PlayTrackRequestEvent(track));
         }
         catch (Exception ex)
         {
@@ -308,6 +366,80 @@ public class LibraryViewModel : INotifyPropertyChanged
         {
             _logger.LogError(ex, "Failed to delete project: {Title}", project.SourceTitle);
         }
+    }
+
+    public PlayerViewModel PlayerViewModel { get; }
+
+    private async Task ExecutePlayAlbumAsync(PlaylistJob? job)
+    {
+        if (job == null) return;
+        _logger.LogInformation("Playing album: {Title}", job.SourceTitle);
+        
+        // Find all tracks for this job and play the first one (or add all to queue)
+        var tracks = await _libraryService.LoadPlaylistTracksAsync(job.Id);
+        var firstValid = tracks.FirstOrDefault(t => !string.IsNullOrEmpty(t.ResolvedFilePath));
+        
+        if (firstValid != null)
+        {
+            // For now, just play the first track. 
+            // TODO: Add all to queue properly via EventBus
+            var vm = new PlaylistTrackViewModel(firstValid, _eventBus);
+            _eventBus.Publish(new PlayTrackRequestEvent(vm));
+        }
+    }
+
+    private async Task ExecuteDownloadAlbumAsync(PlaylistJob? job)
+    {
+        if (job == null) return;
+        _logger.LogInformation("Downloading album: {Title}", job.SourceTitle);
+        // Business logic for downloading album already exists in DownloadManager?
+        // Actually, we usually queue the whole project.
+        _eventBus.Publish(new DownloadAlbumRequestEvent(job));
+    }
+
+    /// <summary>
+    /// Phase 6D: Updates a track's project association (used for D&D).
+    /// </summary>
+    public async Task UpdateTrackProjectAsync(string trackGlobalId, Guid newProjectId)
+    {
+        try
+        {
+            var project = await _libraryService.FindPlaylistJobAsync(newProjectId);
+            if (project == null) return;
+
+            // Find track in current project tracks or global
+            var track = Tracks.CurrentProjectTracks.FirstOrDefault(t => t.GlobalId == trackGlobalId)
+                      ?? _mainViewModel?.AllGlobalTracks.FirstOrDefault(t => t.GlobalId == trackGlobalId);
+
+            if (track != null)
+            {
+                var oldProjectId = track.Model.PlaylistId;
+                if (oldProjectId == newProjectId) return;
+
+                _logger.LogInformation("Moving track {Title} from {Old} to {New}", track.Title, oldProjectId, newProjectId);
+                
+                // Update DB
+                track.Model.PlaylistId = newProjectId;
+                await _libraryService.UpdatePlaylistTrackAsync(track.Model);
+
+                // Publish event for local UI sync
+                _eventBus.Publish(new TrackMovedEvent(trackGlobalId, oldProjectId, newProjectId));
+                
+                if (_mainViewModel != null)
+                    _mainViewModel.StatusText = $"Moved '{track.Title}' to '{project.SourceTitle}'";
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to update track project association");
+            if (_mainViewModel != null)
+                _mainViewModel.StatusText = "Error: Failed to move track.";
+        }
+    }
+
+    public void AddToPlaylist(PlaylistJob targetPlaylist, PlaylistTrackViewModel sourceTrack)
+    {
+        _ = UpdateTrackProjectAsync(sourceTrack.GlobalId, targetPlaylist.Id);
     }
 
     protected void OnPropertyChanged([CallerMemberName] string? propertyName = null)

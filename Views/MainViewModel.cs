@@ -29,6 +29,7 @@ public class MainViewModel : INotifyPropertyChanged
     private readonly IEventBus _eventBus;
     private readonly DownloadManager _downloadManager;
     private readonly ISpotifyMetadataService _spotifyMetadata;
+    private readonly SpotifyAuthService _spotifyAuth;
 
     // Child ViewModels
     public PlayerViewModel PlayerViewModel { get; }
@@ -47,6 +48,13 @@ public class MainViewModel : INotifyPropertyChanged
         set => SetProperty(ref _currentPage, value);
     }
     
+    private PageType _currentPageType;
+    public PageType CurrentPageType
+    {
+        get => _currentPageType;
+        set => SetProperty(ref _currentPageType, value);
+    }
+    
     // ... (StatusText property omitted for brevity, keeping existing) ...
 
     // ... (UI State properties omitted for brevity, keeping existing) ...
@@ -63,9 +71,9 @@ public class MainViewModel : INotifyPropertyChanged
         SearchViewModel searchViewModel,
         ConnectionViewModel connectionViewModel,
         SettingsViewModel settingsViewModel,
-        IEventBus eventBus,
         DownloadManager downloadManager,
-        ISpotifyMetadataService spotifyMetadata)
+        ISpotifyMetadataService spotifyMetadata,
+        SpotifyAuthService spotifyAuth)
     {
         _logger = logger;
         _config = config;
@@ -78,6 +86,7 @@ public class MainViewModel : INotifyPropertyChanged
         _eventBus = eventBus;
         _downloadManager = downloadManager;
         _spotifyMetadata = spotifyMetadata;
+        _spotifyAuth = spotifyAuth;
 
         PlayerViewModel = playerViewModel;
         LibraryViewModel = libraryViewModel;
@@ -98,6 +107,11 @@ public class MainViewModel : INotifyPropertyChanged
         ZoomInCommand = new RelayCommand(ZoomIn);
         ZoomOutCommand = new RelayCommand(ZoomOut);
         ResetZoomCommand = new RelayCommand(ResetZoom);
+
+        // Spotify Hub Initialization
+        LoadSpotifyPlaylistsCommand = new AsyncRelayCommand(LoadSpotifyPlaylistsAsync);
+        ImportSpotifyPlaylistCommand = new AsyncRelayCommand<SimplePlaylist>(ImportSpotifyPlaylistAsync);
+        ImportLikedSongsCommand = new AsyncRelayCommand(ImportLikedSongsAsync);
         
         // Subscribe to EventBus events
         // Subscribe to EventBus events
@@ -132,6 +146,13 @@ public class MainViewModel : INotifyPropertyChanged
 
         _logger.LogInformation("MainViewModel initialized");
 
+        // Sync Spotify auth state
+        IsSpotifyAuthenticated = _spotifyAuth.IsAuthenticated;
+        _spotifyAuth.AuthenticationChanged += (s, e) => {
+            IsSpotifyAuthenticated = e;
+            if (e) _ = LoadSpotifyPlaylistsAsync();
+        };
+
         // Register pages for navigation service
         _navigationService.RegisterPage("ImportPreview", typeof(Avalonia.ImportPreviewPage));
         
@@ -143,6 +164,25 @@ public class MainViewModel : INotifyPropertyChanged
 
         // Phase 0.3: Brain Command
         ExecuteBrainTestCommand = new AsyncRelayCommand(ExecuteBrainTestAsync);
+
+        // Phase 7: Spotify Silent Refresh
+        _ = InitializeSpotifyAsync();
+    }
+
+    private async Task InitializeSpotifyAsync()
+    {
+        try
+        {
+            if (_config.SpotifyUseApi && await _spotifyAuth.IsAuthenticatedAsync())
+            {
+                _logger.LogInformation("Spotify silent session refresh successful");
+                await LoadSpotifyPlaylistsAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Spotify silent refresh failed");
+        }
     }
 
     private void NavigateToSettings()
@@ -152,6 +192,8 @@ public class MainViewModel : INotifyPropertyChanged
             _settingsPage = new Avalonia.SettingsPage { DataContext = SettingsViewModel };
         }
         CurrentPage = _settingsPage;
+        CurrentPageType = PageType.Settings;
+        _eventBus.Publish(new NavigationEvent(PageType.Settings));
     }
 
 
@@ -235,6 +277,28 @@ public class MainViewModel : INotifyPropertyChanged
         set => SetProperty(ref _isInitializing, value);
     }
 
+    // Phase 7: Spotify Hub Properties
+    private bool _isSpotifyAuthenticated;
+    public bool IsSpotifyAuthenticated
+    {
+        get => _isSpotifyAuthenticated;
+        set => SetProperty(ref _isSpotifyAuthenticated, value);
+    }
+
+    private System.Collections.ObjectModel.ObservableCollection<SimplePlaylist> _spotifyPlaylists = new();
+    public System.Collections.ObjectModel.ObservableCollection<SimplePlaylist> SpotifyPlaylists
+    {
+        get => _spotifyPlaylists;
+        set => SetProperty(ref _spotifyPlaylists, value);
+    }
+
+    private bool _isLoadingPlaylists;
+    public bool IsLoadingPlaylists
+    {
+        get => _isLoadingPlaylists;
+        set => SetProperty(ref _isLoadingPlaylists, value);
+    }
+
     // Event-Driven Collection
     public System.Collections.ObjectModel.ObservableCollection<PlaylistTrackViewModel> AllGlobalTracks { get; } = new();
 
@@ -253,6 +317,11 @@ public class MainViewModel : INotifyPropertyChanged
     public ICommand ZoomOutCommand { get; }
     public ICommand ResetZoomCommand { get; }
     public ICommand ExecuteBrainTestCommand { get; }
+    
+    // Spotify Hub Commands
+    public ICommand LoadSpotifyPlaylistsCommand { get; }
+    public ICommand ImportSpotifyPlaylistCommand { get; }
+    public ICommand ImportLikedSongsCommand { get; }
 
     // Page instances (lazy-loaded)
     // Lazy-loaded page instances
@@ -280,6 +349,8 @@ public class MainViewModel : INotifyPropertyChanged
             _homePage = new Avalonia.HomePage { DataContext = this };
         }
         CurrentPage = _homePage;
+        CurrentPageType = PageType.Home;
+        _eventBus.Publish(new NavigationEvent(PageType.Home));
     }
 
     private void NavigateToSearch()
@@ -289,6 +360,8 @@ public class MainViewModel : INotifyPropertyChanged
             _searchPage = new Avalonia.SearchPage { DataContext = SearchViewModel };
         }
         CurrentPage = _searchPage;
+        CurrentPageType = PageType.Search;
+        _eventBus.Publish(new NavigationEvent(PageType.Search));
     }
 
     private void NavigateToLibrary()
@@ -298,6 +371,8 @@ public class MainViewModel : INotifyPropertyChanged
             _libraryPage = new Avalonia.LibraryPage { DataContext = LibraryViewModel };
         }
         CurrentPage = _libraryPage;
+        CurrentPageType = PageType.Library;
+        _eventBus.Publish(new NavigationEvent(PageType.Library));
     }
 
     private void NavigateToDownloads()
@@ -307,6 +382,8 @@ public class MainViewModel : INotifyPropertyChanged
             _downloadsPage = new Avalonia.DownloadsPage { DataContext = this };
         }
         CurrentPage = _downloadsPage;
+        CurrentPageType = PageType.Downloads;
+        _eventBus.Publish(new NavigationEvent(PageType.Downloads));
     }
 
     private void NavigateToImport()
@@ -316,6 +393,8 @@ public class MainViewModel : INotifyPropertyChanged
             _importPage = new Avalonia.ImportPage { DataContext = this };
         }
         CurrentPage = _importPage;
+        CurrentPageType = PageType.Import;
+        _eventBus.Publish(new NavigationEvent(PageType.Import));
     }
 
 
@@ -452,5 +531,53 @@ public class MainViewModel : INotifyPropertyChanged
             StatusText = "🧠 Brain Test Failed";
             _logger.LogError(ex, "Brain Test Verification Failed");
         }
+    }
+
+    private async Task LoadSpotifyPlaylistsAsync()
+    {
+        if (!IsSpotifyAuthenticated) return;
+        
+        try
+        {
+            IsLoadingPlaylists = true;
+            var client = await _spotifyAuth.GetAuthenticatedClientAsync();
+            var playlists = await client.Playlists.CurrentUsers();
+            
+            await Dispatcher.UIThread.InvokeAsync(() => 
+            {
+                SpotifyPlaylists.Clear();
+                foreach (var p in playlists.Items ?? new List<SimplePlaylist>())
+                {
+                    SpotifyPlaylists.Add(p);
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to load Spotify playlists");
+        }
+        finally
+        {
+            IsLoadingPlaylists = false;
+        }
+    }
+
+    private async Task ImportSpotifyPlaylistAsync(SimplePlaylist? playlist)
+    {
+        if (playlist == null) return;
+        
+        var orchestrator = Services.GetRequiredService<ImportOrchestrator>();
+        var provider = Services.GetRequiredService<SpotifyLikedSongsImportProvider>(); // Need common Spotify provider? 
+        // For now using existing provider but it might need to handle playlists too
+        
+        await orchestrator.StartImportWithPreviewAsync(provider, $"https://open.spotify.com/playlist/{playlist.Id}");
+    }
+
+    private async Task ImportLikedSongsAsync()
+    {
+        var orchestrator = Services.GetRequiredService<ImportOrchestrator>();
+        var provider = Services.GetRequiredService<SpotifyLikedSongsImportProvider>();
+        
+        await orchestrator.StartImportWithPreviewAsync(provider, "liked");
     }
 }

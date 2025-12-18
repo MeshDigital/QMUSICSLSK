@@ -295,10 +295,47 @@ public class DatabaseService
                     if (!tracksColumns.Contains("BitrateScore")) newCols.Add(("BitrateScore", "INTEGER NULL"));
                     if (!tracksColumns.Contains("AnalysisOffset")) newCols.Add(("AnalysisOffset", "REAL NULL"));
                     
+                    // Phase 8: Sonic Integrity & Spectral Analysis
+                    if (!tracksColumns.Contains("SpectralHash")) newCols.Add(("SpectralHash", "TEXT NULL"));
+                    if (!tracksColumns.Contains("QualityConfidence")) newCols.Add(("QualityConfidence", "REAL NULL"));
+                    if (!tracksColumns.Contains("FrequencyCutoff")) newCols.Add(("FrequencyCutoff", "INTEGER NULL"));
+                    if (!tracksColumns.Contains("IsTrustworthy")) newCols.Add(("IsTrustworthy", "INTEGER NULL"));
+                    if (!tracksColumns.Contains("QualityDetails")) newCols.Add(("QualityDetails", "TEXT NULL"));
+
                     foreach (var (col, def) in newCols)
                     {
                          _logger.LogWarning("Schema Patch: Adding missing column '{Col}' to Tracks", col);
                          await context.Database.ExecuteSqlRawAsync($"ALTER TABLE Tracks ADD COLUMN {col} {def}");
+                    }
+                }
+            }
+
+            // Patch PlaylistTracks columns (Phase 8 Support)
+            using (var schemaCmd = connection.CreateCommand())
+            {
+                schemaCmd.CommandText = "PRAGMA table_info(PlaylistTracks)";
+                var ptColumns = new HashSet<string>();
+                using (var reader = await schemaCmd.ExecuteReaderAsync())
+                {
+                    while (await reader.ReadAsync())
+                    {
+                        ptColumns.Add(reader.GetString(1));
+                    }
+                }
+
+                if (ptColumns.Count > 0)
+                {
+                    var newCols = new List<(string Name, string Def)>();
+                    if (!ptColumns.Contains("SpectralHash")) newCols.Add(("SpectralHash", "TEXT NULL"));
+                    if (!ptColumns.Contains("QualityConfidence")) newCols.Add(("QualityConfidence", "REAL NULL"));
+                    if (!ptColumns.Contains("FrequencyCutoff")) newCols.Add(("FrequencyCutoff", "INTEGER NULL"));
+                    if (!ptColumns.Contains("IsTrustworthy")) newCols.Add(("IsTrustworthy", "INTEGER NULL"));
+                    if (!ptColumns.Contains("QualityDetails")) newCols.Add(("QualityDetails", "TEXT NULL"));
+
+                    foreach (var (col, def) in newCols)
+                    {
+                        _logger.LogWarning("Schema Patch: Adding missing column '{Col}' to PlaylistTracks", col);
+                        await context.Database.ExecuteSqlRawAsync($"ALTER TABLE PlaylistTracks ADD COLUMN {col} {def}");
                     }
                 }
             }
@@ -313,12 +350,68 @@ public class DatabaseService
         _logger.LogInformation("[{Ms}ms] Database initialized and schema verified.", sw.ElapsedMilliseconds);
     }
 
+    // ===== PendingOrchestration Methods =====
+
+    public async Task AddPendingOrchestrationAsync(string globalId)
+    {
+        await _writeSemaphore.WaitAsync();
+        try
+        {
+            using var context = new AppDbContext();
+            var sql = "INSERT OR IGNORE INTO PendingOrchestrations (GlobalId, AddedAt) VALUES (@id, @now)";
+            await context.Database.ExecuteSqlRawAsync(sql, 
+                new SqliteParameter("@id", globalId),
+                new SqliteParameter("@now", DateTime.UtcNow.ToString("o")));
+        }
+        finally
+        {
+            _writeSemaphore.Release();
+        }
+    }
+
+    public async Task RemovePendingOrchestrationAsync(string globalId)
+    {
+        await _writeSemaphore.WaitAsync();
+        try
+        {
+            using var context = new AppDbContext();
+            var sql = "DELETE FROM PendingOrchestrations WHERE GlobalId = @id";
+            await context.Database.ExecuteSqlRawAsync(sql, new SqliteParameter("@id", globalId));
+        }
+        finally
+        {
+            _writeSemaphore.Release();
+        }
+    }
+
+    public async Task<List<string>> GetPendingOrchestrationsAsync()
+    {
+        using var context = new AppDbContext();
+        var ids = new List<string>();
+        var connection = context.Database.GetDbConnection();
+        await connection.OpenAsync();
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = "SELECT GlobalId FROM PendingOrchestrations";
+        using var reader = await cmd.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            ids.Add(reader.GetString(0));
+        }
+        return ids;
+    }
+
     // ===== Track Methods =====
 
     public async Task<List<TrackEntity>> LoadTracksAsync()
     {
         using var context = new AppDbContext();
         return await context.Tracks.ToListAsync();
+    }
+
+    public async Task<TrackEntity?> FindTrackAsync(string globalId)
+    {
+        using var context = new AppDbContext();
+        return await context.Tracks.FirstOrDefaultAsync(t => t.GlobalId == globalId);
     }
 
     public async Task SaveTrackAsync(TrackEntity track)
@@ -375,6 +468,13 @@ public class DatabaseService
                         existingTrack.AudioFingerprint = track.AudioFingerprint;
                         existingTrack.CuePointsJson = track.CuePointsJson;
                     
+                        // Phase 8: Sonic Integrity
+                        existingTrack.SpectralHash = track.SpectralHash;
+                        existingTrack.QualityConfidence = track.QualityConfidence;
+                        existingTrack.FrequencyCutoff = track.FrequencyCutoff;
+                        existingTrack.IsTrustworthy = track.IsTrustworthy;
+                        existingTrack.QualityDetails = track.QualityDetails;
+
                         // Don't update AddedAt - preserve original
                         // context.Tracks.Update() is not needed - EF Core tracks changes automatically
                     }
@@ -784,7 +884,22 @@ public class DatabaseService
                     Genres = track.Genres,
                     Popularity = track.Popularity,
                     CanonicalDuration = track.CanonicalDuration,
-                    ReleaseDate = track.ReleaseDate
+                    ReleaseDate = track.ReleaseDate,
+
+                    // Phase 0.1: Musical Intelligence
+                    MusicalKey = track.MusicalKey,
+                    BPM = track.BPM,
+                    CuePointsJson = track.CuePointsJson,
+                    AudioFingerprint = track.AudioFingerprint,
+                    BitrateScore = track.BitrateScore,
+                    AnalysisOffset = track.AnalysisOffset,
+
+                    // Phase 8: Sonic Integrity
+                    SpectralHash = track.SpectralHash,
+                    QualityConfidence = track.QualityConfidence,
+                    FrequencyCutoff = track.FrequencyCutoff,
+                    IsTrustworthy = track.IsTrustworthy,
+                    QualityDetails = track.QualityDetails
                 });
                 context.PlaylistTracks.AddRange(trackEntities);
             }
@@ -829,7 +944,14 @@ public class DatabaseService
                         CuePointsJson = track.CuePointsJson,
                         AudioFingerprint = track.AudioFingerprint,
                         BitrateScore = track.BitrateScore,
-                        AnalysisOffset = track.AnalysisOffset
+                        AnalysisOffset = track.AnalysisOffset,
+
+                        // Phase 8: Sonic Integrity
+                        SpectralHash = track.SpectralHash,
+                        QualityConfidence = track.QualityConfidence,
+                        FrequencyCutoff = track.FrequencyCutoff,
+                        IsTrustworthy = track.IsTrustworthy,
+                        QualityDetails = track.QualityDetails
                     };
 
                     if (existingTrackIdSet.Contains(track.Id))

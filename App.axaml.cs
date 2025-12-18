@@ -72,9 +72,18 @@ public partial class App : Application
                 Serilog.Log.Information("Loaded ranking strategy: {Strategy}", config.RankingPreset ?? "Balanced");
                 */
                 
-                // Use default strategy for now
-                ResultSorter.SetStrategy(new BalancedStrategy());
-                Serilog.Log.Information("Using default Balanced ranking strategy");
+                // Phase 7: Load ranking strategy and weights from config
+                var config = Services.GetRequiredService<ConfigManager>().GetCurrent();
+                ISortingStrategy strategy = (config.RankingPreset ?? "Balanced") switch
+                {
+                    "Quality First" => new QualityFirstStrategy(),
+                    "DJ Mode" => new DJModeStrategy(),
+                    _ => new BalancedStrategy()
+                };
+                ResultSorter.SetStrategy(strategy);
+                ResultSorter.SetWeights(config.CustomWeights ?? ScoringWeights.Balanced);
+                
+                Serilog.Log.Information("Loaded ranking strategy: {Strategy} with custom weights", config.RankingPreset ?? "Balanced");
 
                 // Create main window and show it immediately
                 var mainVm = Services.GetRequiredService<MainViewModel>();
@@ -200,6 +209,7 @@ public partial class App : Application
         // Session 2: Performance Optimization - Extracted services
         services.AddSingleton<LibraryOrganizationService>();
         services.AddSingleton<ArtworkPipeline>();
+        services.AddSingleton<DragAdornerService>();
         
         // Session 3: Performance Optimization - Polymorphic taggers
         services.AddSingleton<Services.Tagging.Id3Tagger>();
@@ -290,6 +300,9 @@ public partial class App : Application
         services.AddSingleton<DownloadOrchestrationService>();
         services.AddSingleton<DownloadDiscoveryService>(); // Phase 3.1
         services.AddSingleton<MetadataEnrichmentOrchestrator>(); // Phase 3.1
+        services.AddSingleton<SonicIntegrityService>(); // Phase 8: Sonic Integrity
+        services.AddSingleton<LibraryUpgradeScout>(); // Phase 8: Self-Healing Library
+        services.AddSingleton<UpgradeScoutViewModel>();
         
         // Phase 0: ViewModel Refactoring - Library child ViewModels
         services.AddTransient<ViewModels.Library.ProjectListViewModel>();

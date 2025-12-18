@@ -49,6 +49,7 @@ public class AppConfig
     public bool AutoRetryFailedDownloads { get; set; } = true;
     public int MaxDownloadRetries { get; set; } = 2;
     public string RankingPreset { get; set; } = "Balanced";
+    public ScoringWeights CustomWeights { get; set; } = ScoringWeights.Balanced;
     
     // Window state persistence
     public double WindowWidth { get; set; } = 1400;
@@ -61,6 +62,12 @@ public class AppConfig
     public List<string> LibraryRootPaths { get; set; } = new(); // Root directories to scan for music files
     public bool EnableFilePathResolution { get; set; } = true; // Enable automatic resolution of moved files
     public double FuzzyMatchThreshold { get; set; } = 0.85; // Minimum similarity score (0.0-1.0) for fuzzy matching
+
+    // Phase 8: Upgrade Scout (Self-Healing Library)
+    public bool UpgradeScoutEnabled { get; set; } = false; // Background upgrading
+    public int UpgradeMinBitrateThreshold { get; set; } = 320; // Upgrade everything below this
+    public int UpgradeMinGainKbps { get; set; } = 128; // Only upgrade if gain is significant
+    public bool UpgradeAutoQueueEnabled { get; set; } = false; // Auto-queue vs just notify
 
     public override string ToString()
     {

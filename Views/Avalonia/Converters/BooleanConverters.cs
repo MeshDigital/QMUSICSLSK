@@ -106,4 +106,38 @@ namespace SLSKDONET.Views.Avalonia.Converters
             throw new NotImplementedException();
         }
     }
+
+    public class BooleanToRedBrushConverter : IValueConverter
+    {
+        public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
+        {
+            if (value is bool isBad)
+            {
+                return isBad ? Brushes.Red : Brushes.Gray;
+            }
+            return Brushes.Gray;
+        }
+
+        public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
+        {
+            throw new NotImplementedException();
+        }
+    }
+
+    public class UpgradeStatusToVisibleConverter : IValueConverter
+    {
+        public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
+        {
+            if (value is SLSKDONET.ViewModels.UpgradeStatus status && parameter is string targetStatus)
+            {
+                return status.ToString() == targetStatus;
+            }
+            return false;
+        }
+
+        public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
+        {
+            throw new NotImplementedException();
+        }
+    }
 }

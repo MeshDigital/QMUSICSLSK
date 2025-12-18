@@ -80,6 +80,30 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
 
         // Initialize from config, but allow runtime changes
         MaxActiveDownloads = _config.MaxConcurrentDownloads > 0 ? _config.MaxConcurrentDownloads : 3;
+
+        // Phase 8: Automation Subscriptions
+        _eventBus.Subscribe<Events.AutoDownloadTrackEvent>(OnAutoDownloadTrack);
+        _eventBus.Subscribe<Events.AutoDownloadUpgradeEvent>(OnAutoDownloadUpgrade);
+        _eventBus.Subscribe<Events.UpgradeAvailableEvent>(OnUpgradeAvailable);
+    }
+
+    /// <summary>
+    /// Checks if a track is already in the library or download queue.
+    /// </summary>
+    public bool IsTrackAlreadyQueued(string? spotifyTrackId, string artist, string title)
+    {
+        lock (_collectionLock)
+        {
+            if (!string.IsNullOrEmpty(spotifyTrackId))
+            {
+                if (_downloads.Any(d => d.Model.SpotifyTrackId == spotifyTrackId))
+                    return true;
+            }
+
+            return _downloads.Any(d => 
+                string.Equals(d.Model.Artist, artist, StringComparison.OrdinalIgnoreCase) && 
+                string.Equals(d.Model.Title, title, StringComparison.OrdinalIgnoreCase));
+        }
     }
 
     public int MaxActiveDownloads { get; set; }
@@ -456,7 +480,9 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
                 DownloadContext? nextContext = null;
                 lock (_collectionLock)
                 {
-                    nextContext = _downloads.FirstOrDefault(t => t.State == PlaylistTrackState.Pending);
+                    nextContext = _downloads.FirstOrDefault(t => 
+                        t.State == PlaylistTrackState.Pending && 
+                        (!t.NextRetryTime.HasValue || t.NextRetryTime.Value <= DateTime.Now));
                 }
 
                 if (nextContext == null)
@@ -538,8 +564,21 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
             }
             catch (Exception ex)
             {
-                await UpdateStateAsync(ctx, PlaylistTrackState.Failed, ex.Message);
-                _logger.LogError(ex, "ProcessTrackAsync fatal error");
+                _logger.LogError(ex, "ProcessTrackAsync error for {GlobalId}", ctx.GlobalId);
+                
+                // Exponential Backoff Logic (Phase 7)
+                ctx.RetryCount++;
+                if (ctx.RetryCount < 5)
+                {
+                    var delayMinutes = Math.Pow(2, ctx.RetryCount); // 2, 4, 8, 16...
+                    ctx.NextRetryTime = DateTime.Now.AddMinutes(delayMinutes);
+                    await UpdateStateAsync(ctx, PlaylistTrackState.Pending, $"Retrying in {delayMinutes}m: {ex.Message}");
+                    _logger.LogInformation("Scheduled retry #{Count} for {GlobalId} at {Time}", ctx.RetryCount, ctx.GlobalId, ctx.NextRetryTime);
+                }
+                else
+                {
+                    await UpdateStateAsync(ctx, PlaylistTrackState.Failed, $"Max retries exceeded: {ex.Message}");
+                }
             }
         }
     }
@@ -592,6 +631,53 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
     public event PropertyChangedEventHandler? PropertyChanged;
     protected void OnPropertyChanged([CallerMemberName] string? name = null)
         => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+
+    private void OnAutoDownloadTrack(Events.AutoDownloadTrackEvent e)
+    {
+        _logger.LogInformation("Auto-Download triggered for {TrackId}", e.TrackGlobalId);
+        DownloadContext? ctx;
+        lock (_collectionLock) ctx = _downloads.FirstOrDefault(d => d.GlobalId == e.TrackGlobalId);
+        if (ctx == null) return;
+
+        _ = Task.Run(async () => 
+        {
+            await UpdateStateAsync(ctx, PlaylistTrackState.Downloading);
+            await DownloadFileAsync(ctx, e.BestMatch, _globalCts.Token);
+        });
+    }
+
+    private void OnAutoDownloadUpgrade(Events.AutoDownloadUpgradeEvent e)
+    {
+        _logger.LogInformation("Auto-Upgrade triggered for {TrackId}", e.TrackGlobalId);
+        DownloadContext? ctx;
+        lock (_collectionLock) ctx = _downloads.FirstOrDefault(d => d.GlobalId == e.TrackGlobalId);
+        if (ctx == null) return;
+
+        _ = Task.Run(async () => 
+        {
+            // 1. Delete old file first to avoid confusion
+            if (!string.IsNullOrEmpty(ctx.Model.ResolvedFilePath))
+            {
+                DeleteLocalFiles(ctx.Model.ResolvedFilePath);
+            }
+
+            // 2. Clear old quality metrics
+            ctx.Model.Bitrate = null;
+            ctx.Model.SpectralHash = null;
+            ctx.Model.IsTrustworthy = null;
+
+            // 3. Start download of higher quality file
+            await UpdateStateAsync(ctx, PlaylistTrackState.Downloading);
+            await DownloadFileAsync(ctx, e.BestMatch, _globalCts.Token);
+        });
+    }
+
+    private void OnUpgradeAvailable(Events.UpgradeAvailableEvent e)
+    {
+        // For now just log, could trigger a notification in future
+        _logger.LogInformation("Upgrade Available (Manual Approval Needed): {TrackId} - {BestMatch}", 
+            e.TrackGlobalId, e.BestMatch.Filename);
+    }
 
     public void Dispose()
     {

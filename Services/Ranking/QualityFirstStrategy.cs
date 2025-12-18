@@ -16,14 +16,15 @@ namespace SLSKDONET.Services.Ranking
             double musicalIntelligenceScore,
             double metadataScore,
             double stringMatchingScore,
-            double tiebreakerScore)
+            double tiebreakerScore,
+            ScoringWeights weights)
         {
-            return availabilityScore
-                 + conditionsScore
-                 + (qualityScore * 1.5)              // 50% boost to quality
-                 + (musicalIntelligenceScore * 0.5)  // 50% reduction to BPM/Key
-                 + metadataScore
-                 + stringMatchingScore
+            return (availabilityScore * weights.AvailabilityWeight)
+                 + (conditionsScore * weights.ConditionsWeight)
+                 + (qualityScore * weights.QualityWeight)
+                 + (musicalIntelligenceScore * weights.MusicalWeight)
+                 + (metadataScore * weights.MetadataWeight)
+                 + (stringMatchingScore * weights.StringWeight)
                  + tiebreakerScore;
         }
     }

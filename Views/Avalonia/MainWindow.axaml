@@ -4,6 +4,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:vm="clr-namespace:SLSKDONET.Views"
         xmlns:views="clr-namespace:SLSKDONET.Views.Avalonia"
+        xmlns:models="clr-namespace:SLSKDONET.Models"
         mc:Ignorable="d" d:DesignWidth="1400" d:DesignHeight="900"
         x:Class="SLSKDONET.Views.Avalonia.MainWindow"
         x:DataType="vm:MainViewModel"
@@ -181,41 +182,65 @@
                     BorderThickness="0,0,1,0"
                     Width="220"
                     IsVisible="{Binding !IsNavigationCollapsed}">
-                <StackPanel Margin="0,16,0,0">
-                    <Button Classes="nav" Command="{Binding NavigateSearchCommand}">
-                        <StackPanel Orientation="Horizontal" Spacing="12">
-                            <TextBlock Text="🔍" FontSize="16"/>
-                            <TextBlock Text="Search" FontSize="14"/>
-                        </StackPanel>
+                <StackPanel Margin="0,16,0,0" Spacing="4">
+                    <Button Classes="nav" 
+                            Command="{Binding NavigateSearchCommand}"
+                            Classes.selected="{Binding CurrentPageType, Converter={StaticResource EqualityConverter}, ConverterParameter={x:Static models:PageType.Search}}">
+                        <Grid ColumnDefinitions="Auto,*">
+                            <Border x:Name="Glow" Grid.ColumnSpan="2" CornerRadius="4" IsVisible="False"/>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="12">
+                                <TextBlock Text="🔍" FontSize="16"/>
+                                <TextBlock Text="Search" FontSize="14"/>
+                            </StackPanel>
+                        </Grid>
                     </Button>
                     
-                    <Button Classes="nav" Command="{Binding NavigateLibraryCommand}">
-                        <StackPanel Orientation="Horizontal" Spacing="12">
-                            <TextBlock Text="📚" FontSize="16"/>
-                            <TextBlock Text="Library" FontSize="14"/>
-                        </StackPanel>
+                    <Button Classes="nav" 
+                            Command="{Binding NavigateLibraryCommand}"
+                            Classes.selected="{Binding CurrentPageType, Converter={StaticResource EqualityConverter}, ConverterParameter={x:Static models:PageType.Library}}">
+                        <Grid ColumnDefinitions="Auto,*">
+                            <Border x:Name="Glow" Grid.ColumnSpan="2" CornerRadius="4" IsVisible="False"/>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="12">
+                                <TextBlock Text="📚" FontSize="16"/>
+                                <TextBlock Text="Library" FontSize="14"/>
+                            </StackPanel>
+                        </Grid>
                     </Button>
                     
-                    <Button Classes="nav" Command="{Binding NavigateDownloadsCommand}">
-                        <StackPanel Orientation="Horizontal" Spacing="12">
-                            <TextBlock Text="⬇️" FontSize="16"/>
-                            <TextBlock Text="Downloads" FontSize="14"/>
-                        </StackPanel>
+                    <Button Classes="nav" 
+                            Command="{Binding NavigateDownloadsCommand}"
+                            Classes.selected="{Binding CurrentPageType, Converter={StaticResource EqualityConverter}, ConverterParameter={x:Static models:PageType.Downloads}}">
+                        <Grid ColumnDefinitions="Auto,*">
+                            <Border x:Name="Glow" Grid.ColumnSpan="2" CornerRadius="4" IsVisible="False"/>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="12">
+                                <TextBlock Text="⬇️" FontSize="16"/>
+                                <TextBlock Text="Downloads" FontSize="14"/>
+                            </StackPanel>
+                        </Grid>
                     </Button>
                     
-                    <Button Classes="nav" Command="{Binding NavigateSettingsCommand}">
-                        <StackPanel Orientation="Horizontal" Spacing="12">
-                            <TextBlock Text="⚙️" FontSize="16"/>
-                            <TextBlock Text="Settings" FontSize="14"/>
-                        </StackPanel>
+                    <Button Classes="nav" 
+                            Command="{Binding NavigateSettingsCommand}"
+                            Classes.selected="{Binding CurrentPageType, Converter={StaticResource EqualityConverter}, ConverterParameter={x:Static models:PageType.Settings}}">
+                        <Grid ColumnDefinitions="Auto,*">
+                            <Border x:Name="Glow" Grid.ColumnSpan="2" CornerRadius="4" IsVisible="False"/>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="12">
+                                <TextBlock Text="⚙️" FontSize="16"/>
+                                <TextBlock Text="Settings" FontSize="14"/>
+                            </StackPanel>
+                        </Grid>
                     </Button>
                 </StackPanel>
             </Border>
 
-            <!-- Center Content Area -->
-            <ContentControl Grid.Column="1" 
-                            Content="{Binding CurrentPage}" 
-                            Background="#1E1E1E"/>
+            <!-- Center Content Area with Page Transitions -->
+            <TransitioningContentControl Grid.Column="1" 
+                                       Content="{Binding CurrentPage}" 
+                                       Background="#1E1E1E">
+                <TransitioningContentControl.PageTransition>
+                    <CrossFade Duration="0:0:0.25"/>
+                </TransitioningContentControl.PageTransition>
+            </TransitioningContentControl>
 
             <!-- Right Player Sidebar -->
             <Border Grid.Column="2" 

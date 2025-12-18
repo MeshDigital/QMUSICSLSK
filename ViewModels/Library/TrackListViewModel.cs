@@ -2,10 +2,12 @@ using System;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Linq;
+using System.Reactive.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using Avalonia.Threading;
 using Microsoft.Extensions.Logging;
+using ReactiveUI;
 using SLSKDONET.Models;
 using SLSKDONET.Services;
 using SLSKDONET.Views;
@@ -16,7 +18,7 @@ namespace SLSKDONET.ViewModels.Library;
 /// Manages track lists, filtering, and search functionality.
 /// Handles track display state and filtering logic.
 /// </summary>
-public class TrackListViewModel : INotifyPropertyChanged
+public class TrackListViewModel : ReactiveObject
 {
     private readonly ILogger<TrackListViewModel> _logger;
     private readonly ILibraryService _libraryService;
@@ -25,15 +27,15 @@ public class TrackListViewModel : INotifyPropertyChanged
     private readonly ArtworkCacheService _artworkCache;
     private readonly IEventBus _eventBus;
 
-    // Track collections
+    public HierarchicalLibraryViewModel Hierarchical { get; } = new();
+
     private ObservableCollection<PlaylistTrackViewModel> _currentProjectTracks = new();
     public ObservableCollection<PlaylistTrackViewModel> CurrentProjectTracks
     {
         get => _currentProjectTracks;
         set
         {
-            _currentProjectTracks = value;
-            OnPropertyChanged();
+            this.RaiseAndSetIfChanged(ref _currentProjectTracks, value);
             RefreshFilteredTracks();
         }
     }
@@ -42,79 +44,36 @@ public class TrackListViewModel : INotifyPropertyChanged
     public ObservableCollection<PlaylistTrackViewModel> FilteredTracks
     {
         get => _filteredTracks;
-        private set
-        {
-            if (_filteredTracks != value)
-            {
-                _filteredTracks = value;
-                OnPropertyChanged();
-            }
-        }
+        private set => this.RaiseAndSetIfChanged(ref _filteredTracks, value);
     }
 
-    // Search and filter state
     private string _searchText = string.Empty;
     public string SearchText
     {
         get => _searchText;
-        set
-        {
-            if (_searchText != value)
-            {
-                _searchText = value;
-                OnPropertyChanged();
-                RefreshFilteredTracks();
-            }
-        }
+        set => this.RaiseAndSetIfChanged(ref _searchText, value);
     }
 
-    // Filter buttons (radio button behavior)
     private bool _isFilterAll = true;
     public bool IsFilterAll
     {
         get => _isFilterAll;
-        set
-        {
-            if (_isFilterAll != value)
-            {
-                _isFilterAll = value;
-                OnPropertyChanged();
-                RefreshFilteredTracks();
-            }
-        }
+        set => this.RaiseAndSetIfChanged(ref _isFilterAll, value);
     }
 
     private bool _isFilterDownloaded;
     public bool IsFilterDownloaded
     {
         get => _isFilterDownloaded;
-        set
-        {
-            if (_isFilterDownloaded != value)
-            {
-                _isFilterDownloaded = value;
-                OnPropertyChanged();
-                RefreshFilteredTracks();
-            }
-        }
+        set => this.RaiseAndSetIfChanged(ref _isFilterDownloaded, value);
     }
 
     private bool _isFilterPending;
     public bool IsFilterPending
     {
         get => _isFilterPending;
-        set
-        {
-            if (_isFilterPending != value)
-            {
-                _isFilterPending = value;
-                OnPropertyChanged();
-                RefreshFilteredTracks();
-            }
-        }
+        set => this.RaiseAndSetIfChanged(ref _isFilterPending, value);
     }
-
-    public event PropertyChangedEventHandler? PropertyChanged;
 
     public TrackListViewModel(
         ILogger<TrackListViewModel> logger,
@@ -129,9 +88,45 @@ public class TrackListViewModel : INotifyPropertyChanged
         _artworkCache = artworkCache;
         _eventBus = eventBus;
 
-        // Subscribe to global track updates
+        // Throttled search and filter synchronization
+        this.WhenAnyValue(
+            x => x.SearchText,
+            x => x.IsFilterAll,
+            x => x.IsFilterDownloaded,
+            x => x.IsFilterPending)
+            .Throttle(TimeSpan.FromMilliseconds(250))
+            .ObserveOn(RxApp.MainThreadScheduler)
+            .Subscribe(_ => RefreshFilteredTracks());
+
         // Subscribe to global track updates
         eventBus.GetEvent<TrackUpdatedEvent>().Subscribe(evt => OnGlobalTrackUpdated(this, evt.Track));
+
+        // Phase 6D: Local UI sync for track moves
+        eventBus.GetEvent<TrackMovedEvent>().Subscribe(evt => OnTrackMoved(evt));
+    }
+
+    private void OnTrackMoved(TrackMovedEvent evt)
+    {
+        Dispatcher.UIThread.Post(() => {
+            // If moved from this project, remove it
+            if (_mainViewModel?.SelectedProject?.Id == evt.OldProjectId)
+            {
+                var track = CurrentProjectTracks.FirstOrDefault(t => t.GlobalId == evt.TrackGlobalId);
+                if (track != null)
+                {
+                    CurrentProjectTracks.Remove(track);
+                    RefreshFilteredTracks();
+                }
+            }
+            // If moved to this project, and it's not already here (sanity check)
+            else if (_mainViewModel?.SelectedProject?.Id == evt.NewProjectId)
+            {
+                // We might need to load the track from global or reload. 
+                // For simplicity, if we are in the target project, a refresh might be needed or just reload.
+                // But usually the user is in the source project during drag.
+                _ = LoadProjectTracksAsync(_mainViewModel.SelectedProject);
+            }
+        });
     }
 
     public void SetMainViewModel(MainViewModel mainViewModel)
@@ -227,6 +222,9 @@ public class TrackListViewModel : INotifyPropertyChanged
         FilteredTracks.Clear();
         foreach (var track in filtered)
             FilteredTracks.Add(track);
+
+        // Phase 6D: Ensure TreeDataGrid source is updated
+        Hierarchical.UpdateTracks(filtered);
 
         OnPropertyChanged(nameof(FilteredTracks));
     }

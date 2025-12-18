@@ -19,6 +19,10 @@ public class DownloadContext
     public string GlobalId => Model.TrackUniqueHash;
     public string? ErrorMessage { get; set; }
 
+    // Reliability (Phase 7: DJ's Studio)
+    public int RetryCount { get; set; }
+    public DateTime? NextRetryTime { get; set; }
+
     public DownloadContext(PlaylistTrack model)
     {
         Model = model;

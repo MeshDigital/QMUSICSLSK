@@ -58,6 +58,16 @@ public class ImportOrchestrator
                 return;
             }
 
+            // Phase 7: Diff-based update (skip existing)
+            var originalCount = result.Tracks.Count;
+            result.Tracks = result.Tracks.Where(t => !_downloadManager.IsTrackAlreadyQueued(t.SpotifyTrackId, t.Artist, t.Title)).ToList();
+            var skippedCount = originalCount - result.Tracks.Count;
+
+            if (skippedCount > 0)
+            {
+                _logger.LogInformation("Skipped {Count} tracks already in library", skippedCount);
+            }
+
             if (!result.Tracks.Any())
             {
                 _notificationService.Show(
@@ -114,6 +124,16 @@ public class ImportOrchestrator
                     Views.NotificationType.Error,
                     TimeSpan.FromSeconds(5));
                 return;
+            }
+
+            // Phase 7: Diff-based update (skip existing)
+            var originalCount = result.Tracks.Count;
+            result.Tracks = result.Tracks.Where(t => !_downloadManager.IsTrackAlreadyQueued(t.SpotifyTrackId, t.Artist, t.Title)).ToList();
+            var skippedCount = originalCount - result.Tracks.Count;
+
+            if (skippedCount > 0)
+            {
+                _logger.LogInformation("Skipped {Count} tracks already in library during direct import", skippedCount);
             }
 
             if (!result.Tracks.Any())

@@ -1,52 +1,89 @@
-# SLSKDONET: Current Status & Roadmap
+# ORBIT (formerly SLSKDONET): Current Status & Roadmap
 
-## ✅ Completed Features
+**Last Updated**: December 17, 2025  
+**Repository**: https://github.com/MeshDigital/ORBIT
 
-### Core Infrastructure
-- **Persistence Layer**: SQLite database with Entity Framework Core
-- **Download Management**: Concurrent downloads with progress tracking
-- **Library System**: Playlist management with drag-and-drop organization
-- **Audio Playback**: Built-in player with LibVLC integration
-- **Import System**: Multi-source imports (Spotify, CSV, manual)
-- **File Path Resolution** ✨: Advanced fuzzy matching with Levenshtein distance algorithm
-  - Multi-step resolution: Fast check → Filename search → Fuzzy metadata matching
-  - Configurable thresholds and library root paths
-  - Database tracking with OriginalFilePath and FilePathUpdatedAt fields
-  - See `DOCS/FILE_PATH_RESOLUTION.md` for details
+---
 
-### User Experience
-- **Modern UI**: Dark-themed WPF interface with WPF-UI controls
-- **Drag-and-Drop**: Visual playlist organization with adorners
-- **Console Diagnostics**: Debug mode with detailed logging
-- **Version Display**: Application version shown in status bar
-- **Responsive Design**: Async operations keep UI responsive
+## ✅ Recently Completed (Dec 17, 2025)
 
-### Technical Achievements
-- **Database Concurrency**: Proper entity state management
-- **UI Refresh**: Real-time updates from database
-- **File Path Resolution**: Smart lookup from DownloadManager
-- **Error Handling**: Comprehensive diagnostics and user feedback
-- **Architecture**: Decoupled ViewModels with Coordinator pattern (86% code reduction)
+### Performance Overhaul (Phase 2) - COMPLETE
+**Impact**: 60x-100x performance improvements
+- **60x faster** playlist loading (2-3s → <50ms)
+- **50-100x faster** database queries (6 performance indexes)
+- **4x faster** metadata enrichment
+- **50-80% memory reduction** in artwork pipeline
+- **95% cache hit rate** with LibraryCacheService
+- **Polymorphic tagging** system (MP3, FLAC, M4A)
+
+### Phase 6A: Bento Grid UI - COMPLETE
+**Impact**: Visual transformation from ugly list to beautiful grid
+- Beautiful album cards with glassmorphism design
+- 200x200 album artwork with hover effects (scale 1.02 + Orbit Blue glow)
+- Download progress bars
+- Spotify-like aesthetic achieved
+- Removed 90 lines of old code, added 133 lines of reusable component
+
+### Phase 6D: Navigation Shell - COMPLETE
+**Impact**: Professional 6-page application structure
+- 🏠 **Home** - Dashboard with real-time stats (IEventBus integration)
+- 🔍 **Search** - P2P search
+- 📚 **Library** - Bento Grid with album cards
+- ⬇️ **Downloads** - Active downloads
+- ⚙️ **Settings** - Configuration
+- 📥 **Import** - Spotify/CSV/USB hub
+- Lazy-loading pattern for fast startup
+
+### Phase 7: The DJ's Studio (Dec 18, 2025) - COMPLETE
+**Impact**: Professional-grade metadata orchestration and DJ tools.
+- **My Spotify Hub**: One-click "Liked Songs" and playlist import with auto-refresh OAuth.
+- **Advanced Ranking**: Configurable scoring weights for Bitrate, BPM, and String similarity.
+- **Pro Metadata Inspector**: Side-panel with Audio Guard (fidelity status) and Camelot Key mapping.
+- **Resilient Orchestration**: Exponential backoff retries and persistent post-download worker.
+- **Diff-based Updates**: Smart skipping of already-owned tracks during bulk imports.
+
+### Library UI Critical Fixes - COMPLETE
+- PlayTrackCommand, RefreshLibraryCommand, DeleteProjectCommand implemented
+- Startup crash fixed (ranking strategy config)
+- Library page fully functional with Track Inspector sidebar
 
 ---
 
 ## 🚧 In Progress
 
-### Album Downloading
-**Status**: Partial implementation
-- Directory enumeration exists in `SoulseekAdapter`
-- Needs UI grouping and batch download logic
-- **Priority**: High
+### Phase 6C: TreeDataGrid (Next Priority)
+**Status**: Planning complete, ready to implement  
+**Estimated**: 4-5 hours
 
-### Search Ranking
-**Status**: Implemented but needs refinement
-- Basic ranking system in place
-- Could benefit from user feedback tuning
-- **Priority**: Medium
+**Approach**: Fork open-source TreeDataGrid to avoid commercial license
+- ⚠️ **License Issue**: NuGet package requires commercial Avalonia license
+- ✅ **Solution**: Fork `https://github.com/AvaloniaUI/Avalonia.Controls.TreeDataGrid`
+- Integrate as project reference (not NuGet)
+- Maintain our own version
+
+**Features**:
+- Hierarchical track view (Playlist → Album → Tracks)
+- Virtual scrolling for 1000+ tracks
+- Collapse/expand albums
+- Custom column templates
+- Performance matches backend optimizations
+
+**Implementation Plan**: `phase6c_treedatagrid_plan.md`
 
 ---
 
 ## 🎯 Planned Features
+
+### Phase 6B: Styling & Polish (3-4h)
+**Priority**: High (final UI touches)
+- Wire album card Play/Download commands
+- Add Inter/JetBrains Mono fonts
+- Integrate ArtworkPipeline for real album images
+- Add loading states
+- Active navigation highlights (current page)
+- Import progress feedback (recent imports)
+- Dashboard quick actions (resume last download)
+
 
 ### High Priority
 
@@ -57,6 +94,7 @@
 - **Import Integration**: Every import gets canonical metadata anchors ✅ Complete
 - **Cache Layer**: Local metadata cache to avoid API spam ✅ Complete
 - **Smart Logic**: "DJ Secret" duration matching and fuzzy search ✅ Complete (Phase 0.3)
+- **Canonical Anchors**: Store Spotify Canonical Duration to prevent "Radio Edit" vs "Extended Mix" mismatches.
 
 #### 2. Spotify OAuth Authentication (Anchorless Beacon)
 - User sign-in with Spotify (PKCE flow) ✅ Complete (See `DOCS/SPOTIFY_AUTH.md`)
@@ -114,6 +152,8 @@
 #### 1. Extract Method - ResultSorter & DownloadDiscoveryService
 - **Problem**: Monolithic scoring methods mixing BPM, bitrate, and duration logic
 - **Solution**: Extract `CalculateBitrateScore()`, `CalculateDurationPenalty()`, `EvaluateUploaderTrust()`
+- **VBR Fraud Detection**: Add post-download bit-depth/spectral analysis to flag "Fake Lossless" (e.g., FLAC with no data >16kHz).
+- **Path-Based Token Decay**: Weight tokens in filename higher than tokens in parent folders (prevent folder-level metadata contamination).
 - **Impact**: Easier unit testing, clearer "Brain" logic
 - **Reference**: [Refactoring.Guru - Extract Method](https://refactoring.guru/extract-method)
 
@@ -230,6 +270,8 @@
 - **Bitrate Progress Bars**: Visual quality scanning (full bar = FLAC, half = 192kbps)
 - **Waveform Preview**: Mini waveform in track row (planned)
 - **BPM/Key Badges**: Color-coded badges for quick scanning
+- **Visual Quality Badges**: Color-coded badges for quick scanning (Purple=FLAC, Green=320kbps, Orange<192kbps).
+- **Skeleton Screens**: Ghost rows during API/Search loading for 2x faster perceived performance.
 - **Impact**: Professional DJ tool aesthetic
 
 ### Medium Priority
@@ -321,14 +363,36 @@
 
 ---
 
+## 🎯 Next Generation: Phase 8 - Sonic Integrity & Automation
+
+### 1. VBR Fraud Detection & Spectral Analysis
+- **Problem**: Many "FLAC" files on P2P networks are actually upscaled 128kbps MP3s.
+- **Solution**: Use `FFmpeg` or `BASS` to perform spectral analysis post-download.
+- **Feature**: Automatically flag tracks with a frequency cutoff below 16kHz as "Suspicious/Fraudulent".
+- **Impact**: Guaranteed audiophile quality for the library.
+
+### 2. Self-Healing Library (Part 1: Auto-Upgrades)
+- **Problem**: Library contains many old, low-quality (128/192kbps) tracks.
+- **Solution**: Background "Upgrade Scout" that searches for FLAC/320kbps versions of existing library tracks.
+- **Feature**: "One-Click Upgrade" to replace lower-quality files while preserving metadata and playlist position.
+
+### 3. Recordbox & Denon Hub (USB Export)
+- **Problem**: Moving music from app to DJ hardware is manual.
+- **Solution**: Generate Rekordbox-compatible XML or Denon Engine database on a USB drive.
+- **Feature**: Sync a playlist directly to a FAT32 USB drive with proper folder structure.
+
+### 4. Advanced Batch Discovery
+- **Problem**: Searching for 100 tracks in a new playlist is tedious.
+- **Solution**: "Deep Search" mode for playlists that queues every missing track for autonomous discovery.
+- **Impact**: Fully automated library building.
+
+---
+
 ## 📝 Next Immediate Actions
 
-1. **Implement Spotify OAuth (PKCE)** - Enable private playlist access
-2. **Complete album downloading** - Highest user impact
-3. **Add metadata/cover art** - Visual polish
-4. **Implement download resume** - Reliability improvement
-5. **Performance optimization** - Handle larger libraries
-6. **User documentation** - Tutorials and guides
+1. **Phase 8 Implementation Plan** - Architect the Spectral Analysis worker.
+2. **Complete album downloading** - Improve recursive directory parsing.
+3. **User documentation** - Tutorials and guides.
 
 ---
 

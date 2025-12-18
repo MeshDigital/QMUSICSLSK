@@ -1,0 +1,127 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="clr-namespace:SLSKDONET.ViewModels"
+             mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="600"
+             x:Class="SLSKDONET.Views.Avalonia.UpgradeScoutView"
+             x:DataType="vm:UpgradeScoutViewModel">
+
+    <Border Background="#1E1E1E" CornerRadius="12" BorderBrush="#3E3E3E" BorderThickness="1">
+        <Grid RowDefinitions="Auto,*,Auto">
+            
+            <!-- Header -->
+            <Border Grid.Row="0" Background="#2D2D2D" CornerRadius="12,12,0,0" Padding="20,16">
+                <Grid ColumnDefinitions="*,Auto">
+                    <StackPanel Grid.Column="0" Spacing="4">
+                        <TextBlock Text="💎 Upgrade Scout" FontSize="20" FontWeight="Bold" Foreground="#B388FF"/>
+                        <TextBlock Text="Identify and upgrade low-quality tracks in your library" FontSize="12" Foreground="#888"/>
+                    </StackPanel>
+                    
+                    <Button Grid.Column="1" 
+                            Command="{Binding $parent[UserControl;1].((vm:LibraryViewModel)DataContext).ToggleUpgradeScoutCommand}"
+                            Background="Transparent" BorderThickness="0">
+                        <TextBlock Text="✕" FontSize="18" Foreground="#666"/>
+                    </Button>
+                </Grid>
+            </Border>
+
+            <!-- Content -->
+            <Grid Grid.Row="1" Margin="20">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="16" Margin="0,0,0,20">
+                    <Button Command="{Binding ScoutCommand}" IsEnabled="{Binding !IsScanning}"
+                            Background="#6200EE" Foreground="White" Padding="20,10" CornerRadius="8">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <TextBlock Text="🔍"/>
+                            <TextBlock Text="Scan Library" FontWeight="SemiBold"/>
+                        </StackPanel>
+                    </Button>
+
+                    <Button Command="{Binding SearchAllCommand}" IsEnabled="{Binding !!Candidates.Count}"
+                            Background="#03DAC6" Foreground="Black" Padding="20,10" CornerRadius="8">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <TextBlock Text="⚡"/>
+                            <TextBlock Text="Search All Candidates" FontWeight="SemiBold"/>
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+
+                <!-- Candidates List -->
+                <Border Grid.Row="1" Background="#252526" CornerRadius="8" BorderBrush="#333" BorderThickness="1">
+                    <Grid>
+                        <ListBox ItemsSource="{Binding Candidates}" Background="Transparent" BorderThickness="0">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate x:DataType="vm:UpgradeCandidateViewModel">
+                                    <Grid ColumnDefinitions="*,120,Auto" Padding="12,8">
+                                        <StackPanel Grid.Column="0" Spacing="2">
+                                            <TextBlock Text="{Binding Artist}" FontSize="12" Foreground="#888"/>
+                                            <TextBlock Text="{Binding Title}" FontWeight="SemiBold" Foreground="White"/>
+                                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                                <TextBlock Text="{Binding CurrentBitrate, StringFormat={}{0}kbps}" 
+                                                           Foreground="{Binding IsFaked, Converter={StaticResource BooleanToRedBrushConverter}}" 
+                                                           FontSize="11"/>
+                                                <TextBlock Text="→" Foreground="#666" FontSize="11" IsVisible="{Binding ProposedReplacement, Converter={x:Static ObjectConverters.IsNotNull}}"/>
+                                                <TextBlock Text="{Binding ProposedReplacement.Bitrate, StringFormat={}{0}kbps}" 
+                                                           Foreground="#1DB954" FontWeight="Bold" FontSize="11" 
+                                                           IsVisible="{Binding ProposedReplacement, Converter={x:Static ObjectConverters.IsNotNull}}"/>
+                                            </StackPanel>
+                                        </StackPanel>
+
+                                        <StackPanel Grid.Column="1" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,16,0">
+                                            <TextBlock Text="{Binding StatusDisplay}" FontSize="11" Foreground="#AAA" HorizontalAlignment="Right"/>
+                                            <TextBlock Text="{Binding StatusMessage}" FontSize="10" Foreground="#666" HorizontalAlignment="Right"/>
+                                        </StackPanel>
+
+                                        <Button Grid.Column="2" 
+                                                Command="{Binding $parent[UserControl;2].((vm:UpgradeScoutViewModel)DataContext).UpgradeCommand}"
+                                                CommandParameter="{Binding}"
+                                                IsVisible="{Binding Status, Converter={StaticResource UpgradeStatusToVisibleConverter}, ConverterParameter=Ready}"
+                                                Background="#0078D4" Foreground="White" CornerRadius="4" Padding="12,6">
+                                            <TextBlock Text="Upgrade" FontSize="12" FontWeight="SemiBold"/>
+                                        </Button>
+                                    </Grid>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+
+                        <!-- Empty State -->
+                        <StackPanel IsVisible="{Binding !Candidates.Count}" 
+                                    VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="12">
+                            <TextBlock Text="💎" FontSize="48" HorizontalAlignment="Center" Opacity="0.3"/>
+                            <TextBlock Text="No candidates found. Start a scan." Foreground="#666"/>
+                        </StackPanel>
+
+                        <!-- Scanning Overlay -->
+                        <Border Background="#CC1E1E1E" IsVisible="{Binding IsScanning}" CornerRadius="8">
+                            <StackPanel VerticalAlignment="Center" Spacing="16">
+                                <ProgressBar IsIndeterminate="True" Width="200" HorizontalAlignment="Center"/>
+                                <TextBlock Text="Scouting library integrity..." HorizontalAlignment="Center" Foreground="#AAA"/>
+                            </StackPanel>
+                        </Border>
+                    </Grid>
+                </Border>
+            </Grid>
+
+            <!-- Footer -->
+            <Border Grid.Row="2" Background="#2D2D2D" CornerRadius="0,0,12,12" Padding="20,12">
+                <Grid ColumnDefinitions="*,Auto">
+                    <TextBlock Grid.Column="0" Text="Found upgrades are automatically added to the download queue." 
+                               VerticalAlignment="Center" FontSize="11" Foreground="#666"/>
+                    <Button Grid.Column="1" Command="{Binding ClearCompletedCommand}"
+                            Background="Transparent" Foreground="#888" FontSize="12">
+                        <TextBlock Text="Clear Completed"/>
+                    </Button>
+                </Grid>
+            </Border>
+        </Grid>
+    </Border>
+
+    <UserControl.Resources>
+        <!-- Converters would be defined here or in a global resource -->
+    </UserControl.Resources>
+</UserControl>

@@ -156,10 +156,19 @@ namespace SLSKDONET.ViewModels
         public ICommand TogglePlayerDockCommand { get; }
         public ICommand ToggleQueueCommand { get; }
 
-        public PlayerViewModel(IAudioPlayerService playerService, DatabaseService databaseService)
+        public PlayerViewModel(IAudioPlayerService playerService, DatabaseService databaseService, IEventBus eventBus)
         {
             _playerService = playerService;
             _databaseService = databaseService;
+            
+            // Phase 6B: Subscribe to playback requests
+            eventBus.GetEvent<PlayTrackRequestEvent>().Subscribe(evt => 
+            {
+                if (evt.Track != null && !string.IsNullOrEmpty(evt.Track.Model.ResolvedFilePath))
+                {
+                    PlayTrack(evt.Track.Model.ResolvedFilePath, evt.Track.Title ?? "Unknown", evt.Track.Artist ?? "Unknown");
+                }
+            });
             
             // Check if LibVLC initialized successfully
             IsPlayerInitialized = _playerService.IsInitialized;

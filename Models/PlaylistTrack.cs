@@ -98,7 +98,15 @@ public class PlaylistTrack
     public string? CuePointsJson { get; set; }
     public string? AudioFingerprint { get; set; }
     public int? BitrateScore { get; set; }
+    public int? Bitrate { get; set; }
     public double? AnalysisOffset { get; set; }
+
+    // Phase 8: Sonic Integrity & Spectral Analysis
+    public string? SpectralHash { get; set; }
+    public double? QualityConfidence { get; set; }
+    public int? FrequencyCutoff { get; set; }
+    public bool? IsTrustworthy { get; set; }
+    public string? QualityDetails { get; set; }
 }
 
 /// <summary>

@@ -2,7 +2,8 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:converters="clr-namespace:SLSKDONET.Views.Avalonia.Converters"
              x:Class="SLSKDONET.App"
-             RequestedThemeVariant="Dark">
+             RequestedThemeVariant="Dark"
+             FontFamily="avares://Avalonia.Fonts.Inter/Assets#Inter">
     
     <Application.Resources>
         <!-- Dynamic Font Sizes for UI Scaling -->

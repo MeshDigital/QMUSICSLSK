@@ -13,6 +13,15 @@
     <Description>Soulseek batch downloader using Soulseek.NET - Cross-platform with Avalonia UI</Description>
   </PropertyGroup>
 
+  <ItemGroup>
+    <Compile Remove="External\**" />
+    <EmbeddedResource Remove="External\**" />
+    <None Remove="External\**" />
+    <AdditionalFiles Remove="External\**" />
+    <AvaloniaResource Remove="External\**" />
+    <AvaloniaXaml Remove="External\**" />
+  </ItemGroup>
+
   <!-- Debug builds show console window for diagnostics -->
   <PropertyGroup Condition="'$(Configuration)'=='Debug'">
     <OutputType>Exe</OutputType>
@@ -101,6 +110,10 @@
     <Content Include="appsettings.Development.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="External\TreeDataGrid\src\Avalonia.Controls.TreeDataGrid\Avalonia.Controls.TreeDataGrid.csproj" />
   </ItemGroup>
 
 </Project>

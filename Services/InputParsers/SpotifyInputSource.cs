@@ -17,35 +17,70 @@ public class SpotifyInputSource : IInputSource
 {
 	private readonly ILogger<SpotifyInputSource> _logger;
 	private readonly AppConfig _config;
+	private readonly SpotifyAuthService _spotifyAuth;
 
 	public InputType InputType => InputType.Spotify;
 
-	public bool IsConfigured =>
-		!string.IsNullOrWhiteSpace(_config.SpotifyClientId) &&
-		!string.IsNullOrWhiteSpace(_config.SpotifyClientSecret);
+	public bool IsConfigured => 
+		_spotifyAuth.IsAuthenticated || 
+		(!string.IsNullOrWhiteSpace(_config.SpotifyClientId) && !string.IsNullOrWhiteSpace(_config.SpotifyClientSecret));
 
-	public SpotifyInputSource(ILogger<SpotifyInputSource> logger, AppConfig config)
+	public SpotifyInputSource(ILogger<SpotifyInputSource> logger, AppConfig config, SpotifyAuthService spotifyAuth)
 	{
 		_logger = logger;
 		_config = config;
+		_spotifyAuth = spotifyAuth;
 	}
 
 	public async Task<List<SearchQuery>> ParseAsync(string url)
 	{
 		if (!IsConfigured)
-			throw new InvalidOperationException("Spotify API credentials are not configured.");
+			throw new InvalidOperationException("Spotify API is not configured or authenticated.");
 
-		var playlistId = ExtractPlaylistId(url);
-		if (string.IsNullOrEmpty(playlistId))
-			throw new InvalidOperationException("Invalid Spotify playlist URL.");
+		_logger.LogInformation("Spotify API: parsing {Url}", url);
 
-		_logger.LogInformation("Spotify API: fetching playlist {PlaylistId}", playlistId);
+		var client = await GetClientAsync();
+		var queries = new List<SearchQuery>();
 
-		var client = await CreateClientAsync();
+		if (url.Equals("liked", StringComparison.OrdinalIgnoreCase) || url.Contains("liked-songs"))
+		{
+			queries = await FetchLikedSongsAsync(client);
+		}
+		else
+		{
+			var playlistId = ExtractPlaylistId(url);
+			if (string.IsNullOrEmpty(playlistId))
+				throw new InvalidOperationException("Invalid Spotify playlist URL.");
 
+			queries = await FetchPlaylistTracksAsync(client, playlistId);
+		}
+
+		_logger.LogInformation("Spotify API: extracted {Count} tracks", queries.Count);
+		return queries;
+	}
+
+	private async Task<List<SearchQuery>> FetchLikedSongsAsync(SpotifyClient client)
+	{
+		var queries = new List<SearchQuery>();
+		var response = await client.Library.GetTracks();
+		var total = response.Total ?? 0;
+
+		await foreach (var item in client.Paginate(response))
+		{
+			if (item.Track != null)
+			{
+				queries.Add(MapToSearchQuery(item.Track, "Liked Songs", total));
+			}
+		}
+
+		return queries;
+	}
+
+	private async Task<List<SearchQuery>> FetchPlaylistTracksAsync(SpotifyClient client, string playlistId)
+	{
+		var queries = new List<SearchQuery>();
 		var playlist = await client.Playlists.Get(playlistId);
 		var total = playlist.Tracks?.Total ?? 0;
-		var queries = new List<SearchQuery>();
 
 		if (playlist.Tracks != null)
 		{
@@ -53,40 +88,45 @@ public class SpotifyInputSource : IInputSource
 			{
 				if (item.Track is FullTrack track)
 				{
-					var artist = track.Artists?.FirstOrDefault()?.Name;
-					var title = track.Name;
-					var album = track.Album?.Name;
-
-					if (string.IsNullOrEmpty(title) || string.IsNullOrEmpty(artist))
-						continue;
-
-					queries.Add(new SearchQuery
-					{
-						Artist = artist,
-						Title = title,
-						Album = album,
-						SourceTitle = playlist.Name,
-						TotalTracks = total,
-						DownloadMode = DownloadMode.Normal,
-						// Spotify Metadata (Phase 0: Metadata Gravity Well)
-						SpotifyTrackId = track.Id,
-						SpotifyAlbumId = track.Album?.Id,
-						SpotifyArtistId = track.Artists?.FirstOrDefault()?.Id,
-						AlbumArtUrl = track.Album?.Images?.FirstOrDefault()?.Url,
-						Popularity = track.Popularity,
-						CanonicalDuration = track.DurationMs,
-						ReleaseDate = DateTime.TryParse(track.Album?.ReleaseDate, out var rd) ? rd : null
-					});
+					queries.Add(MapToSearchQuery(track, playlist.Name ?? "Spotify Playlist", total));
 				}
 			}
 		}
 
-		_logger.LogInformation("Spotify API: extracted {Count} tracks", queries.Count);
 		return queries;
 	}
 
-	private async Task<SpotifyClient> CreateClientAsync()
+	private SearchQuery MapToSearchQuery(FullTrack track, string sourceTitle, int total)
 	{
+		var artist = track.Artists?.FirstOrDefault()?.Name ?? "Unknown Artist";
+		var title = track.Name ?? "Unknown Track";
+		
+		return new SearchQuery
+		{
+			Artist = artist,
+			Title = title,
+			Album = track.Album?.Name,
+			SourceTitle = sourceTitle,
+			TotalTracks = total,
+			DownloadMode = DownloadMode.Normal,
+			SpotifyTrackId = track.Id,
+			SpotifyAlbumId = track.Album?.Id,
+			SpotifyArtistId = track.Artists?.FirstOrDefault()?.Id,
+			AlbumArtUrl = track.Album?.Images?.FirstOrDefault()?.Url,
+			Popularity = track.Popularity,
+			CanonicalDuration = track.DurationMs,
+			ReleaseDate = DateTime.TryParse(track.Album?.ReleaseDate, out var rd) ? rd : null
+		};
+	}
+
+	private async Task<SpotifyClient> GetClientAsync()
+	{
+		if (_spotifyAuth.IsAuthenticated)
+		{
+			return await _spotifyAuth.GetAuthenticatedClientAsync();
+		}
+		
+		_logger.LogWarning("Spotify is not authenticated with User OAuth, falling back to Client Credentials...");
 		var config = SpotifyClientConfig.CreateDefault();
 		var request = new ClientCredentialsRequest(_config.SpotifyClientId!, _config.SpotifyClientSecret!);
 		var response = await new OAuthClient(config).RequestToken(request);

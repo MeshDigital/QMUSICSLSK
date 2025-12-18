@@ -19,7 +19,8 @@ namespace SLSKDONET.Services.Ranking
             double musicalIntelligenceScore,
             double metadataScore,
             double stringMatchingScore,
-            double tiebreakerScore
+            double tiebreakerScore,
+            ScoringWeights weights
         );
     }
 }

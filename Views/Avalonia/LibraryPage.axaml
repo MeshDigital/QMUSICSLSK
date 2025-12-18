@@ -5,11 +5,20 @@
              xmlns:ds="clr-namespace:DraggingService;assembly=Simple-Avalonia-DragnDrop-Service"
              xmlns:vm="clr-namespace:SLSKDONET.ViewModels"
              xmlns:controls="clr-namespace:SLSKDONET.Views.Avalonia.Controls"
+             xmlns:views="clr-namespace:SLSKDONET.Views.Avalonia"
+             xmlns:conv="clr-namespace:SLSKDONET.Views.Avalonia.Converters"
+             xmlns:tree="clr-namespace:Avalonia.Controls;assembly=Avalonia.Controls.TreeDataGrid"
              mc:Ignorable="d" d:DesignWidth="1200" d:DesignHeight="800"
              x:Class="SLSKDONET.Views.Avalonia.LibraryPage"
              Background="#1E1E1E" Foreground="White">
 
-    <Grid ColumnDefinitions="280,*">
+    <UserControl.Resources>
+        <conv:RankColorConverter x:Key="RankColorConverter"/>
+        <conv:BooleanToRedBrushConverter x:Key="BooleanToRedBrushConverter"/>
+        <conv:UpgradeStatusToVisibleConverter x:Key="UpgradeStatusToVisibleConverter"/>
+    </UserControl.Resources>
+
+    <Grid ColumnDefinitions="280,*,Auto">
         
         <!-- LEFT PANEL: Playlist List -->
         <Border Grid.Column="0" Background="#252526" BorderBrush="#3E3E3E" BorderThickness="0,0,1,0">
@@ -82,6 +91,17 @@
                         <StackPanel Orientation="Horizontal" Spacing="10">
                             <TextBlock Text="📜" FontSize="16"/>
                             <TextBlock Text="Import History" FontSize="13"/>
+                        </StackPanel>
+                    </Button>
+
+                    <Button Command="{Binding ToggleUpgradeScoutCommand}" 
+                            Classes="nav"
+                            HorizontalContentAlignment="Left"
+                            Padding="12,10"
+                            Foreground="#B388FF">
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <TextBlock Text="💎" FontSize="16"/>
+                            <TextBlock Text="Upgrade Scout" FontSize="13" FontWeight="SemiBold"/>
                         </StackPanel>
                     </Button>
                     
@@ -251,197 +271,99 @@
                 </Grid>
             </Border>
 
-            <!-- Track DataGrid -->
-            <DataGrid Grid.Row="2"
-                      x:Name="TrackDataGrid"
-                      ItemsSource="{Binding Tracks.FilteredTracks}"
-                      AutoGenerateColumns="False"
-                      Background="Transparent"
-                      BorderThickness="0"
-                      GridLinesVisibility="Horizontal"
-                      RowBackground="Transparent"
-                      Foreground="#DDD"
-                      HeadersVisibility="Column"
-                      CanUserResizeColumns="True"
-                      CanUserSortColumns="False"
-                      IsReadOnly="{Binding IsDataGridReadOnly}">
-                
-                <DataGrid.ContextMenu>
-                    <ContextMenu>
-                        <MenuItem Header="Add to Queue" 
-                                  Command="{Binding $parent[UserControl].((vm:LibraryViewModel)DataContext).PlayerViewModel.AddToQueueCommand}"
-                                  CommandParameter="{Binding}"
-                                  InputGesture="Ctrl+Q">
-                             <MenuItem.Icon>
-                                 <TextBlock Text="📋"/>
-                             </MenuItem.Icon>
-                        </MenuItem>
-                        
-                        <MenuItem Header="Download Album" 
-                                  Command="{Binding $parent[UserControl].((vm:LibraryViewModel)DataContext).DownloadAlbumCommand}"
-                                  CommandParameter="{Binding}">
-                             <MenuItem.Icon>
-                                 <TextBlock Text="💿"/>
-                             </MenuItem.Icon>
-                        </MenuItem>
-                    </ContextMenu>
-                </DataGrid.ContextMenu>
-                
-                <DataGrid.Styles>
-                    <Style Selector="DataGridRow">
-                        <Setter Property="Foreground" Value="White"/>
-                    </Style>
-                    <Style Selector="DataGridRow:pointerover">
-                        <Setter Property="Background" Value="#1AFFFFFF"/>
-                        <Setter Property="Foreground" Value="White"/>
-                        <Setter Property="Cursor" Value="Hand"/>
-                    </Style>
-                    <Style Selector="DataGridRow:selected">
-                        <Setter Property="Background" Value="#2A0078D4"/>
-                        <Setter Property="Foreground" Value="White"/>
-                    </Style>
-                    <Style Selector="DataGridColumnHeader">
-                        <Setter Property="Foreground" Value="White"/>
-                        <Setter Property="FontWeight" Value="SemiBold"/>
-                    </Style>
-                </DataGrid.Styles>
-                
-                <DataGrid.Columns>
-                    <!-- Album Art -->
-                    <DataGridTemplateColumn Header="🎨" Width="60" IsReadOnly="True">
-                        <DataGridTemplateColumn.CellTemplate>
-                            <DataTemplate>
-                                <Border Width="40" Height="40" 
-                                        CornerRadius="4" 
-                                        ClipToBounds="True"
-                                        Background="#2D2D2D">
-                                    <Image Source="{Binding AlbumArtPath}" 
-                                           Stretch="UniformToFill"
-                                           IsVisible="{Binding AlbumArtPath, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
-                                </Border>
-                            </DataTemplate>
-                        </DataGridTemplateColumn.CellTemplate>
-                    </DataGridTemplateColumn>
-                    
-                    <!-- # -->
-                    <DataGridTextColumn Header="#" 
-                                        Binding="{Binding SortOrder}" 
-                                        Width="50" 
-                                        IsReadOnly="True"/>
-                    
-                    <!-- Title -->
-                    <DataGridTextColumn Header="Title" 
-                                        Binding="{Binding Title}" 
-                                        Width="3*"/>
-                    
-                    <!-- Artist -->
-                    <DataGridTextColumn Header="Artist" 
-                                        Binding="{Binding Artist}" 
-                                        Width="2*"/>
-                    
-                    <!-- Album -->
-                    <DataGridTextColumn Header="Album" 
-                                        Binding="{Binding Album}" 
-                                        Width="2*"/>
+            <!-- Track TreeDataGrid -->
+            <Grid Grid.Row="2">
+                <TreeDataGrid x:Name="TracksTreeDataGrid"
+                              Source="{Binding Tracks.Hierarchical.Source}"
+                              Background="Transparent"
+                              BorderThickness="0"
+                              Foreground="#DDD"
+                              CanUserResizeColumns="True"
+                              DoubleTapped="OnTreeDataGridDoubleTapped">
+                    <TreeDataGrid.ContextMenu>
+                        <ContextMenu>
+                            <MenuItem Header="Add to Queue" 
+                                      Command="{Binding $parent[UserControl].((vm:LibraryViewModel)DataContext).PlayerViewModel.AddToQueueCommand}"
+                                      CommandParameter="{Binding Source.Selection.SelectedItem}">
+                                 <MenuItem.Icon>
+                                     <TextBlock Text="📋"/>
+                                 </MenuItem.Icon>
+                            </MenuItem>
+                            
+                            <MenuItem Header="Download Album" 
+                                      Command="{Binding $parent[UserControl].((vm:LibraryViewModel)DataContext).DownloadAlbumCommand}"
+                                      CommandParameter="{Binding Source.Selection.SelectedItem}">
+                                 <MenuItem.Icon>
+                                     <TextBlock Text="💿"/>
+                                 </MenuItem.Icon>
+                            </MenuItem>
+                        </ContextMenu>
+                    </TreeDataGrid.ContextMenu>
+                    <TreeDataGrid.Styles>
+                        <Style Selector="TreeDataGridRow">
+                            <Setter Property="Foreground" Value="White"/>
+                            <Setter Property="MinHeight" Value="48"/>
+                            <Setter Property="Transitions">
+                                <Transitions>
+                                    <BrushTransition Property="Background" Duration="0:0:0.15"/>
+                                </Transitions>
+                            </Setter>
+                        </Style>
+                        <Style Selector="TreeDataGridRow:pointerover">
+                            <Setter Property="Background" Value="#1AFFFFFF"/>
+                        </Style>
+                        <Style Selector="TreeDataGridRow:selected">
+                            <Setter Property="Background" Value="#2A0078D4"/>
+                        </Style>
+                        <Style Selector="TreeDataGridColumnHeader">
+                            <Setter Property="Foreground" Value="#AAA"/>
+                            <Setter Property="Background" Value="Transparent"/>
+                            <Setter Property="FontWeight" Value="SemiBold"/>
+                            <Setter Property="FontSize" Value="12"/>
+                            <Setter Property="Padding" Value="12,8"/>
+                        </Style>
+                    </TreeDataGrid.Styles>
+                </TreeDataGrid>
 
-                    <!-- Duration -->
-                    <DataGridTextColumn Header="🕒" 
-                                        Binding="{Binding DurationDisplay}" 
-                                        Width="60"
-                                        IsReadOnly="True"/>
-
-                    <!-- Popularity -->
-                    <DataGridTemplateColumn Header="🔥" Width="80" IsReadOnly="True">
-                        <DataGridTemplateColumn.CellTemplate>
-                            <DataTemplate>
-                                <ProgressBar Value="{Binding Popularity}" 
-                                             Maximum="100" 
-                                             Height="4" 
-                                             VerticalAlignment="Center"
-                                             Margin="4,0"
-                                             Background="#333" 
-                                             Foreground="#FFA500"
-                                             BorderThickness="0"
-                                             ToolTip.Tip="{Binding Popularity}"/>
-                            </DataTemplate>
-                        </DataGridTemplateColumn.CellTemplate>
-                    </DataGridTemplateColumn>
-
-                    <!-- Genres -->
-                    <DataGridTextColumn Header="Genres" 
-                                        Binding="{Binding GenresDisplay}" 
-                                        Width="1.5*"
-                                        IsReadOnly="True"/>
-                    
-                    <!-- Status -->
-                    <DataGridTemplateColumn Header="Status" Width="120">
-                        <DataGridTemplateColumn.CellTemplate>
-                            <DataTemplate>
-                                <Border CornerRadius="4" 
-                                        Padding="8,4" 
-                                        Background="{Binding StatusColor}"
-                                        HorizontalAlignment="Left">
-                                    <TextBlock Text="{Binding State}" 
-                                               FontSize="11" 
-                                               Foreground="White"/>
-                                </Border>
-                            </DataTemplate>
-                        </DataGridTemplateColumn.CellTemplate>
-                    </DataGridTemplateColumn>
-                    
-                    <!-- Progress -->
-                    <DataGridTemplateColumn Header="Progress" Width="100">
-                        <DataGridTemplateColumn.CellTemplate>
-                            <DataTemplate>
-                                <ProgressBar Value="{Binding Progress}" 
-                                             Maximum="1" 
-                                             Height="6" 
-                                             Background="#333" 
-                                             Foreground="#4CAF50"
-                                             BorderThickness="0"/>
-                            </DataTemplate>
-                        </DataGridTemplateColumn.CellTemplate>
-                    </DataGridTemplateColumn>
-                    
-                    <!-- Actions -->
-                    <DataGridTemplateColumn Header="Actions" Width="200">
-                        <DataGridTemplateColumn.CellTemplate>
-                            <DataTemplate>
-                                <StackPanel Orientation="Horizontal" Spacing="4">
-                                    <Button Command="{Binding $parent[DataGrid].((vm:LibraryViewModel)DataContext).PlayTrackCommand}"
-                                            CommandParameter="{Binding}"
-                                            Background="#0078D4"
-                                            Foreground="White"
-                                            Padding="6,4"
-                                            ToolTip.Tip="Play">
-                                        <TextBlock Text="▶️" FontSize="12"/>
-                                    </Button>
-                                    
-                                    <Button Command="{Binding $parent[DataGrid].((vm:LibraryViewModel)DataContext).PlayerViewModel.AddToQueueCommand}"
-                                            CommandParameter="{Binding}"
-                                            Background="#1DB954"
-                                            Foreground="White"
-                                            Padding="6,4"
-                                            ToolTip.Tip="Add to Queue"
-                                            IsVisible="{Binding Model.ResolvedFilePath, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
-                                        <TextBlock Text="📋" FontSize="12"/>
-                                    </Button>
-                                    
-                                    <Button Command="{Binding $parent[DataGrid].((vm:LibraryViewModel)DataContext).RemoveTrackCommand}"
-                                            CommandParameter="{Binding}"
-                                            Background="#F44336"
-                                            Foreground="White"
-                                            Padding="6,4"
-                                            ToolTip.Tip="Remove"
-                                            IsVisible="{Binding $parent[DataGrid].((vm:LibraryViewModel)DataContext).IsEditMode}">
-                                        <TextBlock Text="🗑️" FontSize="12"/>
-                                    </Button>
-                                </StackPanel>
-                            </DataTemplate>
-                        </DataGridTemplateColumn.CellTemplate>
-                    </DataGridTemplateColumn>
-                </DataGrid.Columns>
-            </DataGrid>
+                <!-- Phase 6D: Shimmer Loading Overlay -->
+                <Border Background="#CC1A1A1A"
+                        IsVisible="{Binding IsLoading}"
+                        ZIndex="100">
+                    <StackPanel VerticalAlignment="Center" Spacing="20" Margin="40">
+                        <Border Classes="skeleton" Height="30" CornerRadius="4"/>
+                        <Border Classes="skeleton" Height="24" Width="400" HorizontalAlignment="Left" CornerRadius="4"/>
+                        <Border Classes="skeleton" Height="24" CornerRadius="4"/>
+                        <Border Classes="skeleton" Height="24" Width="300" HorizontalAlignment="Left" CornerRadius="4"/>
+                        <Border Classes="skeleton" Height="24" CornerRadius="4"/>
+                    </StackPanel>
+                </Border>
+            </Grid>
         </Grid>
+
+        <!-- RIGHT PANEL: Track Inspector -->
+        <Border Grid.Column="2" 
+                Width="320"
+                Background="#1A1A1A" 
+                BorderBrush="#3E3E3E" 
+                BorderThickness="1,0,0,0"
+                IsVisible="{Binding IsInspectorVisible}">
+            <controls:TrackInspectorView DataContext="{Binding TrackInspector}"/>
+        </Border>
+
+        <!-- Grid Splitter for Inspector -->
+        <GridSplitter Grid.Column="1" 
+                      Width="1" 
+                      Background="#3E3E3E"
+                      IsVisible="{Binding IsInspectorVisible}"/>
+
+        <!-- Phase 8: Upgrade Scout Overlay -->
+        <Border Grid.Column="0" Grid.ColumnSpan="3"
+                Background="#99000000"
+                IsVisible="{Binding IsUpgradeScoutVisible}"
+                ZIndex="500">
+            <Panel VerticalAlignment="Center" HorizontalAlignment="Center" Width="900" Height="700">
+                <views:UpgradeScoutView DataContext="{Binding UpgradeScout}"/>
+            </Panel>
+        </Border>
     </Grid>
 </UserControl>
