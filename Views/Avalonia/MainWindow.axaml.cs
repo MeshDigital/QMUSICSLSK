@@ -22,6 +22,58 @@ namespace SLSKDONET.Views.Avalonia
             
             // Responsive layout: auto-collapse navigation on small screens
             this.PropertyChanged += OnWindowPropertyChanged;
+
+            // Global Keyboard Shortcuts
+            this.KeyDown += OnKeyDown;
+        }
+
+        private void OnKeyDown(object? sender, global::Avalonia.Input.KeyEventArgs e)
+        {
+            // Ignore if a TextBox is focused/active source to prevention typing interference
+            if (e.Source is TextBox || e.Source is AutoCompleteBox) return;
+
+            if (DataContext is MainViewModel vm)
+            {
+                switch (e.Key)
+                {
+                    case global::Avalonia.Input.Key.Space:
+                        // Only handle space if we're not interacting with a button or list item that might need it
+                        // But for media apps, Space usually forces Play/Pause unless typing.
+                        // We'll set Handled=true to prevent button clicks if we want to enforce Play/Pause
+                        // checking modifiers to avoid conflicts (e.g. Ctrl+Space)
+                        if (e.KeyModifiers == global::Avalonia.Input.KeyModifiers.None)
+                        {
+                            if (vm.PlayerViewModel.TogglePlayPauseCommand.CanExecute(null))
+                            {
+                                vm.PlayerViewModel.TogglePlayPauseCommand.Execute(null);
+                                e.Handled = true;
+                            }
+                        }
+                        break;
+                        
+                    case global::Avalonia.Input.Key.Left:
+                        if (e.KeyModifiers == global::Avalonia.Input.KeyModifiers.None)
+                        {
+                            if (vm.PlayerViewModel.PreviousTrackCommand.CanExecute(null))
+                            {
+                                vm.PlayerViewModel.PreviousTrackCommand.Execute(null);
+                                e.Handled = true;
+                            }
+                        }
+                        break;
+                        
+                    case global::Avalonia.Input.Key.Right:
+                         if (e.KeyModifiers == global::Avalonia.Input.KeyModifiers.None)
+                        {
+                            if (vm.PlayerViewModel.NextTrackCommand.CanExecute(null))
+                            {
+                                vm.PlayerViewModel.NextTrackCommand.Execute(null);
+                                e.Handled = true;
+                            }
+                        }
+                        break;
+                }
+            }
         }
 
         private void OnWindowPropertyChanged(object? sender, AvaloniaPropertyChangedEventArgs e)

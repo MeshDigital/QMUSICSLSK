@@ -18,9 +18,10 @@ public interface ISpotifyMetadataService
     Task<TrackAudioFeatures?> GetAudioFeaturesAsync(string spotifyId);
 
     /// <summary>
-    /// Enriches a PlaylistTrack with Spotify metadata (ID, Art, Key, BPM).
-    /// Used by MetadataEnrichmentOrchestrator.
+    /// Fetches audio features (Key, BPM) for a batch of tracks.
     /// </summary>
+    Task<Dictionary<string, TrackAudioFeatures?>> GetAudioFeaturesBatchAsync(IEnumerable<string> spotifyIds);
+
     /// <summary>
     /// Enriches a PlaylistTrack with Spotify metadata (ID, Art, Key, BPM).
     /// Used by MetadataEnrichmentOrchestrator.

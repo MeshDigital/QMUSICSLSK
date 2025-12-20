@@ -60,6 +60,27 @@ public class AsyncRelayCommand<T> : ICommand
     {
         CanExecuteChanged?.Invoke(this, EventArgs.Empty);
     }
+
+    /// <summary>
+    /// Executes the command asynchronously and returns the task.
+    /// </summary>
+    public async Task ExecuteAsync(T? parameter)
+    {
+        if (CanExecute(parameter))
+        {
+            try
+            {
+                _isExecuting = true;
+                RaiseCanExecuteChanged();
+                await _execute(parameter);
+            }
+            finally
+            {
+                _isExecuting = false;
+                RaiseCanExecuteChanged();
+            }
+        }
+    }
 }
 
 /// <summary>

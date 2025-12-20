@@ -3,6 +3,7 @@ using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using System.Windows.Input;
+using Microsoft.Extensions.DependencyInjection; // Added for GetRequiredService
 using Microsoft.Extensions.Logging;
 using SLSKDONET.Configuration;
 using SLSKDONET.Services;
@@ -11,6 +12,7 @@ using Avalonia.Threading;
 using System.Collections.Generic; // Added this using directive
 using SLSKDONET.Models;
 using SpotifyAPI.Web; // For SimplePlaylist
+using SLSKDONET.Services.ImportProviders; // Added for SpotifyLikedSongsImportProvider
 
 namespace SLSKDONET.Views;
 
@@ -30,6 +32,7 @@ public class MainViewModel : INotifyPropertyChanged
     private readonly DownloadManager _downloadManager;
     private readonly ISpotifyMetadataService _spotifyMetadata;
     private readonly SpotifyAuthService _spotifyAuth;
+    private readonly IFileInteractionService _fileInteractionService;
 
     // Child ViewModels
     public PlayerViewModel PlayerViewModel { get; }
@@ -73,7 +76,9 @@ public class MainViewModel : INotifyPropertyChanged
         SettingsViewModel settingsViewModel,
         DownloadManager downloadManager,
         ISpotifyMetadataService spotifyMetadata,
-        SpotifyAuthService spotifyAuth)
+        SpotifyAuthService spotifyAuth,
+        IFileInteractionService fileInteractionService,
+        IEventBus eventBus)
     {
         _logger = logger;
         _config = config;
@@ -81,6 +86,7 @@ public class MainViewModel : INotifyPropertyChanged
         _soulseek = soulseek;
         _credentialService = credentialService;
         _navigationService = navigationService;
+        _fileInteractionService = fileInteractionService;
         
         // Assign missing fields
         _eventBus = eventBus;
@@ -112,6 +118,14 @@ public class MainViewModel : INotifyPropertyChanged
         LoadSpotifyPlaylistsCommand = new AsyncRelayCommand(LoadSpotifyPlaylistsAsync);
         // ImportSpotifyPlaylistCommand = new AsyncRelayCommand<SimplePlaylist>(ImportSpotifyPlaylistAsync);
         ImportLikedSongsCommand = new AsyncRelayCommand(ImportLikedSongsAsync);
+        SelectCsvFileCommand = new AsyncRelayCommand(SelectCsvFileAsync);
+
+        // Downloads Page Commands
+        PauseAllDownloadsCommand = new RelayCommand(PauseAllDownloads);
+        ResumeAllDownloadsCommand = new RelayCommand(ResumeAllDownloads);
+        CancelDownloadsCommand = new RelayCommand(CancelAllowedDownloads);
+        // Using generic RelayCommand<PlaylistTrackViewModel> for DeleteTrackCommand
+        DeleteTrackCommand = new AsyncRelayCommand<PlaylistTrackViewModel>(DeleteTrackAsync);
         
         // Subscribe to EventBus events
         // Subscribe to EventBus events
@@ -130,15 +144,24 @@ public class MainViewModel : INotifyPropertyChanged
         };
         
         // Set application version from assembly
+        // Set application version
         try
         {
-            var version = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
-            ApplicationVersion = version != null ? $"{version.Major}.{version.Minor}.{version.Build}" : "1.0.0";
+            var assembly = System.Reflection.Assembly.GetExecutingAssembly();
+            var infoVersion = System.Reflection.CustomAttributeExtensions.GetCustomAttribute<System.Reflection.AssemblyInformationalVersionAttribute>(assembly)?.InformationalVersion;
+            
+            // Clean up the version string (e.g. remove commit hash if present)
+            if (infoVersion != null && infoVersion.Contains('+'))
+            {
+                infoVersion = infoVersion.Split('+')[0];
+            }
+
+            ApplicationVersion = !string.IsNullOrEmpty(infoVersion) ? infoVersion : "0.1.0-alpha";
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Failed to get application version");
-            ApplicationVersion = "1.0.0";
+            ApplicationVersion = "0.1.0-alpha";
         }
 
         // Set LibraryViewModel's MainViewModel reference
@@ -159,8 +182,8 @@ public class MainViewModel : INotifyPropertyChanged
         // Subscribe to navigation events
         _navigationService.Navigated += OnNavigated;
 
-        // Navigate to Search page by default
-        NavigateToSearch();
+        // Navigate to Home page by default
+        NavigateToHome();
 
         // Phase 0.3: Brain Command
         ExecuteBrainTestCommand = new AsyncRelayCommand(ExecuteBrainTestAsync);
@@ -304,6 +327,40 @@ public class MainViewModel : INotifyPropertyChanged
 
     // Event-Driven Collection
     public System.Collections.ObjectModel.ObservableCollection<PlaylistTrackViewModel> AllGlobalTracks { get; } = new();
+    
+    // Filtered Collection for Downloads Page
+    private System.Collections.ObjectModel.ObservableCollection<PlaylistTrackViewModel> _filteredGlobalTracks = new();
+    public System.Collections.ObjectModel.ObservableCollection<PlaylistTrackViewModel> FilteredGlobalTracks
+    {
+        get => _filteredGlobalTracks;
+        set => SetProperty(ref _filteredGlobalTracks, value);
+    }
+    
+    private string _downloadsSearchText = "";
+    public string DownloadsSearchText
+    {
+        get => _downloadsSearchText;
+        set
+        {
+            if (SetProperty(ref _downloadsSearchText, value))
+            {
+                 UpdateDownloadsFilter();
+            }
+        }
+    }
+
+    private int _downloadsFilterIndex = 0; 
+    public int DownloadsFilterIndex
+    {
+        get => _downloadsFilterIndex;
+        set
+        {
+            if (SetProperty(ref _downloadsFilterIndex, value))
+            {
+                UpdateDownloadsFilter();
+            }
+        }
+    }
 
     // Navigation Commands
 
@@ -324,7 +381,15 @@ public class MainViewModel : INotifyPropertyChanged
     // Spotify Hub Commands
     public ICommand LoadSpotifyPlaylistsCommand { get; }
     // public ICommand ImportSpotifyPlaylistCommand { get; } // TODO: Phase 7
+    // public ICommand ImportSpotifyPlaylistCommand { get; } // TODO: Phase 7
     public ICommand ImportLikedSongsCommand { get; }
+    public ICommand SelectCsvFileCommand { get; }
+    
+    // Downloads Page Commands
+    public ICommand PauseAllDownloadsCommand { get; }
+    public ICommand ResumeAllDownloadsCommand { get; }
+    public ICommand CancelDownloadsCommand { get; }
+    public ICommand DeleteTrackCommand { get; }
 
     // Page instances (lazy-loaded)
     // Lazy-loaded page instances
@@ -369,13 +434,21 @@ public class MainViewModel : INotifyPropertyChanged
 
     private void NavigateToLibrary()
     {
-        if (_libraryPage == null)
+        try
         {
-            _libraryPage = new Avalonia.LibraryPage { DataContext = LibraryViewModel };
+            if (_libraryPage == null)
+            {
+                _libraryPage = new Avalonia.LibraryPage { DataContext = LibraryViewModel };
+            }
+            CurrentPage = _libraryPage;
+            CurrentPageType = PageType.Library;
+            _eventBus.Publish(new NavigationEvent(PageType.Library));
         }
-        CurrentPage = _libraryPage;
-        CurrentPageType = PageType.Library;
-        _eventBus.Publish(new NavigationEvent(PageType.Library));
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to navigate to Library page");
+            StatusText = $"Error opening Library: {ex.Message}";
+        }
     }
 
     private void NavigateToDownloads()
@@ -469,6 +542,7 @@ public class MainViewModel : INotifyPropertyChanged
         {
             var vm = new PlaylistTrackViewModel(trackModel, _eventBus);
             AllGlobalTracks.Add(vm);
+            UpdateDownloadsFilter(); // Refresh filter
         });
     }
 
@@ -480,6 +554,7 @@ public class MainViewModel : INotifyPropertyChanged
             if (toRemove != null)
             {
                 AllGlobalTracks.Remove(toRemove);
+                UpdateDownloadsFilter(); // Refresh filter
             }
         });
     }
@@ -583,9 +658,103 @@ public class MainViewModel : INotifyPropertyChanged
 
     private async Task ImportLikedSongsAsync()
     {
-        var orchestrator = Services.GetRequiredService<ImportOrchestrator>();
-        var provider = Services.GetRequiredService<SpotifyLikedSongsImportProvider>();
+        var services = (App.Current as App)?.Services ?? throw new InvalidOperationException("App.Services not initialized");
+        var orchestrator = services.GetRequiredService<ImportOrchestrator>();
+        var provider = services.GetRequiredService<SpotifyLikedSongsImportProvider>();
         
         await orchestrator.StartImportWithPreviewAsync(provider, "liked");
+    }
+
+    private async Task SelectCsvFileAsync()
+    {
+        var services = (App.Current as App)?.Services ?? throw new InvalidOperationException("App.Services not initialized");
+        var orchestrator = services.GetRequiredService<ImportOrchestrator>();
+        var provider = services.GetRequiredService<Services.ImportProviders.CsvImportProvider>();
+
+        try
+        {
+            var filters = new List<FileDialogFilter>
+            {
+                new FileDialogFilter("CSV Files", new List<string> { "csv" }),
+                new FileDialogFilter("All Files", new List<string> { "*" })
+            };
+
+            var filePath = await _fileInteractionService.OpenFileDialogAsync("Select CSV File", filters);
+
+            if (!string.IsNullOrWhiteSpace(filePath))
+            {
+                await orchestrator.StartImportWithPreviewAsync(provider, filePath);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to select CSV file");
+            StatusText = $"Error selecting file: {ex.Message}";
+        }
+    }
+    private void UpdateDownloadsFilter()
+    {
+        var search = DownloadsSearchText.Trim();
+        var filterIdx = DownloadsFilterIndex;
+
+        IEnumerable<PlaylistTrackViewModel> query = AllGlobalTracks;
+
+        // 1. Apply Search
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            query = query.Where(t => 
+                (t.Title?.Contains(search, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                (t.Artist?.Contains(search, StringComparison.OrdinalIgnoreCase) ?? false));
+        }
+
+        // 2. Apply State Filter
+        // 0=All, 1=Downloading, 2=Completed, 3=Failed, 4=Pending
+        if (filterIdx > 0)
+        {
+            query = filterIdx switch
+            {
+                1 => query.Where(t => t.State == PlaylistTrackState.Downloading),
+                2 => query.Where(t => t.State == PlaylistTrackState.Completed),
+                3 => query.Where(t => t.State == PlaylistTrackState.Failed),
+                4 => query.Where(t => t.State == PlaylistTrackState.Pending || t.State == PlaylistTrackState.Searching || t.State == PlaylistTrackState.Queued),
+                _ => query
+            };
+        }
+
+        // Update ObservableCollection
+        // Note: For large lists this is inefficient, but for <1000 downloads it's fine for now.
+        // Optimization: Use DynamicData or similar if list grows large.
+        FilteredGlobalTracks = new System.Collections.ObjectModel.ObservableCollection<PlaylistTrackViewModel>(query.ToList());
+    }
+
+    // Command Implementations
+    private void PauseAllDownloads()
+    {
+        foreach (var track in AllGlobalTracks.Where(t => t.CanPause))
+        {
+            _downloadManager.PauseTrack(track.GlobalId);
+        }
+    }
+
+    private void ResumeAllDownloads()
+    {
+        foreach (var track in AllGlobalTracks.Where(t => t.State == PlaylistTrackState.Paused))
+        {
+            _downloadManager.ResumeTrack(track.GlobalId);
+        }
+    }
+
+    private void CancelAllowedDownloads()
+    {
+        foreach (var track in AllGlobalTracks.Where(t => t.CanCancel))
+        {
+            _downloadManager.CancelTrack(track.GlobalId);
+        }
+    }
+
+    private async Task DeleteTrackAsync(PlaylistTrackViewModel? track)
+    {
+        if (track == null) return;
+        await _downloadManager.DeleteTrackFromDiskAndHistoryAsync(track.GlobalId);
     }
 }

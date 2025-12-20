@@ -82,9 +82,62 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
         MaxActiveDownloads = _config.MaxConcurrentDownloads > 0 ? _config.MaxConcurrentDownloads : 3;
 
         // Phase 8: Automation Subscriptions
-        _eventBus.Subscribe<AutoDownloadTrackEvent>(OnAutoDownloadTrack);
-        _eventBus.Subscribe<AutoDownloadUpgradeEvent>(OnAutoDownloadUpgrade);
-        _eventBus.Subscribe<UpgradeAvailableEvent>(OnUpgradeAvailable);
+        _eventBus.GetEvent<AutoDownloadTrackEvent>().Subscribe(OnAutoDownloadTrack);
+        _eventBus.GetEvent<AutoDownloadUpgradeEvent>().Subscribe(OnAutoDownloadUpgrade);
+        _eventBus.GetEvent<UpgradeAvailableEvent>().Subscribe(OnUpgradeAvailable);
+        // Phase 6: Library Interactions
+        _eventBus.GetEvent<DownloadAlbumRequestEvent>().Subscribe(OnDownloadAlbumRequest);
+    }
+
+    /// <summary>
+    /// Handles requests to download an entire album (Project or AlbumNode).
+    /// </summary>
+    private void OnDownloadAlbumRequest(DownloadAlbumRequestEvent e)
+    {
+        try
+        {
+            if (e.Album is PlaylistJob job)
+            {
+                _logger.LogInformation("Processing DownloadAlbumRequest for Project: {Title}", job.SourceTitle);
+                // If it's a full project, we might need to load tracks if they aren't populated?
+                // QueueProject handles this if OriginalTracks are present.
+                // But usually this comes from Library where PlaylistTracks should be loaded?
+                // If checking LibraryViewModel, DownloadAlbumCommand passes the Job.
+                
+                // Ensure tracks are loaded
+                 _ = Task.Run(async () => 
+                 {
+                     var tracks = await _libraryService.LoadPlaylistTracksAsync(job.Id);
+                     if (tracks.Any())
+                     {
+                         QueueTracks(tracks);
+                         _logger.LogInformation("Queued {Count} tracks for project {Title}", tracks.Count, job.SourceTitle);
+                     }
+                     else
+                     {
+                         _logger.LogWarning("No tracks found for project {Title} (ID: {Id})", job.SourceTitle, job.Id);
+                     }
+                 });
+            }
+            else if (e.Album is ViewModels.Library.AlbumNode node)
+            {
+                _logger.LogInformation("Processing DownloadAlbumRequest for AlbumNode: {Title}", node.AlbumTitle);
+                var tracks = node.Tracks.Select(vm => vm.Model).ToList();
+                if (tracks.Any())
+                {
+                    QueueTracks(tracks);
+                    _logger.LogInformation("Queued {Count} tracks from AlbumNode {Title}", tracks.Count, node.AlbumTitle);
+                }
+            }
+            else
+            {
+                _logger.LogWarning("Unknown payload type for DownloadAlbumRequestEvent: {Type}", e.Album?.GetType().Name);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to handle DownloadAlbumRequestEvent");
+        }
     }
 
     /// <summary>
@@ -207,6 +260,13 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
 
             _logger.LogInformation("Queueing project with {TrackCount} tracks", job.PlaylistTracks.Count);
 
+            // 0. Set Album Art for the Job from the first track if available
+            if (string.IsNullOrEmpty(job.AlbumArtUrl))
+            {
+                 job.AlbumArtUrl = job.OriginalTracks.FirstOrDefault(t => !string.IsNullOrEmpty(t.AlbumArtUrl))?.AlbumArtUrl 
+                                   ?? job.PlaylistTracks.FirstOrDefault(t => !string.IsNullOrEmpty(t.AlbumArtUrl))?.AlbumArtUrl;
+            }
+
             // 1. Persist the job header and all associated tracks via LibraryService
             try
             {
@@ -248,9 +308,10 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
                 _ = SaveTrackToDb(ctx);
                 
                 // Only queue enrichment if it's new/pending
-                // _enrichmentOrchestrator.QueueForEnrichment... (Need to update Enricher to take Model too, or map via ID)
-                // For Phase 3.2 we will skip Enrichment call here to keep it simple, or fix Enricher later. 
-                // The prompt focuses on UI decoupling.
+                if (ctx.State == PlaylistTrackState.Pending || ctx.State == PlaylistTrackState.Searching)
+                {
+                    _enrichmentOrchestrator.QueueForEnrichment(ctx.Model);
+                }
             }
         }
         // Processing loop picks this up automatically

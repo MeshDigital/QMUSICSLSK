@@ -39,7 +39,14 @@ public class UpgradeScoutViewModel : INotifyPropertyChanged
         ScoutCommand = new AsyncRelayCommand(ExecuteScoutAsync);
         SearchAllCommand = new AsyncRelayCommand(ExecuteSearchAllAsync);
         UpgradeCommand = new AsyncRelayCommand<UpgradeCandidateViewModel>(ExecuteUpgradeAsync);
-        ClearCompletedCommand = new RelayCommand(_ => Candidates.Remove(Candidates.Where(c => c.Status == UpgradeStatus.Completed).ToList()));
+        ClearCompletedCommand = new RelayCommand(() => 
+        {
+            var completed = Candidates.Where(c => c.Status == UpgradeStatus.Completed).ToList();
+            foreach (var item in completed)
+            {
+                Candidates.Remove(item);
+            }
+        });
     }
 
     public ObservableCollection<UpgradeCandidateViewModel> Candidates { get; } = new();
@@ -129,7 +136,8 @@ public class UpgradeScoutViewModel : INotifyPropertyChanged
         _logger.LogInformation("Manually triggering upgrade for {Artist} - {Title}", candidate.Artist, candidate.Title);
         
         // Publish the event that DownloadManager handles
-        _eventBus.Publish(new Events.AutoDownloadUpgradeEvent(candidate.GlobalId, candidate.ProposedReplacement));
+        _eventBus.Publish(new SLSKDONET.Models.AutoDownloadUpgradeEvent
+(candidate.GlobalId, candidate.ProposedReplacement));
         
         candidate.Status = UpgradeStatus.Completed;
         candidate.StatusMessage = "Upgrade queued";

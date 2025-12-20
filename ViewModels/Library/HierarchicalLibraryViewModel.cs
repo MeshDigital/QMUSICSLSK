@@ -27,16 +27,30 @@ public class HierarchicalLibraryViewModel
             {
                 new TemplateColumn<ILibraryNode>(
                     "🎨",
-                    new FuncDataTemplate<ILibraryNode>((node, _) => 
-                        new Border { 
+                    new FuncDataTemplate<object>((item, _) => 
+                    {
+                        if (item is not ILibraryNode node) return new Panel();
+
+                        return new Border { 
                             Width = 32, Height = 32, CornerRadius = new CornerRadius(4), ClipToBounds = true,
                             Background = Brush.Parse("#2D2D2D"),
                             Margin = new Thickness(4),
                             Child = new Image { 
-                                [!Image.SourceProperty] = new Binding(nameof(ILibraryNode.AlbumArtPath)),
+                                [!Image.SourceProperty] = new Binding(nameof(ILibraryNode.AlbumArtPath))
+                                {
+                                    Converter = new FuncValueConverter<string?, IImage?>(path => 
+                                    {
+                                        if (string.IsNullOrEmpty(path)) return null;
+                                        try {
+                                            if (System.IO.File.Exists(path)) return new Avalonia.Media.Imaging.Bitmap(path);
+                                        } catch {} // Ignore errors
+                                        return null;
+                                    })
+                                },
                                 Stretch = Stretch.UniformToFill
                             }
-                        }, true),
+                        };
+                    }, false), // Disable recycling
                     new GridLength(40)),
                 new HierarchicalExpanderColumn<ILibraryNode>(
                     new TextColumn<ILibraryNode, string>("Title", x => x.Title ?? "Unknown"),
@@ -50,8 +64,11 @@ public class HierarchicalLibraryViewModel
                 new TextColumn<ILibraryNode, string>("Genres", x => x.Genres ?? string.Empty),
                 new TemplateColumn<ILibraryNode>(
                     "Status",
-                    new FuncDataTemplate<ILibraryNode>((node, _) => 
-                        new StackPanel {
+                    new FuncDataTemplate<object>((item, _) => 
+                    {
+                         if (item is not ILibraryNode node) return new Panel();
+
+                        return new StackPanel {
                             Spacing = 4,
                             VerticalAlignment = VerticalAlignment.Center,
                             Children = {
@@ -63,7 +80,8 @@ public class HierarchicalLibraryViewModel
                                     [!Visual.IsVisibleProperty] = new Binding(nameof(ILibraryNode.Progress)) { Converter = new FuncValueConverter<double, bool>(v => v > 0) }
                                 }
                             }
-                        }, true),
+                        };
+                    }, false),
                     new GridLength(100)),
             }
         };

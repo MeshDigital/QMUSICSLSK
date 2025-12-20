@@ -132,7 +132,7 @@ public class DownloadDiscoveryService
         if (isUpgrade)
         {
             int currentBitrate = track.Bitrate ?? 0;
-            int newBitrate = bestMatch.Bitrate ?? 0;
+            int newBitrate = bestMatch.Bitrate;
             
             // Upgrade Logic: Better bitrate AND minimum gain achieved
             if (newBitrate > currentBitrate && (newBitrate - currentBitrate) >= _config.UpgradeMinGainKbps)
@@ -142,18 +142,18 @@ public class DownloadDiscoveryService
 
                 if (_config.UpgradeAutoQueueEnabled)
                 {
-                    _eventBus.Publish(new Events.AutoDownloadUpgradeEvent(track.TrackUniqueHash, bestMatch));
+                    _eventBus.Publish(new AutoDownloadUpgradeEvent(track.TrackUniqueHash, bestMatch));
                 }
                 else
                 {
-                    _eventBus.Publish(new Events.UpgradeAvailableEvent(track.TrackUniqueHash, bestMatch));
+                    _eventBus.Publish(new UpgradeAvailableEvent(track.TrackUniqueHash, bestMatch));
                 }
             }
         }
         else
         {
             // Standard missing track discovery - auto download is assumed here for automation flows
-            _eventBus.Publish(new Events.AutoDownloadTrackEvent(track.TrackUniqueHash, bestMatch));
+            _eventBus.Publish(new AutoDownloadTrackEvent(track.TrackUniqueHash, bestMatch));
         }
     }
 }

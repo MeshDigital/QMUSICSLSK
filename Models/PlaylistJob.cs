@@ -39,6 +39,11 @@ public class PlaylistJob : INotifyPropertyChanged
     public string DestinationFolder { get; set; } = "";
 
     /// <summary>
+    /// URL for the playlist/album cover art.
+    /// </summary>
+    public string? AlbumArtUrl { get; set; }
+
+    /// <summary>
     /// The complete, original list of tracks fetched from the source.
     /// This list is never modified; it represents the full source.
     /// </summary>

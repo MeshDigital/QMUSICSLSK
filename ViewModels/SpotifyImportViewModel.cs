@@ -16,68 +16,69 @@ namespace SLSKDONET.ViewModels;
 public class SpotifyImportViewModel : INotifyPropertyChanged
 {
     private readonly ILogger<SpotifyImportViewModel> _logger;
+    private readonly SpotifyAuthService _authService;
+    
+    // Dependencies
     private readonly SpotifyInputSource? _spotifyApiService;
     private readonly SpotifyScraperInputSource _spotifyScraperService;
     private readonly DownloadManager _downloadManager;
     
+    // Properties
+    public ObservableCollection<SelectableTrack> Tracks { get; } = new();
+    
     private string _playlistUrl = "";
-    private string _playlistTitle = "Spotify Playlist";
-    private string _playlistCoverUrl = "";
-    private bool _isLoading;
-    private string _statusMessage = "";
-    private ObservableCollection<SelectableTrack> _tracks = new();
-
     public string PlaylistUrl
     {
         get => _playlistUrl;
         set { _playlistUrl = value; OnPropertyChanged(); }
     }
 
+    private string _playlistTitle = "Spotify Playlist";
     public string PlaylistTitle
     {
         get => _playlistTitle;
         set { _playlistTitle = value; OnPropertyChanged(); }
     }
 
-    public string PlaylistCoverUrl
-    {
-        get => _playlistCoverUrl;
-        set { _playlistCoverUrl = value; OnPropertyChanged(); }
-    }
-
+    private bool _isLoading;
     public bool IsLoading
     {
         get => _isLoading;
-        set
-        {
-            _isLoading = value;
-            OnPropertyChanged();
-            OnPropertyChanged(nameof(CanInteract));
-        }
+        set { _isLoading = value; OnPropertyChanged(); }
     }
 
+    private string _statusMessage = "";
     public string StatusMessage
     {
         get => _statusMessage;
         set { _statusMessage = value; OnPropertyChanged(); }
     }
 
-    public ObservableCollection<SelectableTrack> Tracks
-    {
-        get => _tracks;
-        set
-        {
-            _tracks = value;
-            OnPropertyChanged();
-            OnPropertyChanged(nameof(TrackCount));
-            OnPropertyChanged(nameof(SelectedCount));
-        }
-    }
-
     public int TrackCount => Tracks.Count;
     public int SelectedCount => Tracks.Count(t => t.IsSelected);
-    public bool CanInteract => !IsLoading;
 
+    // User Playlists
+    public ObservableCollection<SpotifyPlaylistViewModel> UserPlaylists { get; } = new();
+    
+    private bool _isAuthenticated;
+    public bool IsAuthenticated
+    {
+        get => _isAuthenticated;
+        set 
+        { 
+            _isAuthenticated = value; 
+            OnPropertyChanged(); 
+            OnPropertyChanged(nameof(ShowLoginButton));
+            OnPropertyChanged(nameof(ShowPlaylists));
+        }
+    }
+    
+    public bool ShowLoginButton => !IsAuthenticated;
+    public bool ShowPlaylists => IsAuthenticated;
+
+    public ICommand ConnectCommand { get; }
+    public ICommand RefreshPlaylistsCommand { get; }
+    public ICommand ImportPlaylistCommand { get; }
     public ICommand LoadPlaylistCommand { get; }
     public ICommand DownloadCommand { get; }
     public ICommand SelectAllCommand { get; }
@@ -88,18 +89,34 @@ public class SpotifyImportViewModel : INotifyPropertyChanged
         ILogger<SpotifyImportViewModel> logger,
         SpotifyInputSource? spotifyApiService,
         SpotifyScraperInputSource spotifyScraperService,
-        DownloadManager downloadManager)
+        DownloadManager downloadManager,
+        SpotifyAuthService authService)
     {
         _logger = logger;
         _spotifyApiService = spotifyApiService;
         _spotifyScraperService = spotifyScraperService;
         _downloadManager = downloadManager;
+        _authService = authService;
+        
+        // Subscribe to auth changes
+        _authService.AuthenticationChanged += (s, e) => 
+        {
+            IsAuthenticated = e;
+            if (e) _ = RefreshPlaylistsAsync();
+        };
+
+        // Initial check
+        Task.Run(async () => IsAuthenticated = await _authService.IsAuthenticatedAsync());
 
         LoadPlaylistCommand = new AsyncRelayCommand(LoadPlaylistAsync);
         DownloadCommand = new AsyncRelayCommand(DownloadSelectedAsync, () => SelectedCount > 0);
         SelectAllCommand = new RelayCommand(SelectAll);
         DeselectAllCommand = new RelayCommand(DeselectAll);
         CancelCommand = new RelayCommand(Cancel);
+        
+        ConnectCommand = new AsyncRelayCommand(ConnectSpotifyAsync);
+        RefreshPlaylistsCommand = new AsyncRelayCommand(RefreshPlaylistsAsync);
+        ImportPlaylistCommand = new AsyncRelayCommand<SpotifyPlaylistViewModel>(ImportUserPlaylistAsync);
     }
 
     public async Task LoadPlaylistAsync()
@@ -153,7 +170,17 @@ public class SpotifyImportViewModel : INotifyPropertyChanged
                     Title = query.Title,
                     Artist = query.Artist,
                     Album = query.Album,
-                    Length = 0 // Will be populated during search
+                    Length = 0, // Will be populated during search
+                    // Fix: Map metadata fields
+                    SpotifyTrackId = query.SpotifyTrackId,
+                    SpotifyAlbumId = query.SpotifyAlbumId,
+                    SpotifyArtistId = query.SpotifyArtistId,
+                    AlbumArtUrl = query.AlbumArtUrl,
+                    ArtistImageUrl = query.ArtistImageUrl,
+                    Genres = query.Genres,
+                    Popularity = query.Popularity,
+                    CanonicalDuration = query.CanonicalDuration,
+                    ReleaseDate = query.ReleaseDate
                 };
 
                 Tracks.Add(new SelectableTrack(track, trackNum++));
@@ -211,7 +238,17 @@ public class SpotifyImportViewModel : INotifyPropertyChanged
                 TrackUniqueHash = $"{selectable.Artist}|{selectable.Title}".ToLowerInvariant(),
                 Status = TrackStatus.Missing,
                 AddedAt = DateTime.Now,
-                TrackNumber = selectable.TrackNumber
+                TrackNumber = selectable.TrackNumber,
+                // Fix: Map metadata from source track
+                SpotifyTrackId = selectable.Track.SpotifyTrackId,
+                SpotifyAlbumId = selectable.Track.SpotifyAlbumId,
+                SpotifyArtistId = selectable.Track.SpotifyArtistId,
+                AlbumArtUrl = selectable.Track.AlbumArtUrl,
+                ArtistImageUrl = selectable.Track.ArtistImageUrl,
+                Genres = selectable.Track.Genres,
+                Popularity = selectable.Track.Popularity,
+                CanonicalDuration = selectable.Track.CanonicalDuration,
+                ReleaseDate = selectable.Track.ReleaseDate
             };
 
             job.PlaylistTracks.Add(playlistTrack);
@@ -276,8 +313,115 @@ public class SpotifyImportViewModel : INotifyPropertyChanged
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
-    protected void OnPropertyChanged([CallerMemberName] string? propertyName = null)
+    protected virtual void OnPropertyChanged([CallerMemberName] string? propertyName = null)
     {
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
     }
+
+    private async Task ConnectSpotifyAsync()
+    {
+        try
+        {
+            IsLoading = true;
+            StatusMessage = "Connecting to Spotify...";
+            await _authService.StartAuthorizationAsync();
+            // AuthenticationChanged event will handle the rest
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to connect to Spotify");
+            StatusMessage = "Connection failed: " + ex.Message;
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    private async Task RefreshPlaylistsAsync()
+    {
+        if (!IsAuthenticated) return;
+
+        try
+        {
+            IsLoading = true;
+            StatusMessage = "Fetching your playlists...";
+            UserPlaylists.Clear();
+
+            var client = await _authService.GetAuthenticatedClientAsync();
+            var page = await client.Playlists.CurrentUsers();
+            
+            await foreach (var playlist in client.Paginate(page))
+            {
+                UserPlaylists.Add(new SpotifyPlaylistViewModel
+                {
+                    Id = playlist.Id,
+                    Name = playlist.Name,
+                    ImageUrl = playlist.Images?.FirstOrDefault()?.Url ?? "",
+                    TrackCount = playlist.Tracks?.Total ?? 0,
+                    Owner = playlist.Owner?.DisplayName ?? "Unknown",
+                    Url = playlist.ExternalUrls.ContainsKey("spotify") ? playlist.ExternalUrls["spotify"] : ""
+                });
+            }
+
+            // Also try to get "My Library" (Liked Songs)
+            // Note: Liked songs is a separate endpoint "Library.GetTracks", not a playlist.
+            // We can add a fake "Liked Songs" entry if we want, handled by specific provider.
+            UserPlaylists.Insert(0, new SpotifyPlaylistViewModel
+            {
+                Id = "me/tracks",
+                Name = "Liked Songs",
+                ImageUrl = "https://t.scdn.co/images/3099b3803ad9496896c43f22fe9be8c4.png", // Generic heart icon
+                TrackCount = 0, // Hard to get total without a call
+                Owner = "You",
+                Url = "spotify:user:me:collection" // Special case handled by provider?
+            });
+
+            StatusMessage = $"Found {UserPlaylists.Count} playlists";
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to fetch playlists");
+            StatusMessage = "Failed to load playlists";
+            
+            // If it's an auth error, we might want to reset auth
+            if (ex.Message.Contains("Unauthorized"))
+            {
+                await _authService.SignOutAsync();
+            }
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    private async Task ImportUserPlaylistAsync(SpotifyPlaylistViewModel? playlist)
+    {
+        if (playlist == null) return;
+
+        PlaylistUrl = playlist.Url;
+        
+        // Special handling for Liked Songs if we implement that provider
+        if (playlist.Id == "me/tracks")
+        {
+             // TODO: Ensure a provider can handle "spotify:user:me:collection" or similar ID
+             // For now, let's treat it as a URL that the LikedSongsProvider can handle
+             // or assume the user wants to import that specific collection.
+             // We can check if PlaylistUrl is empty or special.
+        }
+
+        await LoadPlaylistAsync();
+    }
+}
+
+public class SpotifyPlaylistViewModel
+{
+    public string Id { get; set; } = "";
+    public string Name { get; set; } = "";
+    public string ImageUrl { get; set; } = "";
+    public int TrackCount { get; set; }
+    public string Owner { get; set; } = "";
+    public string Url { get; set; } = "";
+    public string Description => $"{TrackCount} tracks • by {Owner}";
 }

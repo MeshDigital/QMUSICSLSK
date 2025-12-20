@@ -177,11 +177,65 @@ public class MetadataEnrichmentOrchestrator : IDisposable
             {
                 await _signal.WaitAsync(token); // Wait for item
                 
-                if (_enrichmentQueue.TryDequeue(out var track))
+                // Dequeue a batch of items
+                var batch = new List<PlaylistTrack>();
+                
+                // Try to fill batch up to 50 items
+                // Always take at least one (we just waited for it)
+                if (_enrichmentQueue.TryDequeue(out var first))
                 {
-                    // Introduce a small delay to batch? (Future optimization as per Roadmap)
-                    // limit to one by one for now to match safety of original implementation
-                    await EnrichTrackAsync(track);
+                    batch.Add(first);
+                    
+                    // Try to grab more if available properly
+                    // Limit loop to avoid blocking too long
+                    while (batch.Count < 50 && _enrichmentQueue.TryDequeue(out var next))
+                    {
+                        batch.Add(next);
+                    }
+                }
+
+                if (!batch.Any()) continue;
+
+                // Process the batch
+                 if (!_spotifyAuthService.IsAuthenticated)
+                {
+                     _logger.LogDebug("Skipping metadata enrichment: User not authenticated with Spotify.");
+                     // Mark all as done so they don't hang ? Or just ignore?
+                     // If we ignore, they will be "missing" metadata which is fine.
+                     // But we should clean up pending orchestrations.
+                     foreach(var t in batch) await _databaseService.RemovePendingOrchestrationAsync(t.TrackUniqueHash);
+                     continue;
+                }
+
+                // Split into "Has Spotify ID" vs "Needs Search"
+                var knownTracks = batch.Where(t => !string.IsNullOrEmpty(t.SpotifyTrackId)).ToList();
+                var unknownTracks = batch.Where(t => string.IsNullOrEmpty(t.SpotifyTrackId)).ToList();
+
+                // 1. Bulk Fetch Audio Features for Known Tracks
+                if (knownTracks.Any())
+                {
+                    var ids = knownTracks.Select(t => t.SpotifyTrackId!).ToList();
+                    var features = await _metadataService.GetAudioFeaturesBatchAsync(ids);
+
+                    foreach (var track in knownTracks)
+                    {
+                        if (features.TryGetValue(track.SpotifyTrackId!, out var feature) && feature != null)
+                        {
+                            ApplyFeatures(track, feature);
+                        }
+                        
+                        await FinalizeEnrichmentAsync(track, true);
+                    }
+                }
+
+                // 2. Process Unknown Tracks One-by-One (Search cannot be batched easily)
+                foreach (var track in unknownTracks)
+                {
+                    bool success = await _metadataService.EnrichTrackAsync(track);
+                    await FinalizeEnrichmentAsync(track, success);
+                    
+                    // Add small delay only for searches to be safe
+                    await Task.Delay(50, token); 
                 }
             }
             catch (OperationCanceledException)
@@ -195,21 +249,18 @@ public class MetadataEnrichmentOrchestrator : IDisposable
         }
     }
 
-    private async Task EnrichTrackAsync(PlaylistTrack track)
+    private void ApplyFeatures(PlaylistTrack track, SpotifyAPI.Web.TrackAudioFeatures feature)
     {
-        try
+        track.BPM = feature.Tempo;
+        track.MusicalKey = $"{feature.Key}{(feature.Mode == 1 ? "B" : "A")}";
+        track.AnalysisOffset = 0;
+    }
+
+    private async Task FinalizeEnrichmentAsync(PlaylistTrack track, bool success)
+    {
+        try 
         {
-            // 1. Check Authentication
-            if (!_spotifyAuthService.IsAuthenticated)
-            {
-                _logger.LogDebug("Skipping metadata enrichment: User not authenticated with Spotify.");
-                return;
-            }
-
-            // 2. Attempt Enrichment
-            bool success = await _metadataService.EnrichTrackAsync(track);
-
-            // Phase 8: Sonic Integrity Analysis
+            // Phase 8: Sonic Integrity
             if (!string.IsNullOrEmpty(track.ResolvedFilePath))
             {
                 try
@@ -227,61 +278,49 @@ public class MetadataEnrichmentOrchestrator : IDisposable
                 }
             }
 
-            // 3. Validation: Verify we actually got data
-            if (success)
+            if (success && !string.IsNullOrEmpty(track.SpotifyTrackId))
             {
-                if (string.IsNullOrEmpty(track.SpotifyTrackId))
-                {
-                    _logger.LogWarning("Enrichment reported success but SpotifyTrackId is missing. Ignoring updates.");
-                    return;
-                }
+               _eventBus.Publish(new TrackMetadataUpdatedEvent(track.TrackUniqueHash));
 
-                // UI Update Removed - replaced with Event
-                _eventBus.Publish(new TrackMetadataUpdatedEvent(track.TrackUniqueHash));
-
-                // Persist changes
                 await _databaseService.SaveTrackAsync(new Data.TrackEntity
                 {
                    GlobalId = track.TrackUniqueHash,
                    Artist = track.Artist,
                    Title = track.Title,
-                   State = track.Status == TrackStatus.Downloaded ? "Completed" : "Missing", // Approximate
+                   State = track.Status == TrackStatus.Downloaded ? "Completed" : "Missing",
                    Filename = track.ResolvedFilePath ?? "",
                    CoverArtUrl = track.AlbumArtUrl,
                    SpotifyTrackId = track.SpotifyTrackId,
-                   
-                   // Phase 0.5: Persistence
                    MusicalKey = track.MusicalKey,
                    BPM = track.BPM,
                    AnalysisOffset = track.AnalysisOffset,
                    BitrateScore = track.BitrateScore,
                    AudioFingerprint = track.AudioFingerprint,
                    CuePointsJson = track.CuePointsJson,
-                   
-                   // Phase 8: Sonic Integrity
                    SpectralHash = track.SpectralHash,
                    QualityConfidence = track.QualityConfidence,
                    FrequencyCutoff = track.FrequencyCutoff,
                    IsTrustworthy = track.IsTrustworthy
                 });
-
-                // Phase 7: Orchestration Complete
-                await _databaseService.RemovePendingOrchestrationAsync(track.TrackUniqueHash);
             }
             else
             {
-                 // Enrichment failed or no match found
-                 _logger.LogDebug("Metadata enrichment yielded no results for {Artist} - {Title}", track.Artist, track.Title);
-                 
-                 // If it failed to enrich but we have a file, it's technically done orchestrating 
-                 // (we can't enrich what doesn't exist on Spotify)
-                 await _databaseService.RemovePendingOrchestrationAsync(track.TrackUniqueHash);
+                 _logger.LogDebug("Metadata enrichment yielded match for {Artist} - {Title}", track.Artist, track.Title);
             }
+
+            await _databaseService.RemovePendingOrchestrationAsync(track.TrackUniqueHash);
         }
         catch (Exception ex)
         {
-             _logger.LogWarning("Failed to enrich track {Artist} - {Title}: {Msg}", track.Artist, track.Title, ex.Message);
+            _logger.LogError(ex, "Failed to finalize enrichment for {Artist} - {Title}", track.Artist, track.Title);
         }
+    }
+
+    // Deprecated single method
+    private Task EnrichTrackAsync(PlaylistTrack track)
+    {
+        // Re-routed to new flow, but mostly unused now by loop
+        return Task.CompletedTask; 
     }
 
     public void Dispose()

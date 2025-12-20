@@ -45,9 +45,9 @@ public class SpotifyImportProvider : IImportProvider
             _logger.LogInformation("Importing from Spotify: {Url}", playlistUrl);
 
             // Determine which import method to use
-            var useApi = !string.IsNullOrWhiteSpace(_config.SpotifyClientId) && 
-                        !string.IsNullOrWhiteSpace(_config.SpotifyClientSecret) && 
-                        !_config.SpotifyUsePublicOnly;
+            // Determine which import method to use
+            // Fix: Check InputSource configuration which includes User Auth (PKCE)
+            var useApi = _spotifyInputSource.IsConfigured;
 
             var tracks = useApi
                 ? await _spotifyInputSource.ParseAsync(playlistUrl)

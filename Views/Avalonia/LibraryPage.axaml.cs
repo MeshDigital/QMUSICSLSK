@@ -2,6 +2,8 @@ using System;
 using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives; // Added for TreeDataGridRow
+using Avalonia.Controls.Selection; // Added for ITreeDataGridRowSelectionModel
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.VisualTree;
@@ -48,10 +50,14 @@ public partial class LibraryPage : UserControl
         if (DataContext is LibraryViewModel vm)
         {
             // The clicked item is in the Source.Selection
-            var selectedItem = vm.Tracks.Hierarchical.Source.Selection.SelectedItem;
-            if (selectedItem is PlaylistTrackViewModel track)
+            if (sender is TreeDataGrid grid)
             {
-                vm.PlayTrackCommand.Execute(track);
+                if (grid.Source is ITreeDataGridSource<PlaylistTrackViewModel> source && 
+                    source.Selection is ITreeDataGridRowSelectionModel<PlaylistTrackViewModel> selection &&
+                    selection.SelectedItem is PlaylistTrackViewModel track)
+                {
+                    vm.PlayTrackCommand.Execute(track);
+                }
             }
         }
     }
@@ -79,6 +85,10 @@ public partial class LibraryPage : UserControl
         if (_dragStartPoint.HasValue && _draggedTrack != null && e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
         {
             var currentPoint = e.GetPosition(this);
+            // The original instruction snippet was malformed. Assuming the intent was to add a dropTarget variable
+            // and keep the 'diff' calculation, and that 'parent' was a placeholder for 'this.Parent'.
+            // Making a best effort to produce syntactically correct code based on the instruction's intent.
+            var dropTarget = this.Parent as Control ?? (Control)this; // Corrected 'parent' to 'this.Parent' for compilation
             var diff = currentPoint - _dragStartPoint.Value;
             
             // Move ghost if it exists
@@ -95,7 +105,7 @@ public partial class LibraryPage : UserControl
                 }
 
                 // Show visual adorner
-                _adornerService?.ShowGhost((e.Source as Control)?.FindAncestorOfType<TreeDataGridRow>() ?? this, this);
+                _adornerService?.ShowGhost(((Control?)(e.Source as Control)?.FindAncestorOfType<TreeDataGridRow>()) ?? this, this);
 
                 // Phase 6D: Decoupled D&D Payload
                 var data = new DataObject();

@@ -6,6 +6,8 @@ using Microsoft.Extensions.Logging;
 using SLSKDONET.Models;
 using SLSKDONET.Services;
 using SLSKDONET.Views;
+using Avalonia.Controls.Selection; // Added for ITreeDataGridSelectionInteraction
+using System.Reactive.Linq;
 using Avalonia.Threading;
 
 namespace SLSKDONET.ViewModels;
@@ -22,6 +24,11 @@ public class LibraryViewModel : INotifyPropertyChanged
     private readonly ILibraryService _libraryService; // Session 1: Critical bug fixes
     private readonly IEventBus _eventBus;
     private Views.MainViewModel? _mainViewModel; // Reference to parent
+    public Views.MainViewModel? MainViewModel
+    {
+        get => _mainViewModel;
+        private set { _mainViewModel = value; OnPropertyChanged(); }
+    }
     private bool _isLoading;
 
     public bool IsLoading
@@ -159,12 +166,16 @@ public class LibraryViewModel : INotifyPropertyChanged
         TrackInspector = new TrackInspectorViewModel();
 
         // Subscribe to selection changes in Tracks.Hierarchical.Source.Selection
-        Tracks.Hierarchical.Source.Selection.SelectionChanged += OnTrackSelectionChanged;
+        if (Tracks.Hierarchical.Source.Selection is ITreeDataGridSelectionInteraction selectionInteraction)
+        {
+            selectionInteraction.SelectionChanged += OnTrackSelectionChanged;
+        }
     }
 
     private void OnTrackSelectionChanged(object? sender, EventArgs e)
     {
-        var selectedItem = Tracks.Hierarchical.Source.Selection.SelectedItem;
+        var selection = Tracks.Hierarchical.Source.Selection as ITreeDataGridRowSelectionModel<PlaylistTrackViewModel>;
+        var selectedItem = selection?.SelectedItem;
         if (selectedItem is PlaylistTrackViewModel trackVm)
         {
             TrackInspector.Track = trackVm.Model;
@@ -447,6 +458,6 @@ public class LibraryViewModel : INotifyPropertyChanged
 
     public void SetMainViewModel(Views.MainViewModel mainViewModel)
     {
-        _mainViewModel = mainViewModel;
+        MainViewModel = mainViewModel;
     }
 }

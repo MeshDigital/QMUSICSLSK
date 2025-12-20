@@ -1,0 +1,135 @@
+using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Linq;
+using System.Net;
+using System.Net.Http;
+using System.Net.Http.Headers;
+using System.Text.Json;
+using System.Threading;
+using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
+using SpotifyAPI.Web; // For response models if needed, or we can use dynamic/custom
+
+namespace SLSKDONET.Services;
+
+/// <summary>
+/// A thread-safe, throttled, and batched client for Spotify API requests.
+/// Serializes all requests through a single Semaphore to prevent 429s.
+/// Handles Retry-After headers and exponential backoff automatically.
+/// </summary>
+public class SpotifyBatchClient
+{
+    private readonly HttpClient _http;
+    private readonly ILogger<SpotifyBatchClient> _log;
+    private readonly SemaphoreSlim _lock = new(1, 1);
+
+    public SpotifyBatchClient(HttpClient http, ILogger<SpotifyBatchClient> log)
+    {
+        _http = http;
+        _log = log;
+    }
+
+    /// <summary>
+    /// updates the bearer token for the underlying HttpClient.
+    /// </summary>
+    public void SetAccessToken(string token)
+    {
+        _http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+    }
+
+    public async Task<T> GetAsync<T>(string url, CancellationToken ct = default)
+    {
+        // Global lock: Serialize ALL Spotify calls from this client instance.
+        await _lock.WaitAsync(ct); 
+        try
+        {
+            int attempt = 0;
+            // Exponential backoff up to a point, then fail? 
+            // The prompt says "while (true)", implying infinite retry for 429s/transient.
+            // We'll stick to the user's robust loop.
+
+            while (true)
+            {
+                var response = await _http.GetAsync(url, ct);
+
+                if (response.StatusCode == (HttpStatusCode)429)
+                {
+                    var retryAfter = response.Headers.RetryAfter?.Delta?.TotalSeconds ?? 2; // Default to 2s if missing
+                    _log.LogWarning("Spotify rate limit hit (429). Waiting {RetryAfter}s", retryAfter);
+
+                    await Task.Delay(TimeSpan.FromSeconds(retryAfter), ct);
+                    continue; // Retry the same request
+                }
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    attempt++;
+                    if (attempt > 3 || response.StatusCode == HttpStatusCode.Unauthorized || response.StatusCode == HttpStatusCode.Forbidden)
+                    {
+                         // Stop retrying on auth errors or after max attempts for other errors
+                         var errorContent = await response.Content.ReadAsStringAsync(ct);
+                         _log.LogError("Spotify request failed permanently. Status: {Status}, Content: {Content}", response.StatusCode, errorContent);
+                         response.EnsureSuccessStatusCode(); // Will throw HttpRequestException
+                    }
+
+                    var delay = TimeSpan.FromMilliseconds(200 * Math.Pow(2, attempt)); // Exponential backoff
+                    _log.LogWarning("Transient Spotify error {Status}. Retrying in {Delay}ms (Attempt {Attempt})",
+                        response.StatusCode, delay.TotalMilliseconds, attempt);
+
+                    await Task.Delay(delay, ct);
+                    continue;
+                }
+
+                var json = await response.Content.ReadAsStringAsync(ct);
+                // Use case-insensitive deserialization
+                var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                return JsonSerializer.Deserialize<T>(json, options)!;
+            }
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
+    /// <summary>
+    /// Batches a list of IDs into chunks and executes the fetch function for each chunk.
+    /// Enforces a small delay between chunks.
+    /// </summary>
+    public async Task<List<T>> BatchAsync<T>(IEnumerable<string> ids, int batchSize, Func<string, Task<T>> fetch)
+    {
+        var results = new List<T>();
+        var distinctIds = ids.Distinct().ToList();
+
+        if (!distinctIds.Any()) return results;
+
+        foreach (var chunk in distinctIds.Chunk(batchSize))
+        {
+            try 
+            {
+                // Join IDs with comma for the API query
+                var idString = string.Join(",", chunk);
+                
+                // Execute the fetch strategy (which calls GetAsync internally)
+                var result = await fetch(idString);
+                
+                if (result != null)
+                {
+                    results.Add(result);
+                }
+
+                // Safety delay between batches to be nice to the API
+                await Task.Delay(150); 
+            }
+            catch (Exception ex)
+            {
+                _log.LogError(ex, "Failed to fetch batch chunk. Skipping chunk.");
+                // Continue to next chunk instead of aborting everything? 
+                // Or throw? For enrichment, best effort is usually better.
+            }
+        }
+
+        return results;
+    }
+}

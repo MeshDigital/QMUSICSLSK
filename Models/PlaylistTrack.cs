@@ -31,6 +31,11 @@ public class PlaylistTrack
     public string Artist { get; set; } = string.Empty;
     public string Title { get; set; } = string.Empty;
     public string Album { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// File extension or format (e.g. "mp3", "flac").
+    /// </summary>
+    public string? Format { get; set; }
 
     /// <summary>
     /// Track status within this playlist's context.
@@ -94,6 +99,7 @@ public class PlaylistTrack
 
     // Phase 0.1: Musical Intelligence & Antigravity
     public string? MusicalKey { get; set; }
+    public string? Key => MusicalKey; // Alias for UI binding
     public double? BPM { get; set; }
     public string? CuePointsJson { get; set; }
     public string? AudioFingerprint { get; set; }
@@ -107,6 +113,8 @@ public class PlaylistTrack
     public int? FrequencyCutoff { get; set; }
     public bool? IsTrustworthy { get; set; }
     public string? QualityDetails { get; set; }
+    
+    public bool IsEnriched { get; set; } = false;
 }
 
 /// <summary>

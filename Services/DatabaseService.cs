@@ -8,6 +8,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using System.IO; // Added for Path
 
 namespace SLSKDONET.Services;
 
@@ -101,11 +102,17 @@ public class DatabaseService
             if (!existingColumns.Contains("AnalysisOffset"))
                 columnsToAdd.Add(("AnalysisOffset", "AnalysisOffset REAL NULL"));
             
+            // New Flag
+            if (!existingColumns.Contains("IsEnriched"))
+                columnsToAdd.Add(("IsEnriched", "IsEnriched INTEGER DEFAULT 0"));
+            
             foreach (var (name, definition) in columnsToAdd)
             {
                 _logger.LogWarning("Schema Patch: Adding missing column '{Column}' to PlaylistTracks", name);
                 var sql = $"ALTER TABLE PlaylistTracks ADD COLUMN {definition}";
+                #pragma warning disable EF1002
                 await context.Database.ExecuteSqlRawAsync(sql);
+                #pragma warning restore EF1002
             }
             
             // Check PlaylistJobs table
@@ -125,36 +132,49 @@ public class DatabaseService
                 _logger.LogWarning("Schema Patch: Adding missing column 'IsDeleted' to PlaylistJobs");
                 await context.Database.ExecuteSqlRawAsync("ALTER TABLE PlaylistJobs ADD COLUMN IsDeleted INTEGER DEFAULT 0");
             }
+
+            if (!existingColumns.Contains("AlbumArtUrl"))
+            {
+                _logger.LogWarning("Schema Patch: Adding missing column 'AlbumArtUrl' to PlaylistJobs");
+                await context.Database.ExecuteSqlRawAsync("ALTER TABLE PlaylistJobs ADD COLUMN AlbumArtUrl TEXT NULL");
+            }
             
             _logger.LogInformation("[{Ms}ms] Database Init: Schema patches completed", sw.ElapsedMilliseconds);
             
             // Session 1: Performance Indexes (Phase 2 Performance Overhaul)
             // These indexes provide 50-100x speedup for common queries
             _logger.LogInformation("Creating performance indexes...");
-            await context.Database.ExecuteSqlRawAsync(@"
-                -- PlaylistTracks indexes for fast filtering/sorting
-                CREATE INDEX IF NOT EXISTS idx_playlist_tracks_playlistid 
-                ON PlaylistTracks(PlaylistId);
-                
-                CREATE INDEX IF NOT EXISTS idx_playlist_tracks_status 
-                ON PlaylistTracks(Status);
-                
-                CREATE INDEX IF NOT EXISTS idx_playlist_tracks_globalid 
-                ON PlaylistTracks(GlobalId);
-                
-                -- PlaylistJobs index for Import History sorting
-                CREATE INDEX IF NOT EXISTS idx_playlist_jobs_createdat 
-                ON PlaylistJobs(CreatedAt);
-                
-                -- LibraryEntries index for duplicate detection
-                CREATE INDEX IF NOT EXISTS idx_library_entries_globalid 
-                ON LibraryEntries(GlobalId);
-                
-                -- Tracks index for Spotify metadata lookups
-                CREATE INDEX IF NOT EXISTS idx_tracks_spotifytrackid 
-                ON Tracks(SpotifyTrackId);
-            ");
-            _logger.LogInformation("[{Ms}ms] Database Init: Performance indexes created", sw.ElapsedMilliseconds);
+            try
+            {
+                await context.Database.ExecuteSqlRawAsync(@"
+                    -- PlaylistTracks indexes for fast filtering/sorting
+                    CREATE INDEX IF NOT EXISTS idx_playlist_tracks_playlistid 
+                    ON PlaylistTracks(PlaylistId);
+                    
+                    CREATE INDEX IF NOT EXISTS idx_playlist_tracks_status 
+                    ON PlaylistTracks(Status);
+                    
+                    CREATE INDEX IF NOT EXISTS idx_playlist_tracks_globalid 
+                    ON PlaylistTracks(TrackUniqueHash);
+                    
+                    -- PlaylistJobs index for Import History sorting
+                    CREATE INDEX IF NOT EXISTS idx_playlist_jobs_createdat 
+                    ON PlaylistJobs(CreatedAt);
+                    
+                    -- LibraryEntries index for duplicate detection
+                    CREATE INDEX IF NOT EXISTS idx_library_entries_globalid 
+                    ON LibraryEntries(UniqueHash);
+                    
+                    -- Tracks index for Spotify metadata lookups
+                    CREATE INDEX IF NOT EXISTS idx_tracks_spotifytrackid 
+                    ON Tracks(SpotifyTrackId);
+                ");
+                _logger.LogInformation("[{Ms}ms] Database Init: Performance indexes created", sw.ElapsedMilliseconds);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to create performance indexes (non-critical)");
+            }
             
             // Check for ActivityLogs table
             try 
@@ -219,6 +239,23 @@ public class DatabaseService
                  await context.Database.ExecuteSqlRawAsync(createCacheTableSql);
             }
 
+            // Check for PendingOrchestrations table (Phase 8: Robustness)
+            try
+            {
+                await context.Database.ExecuteSqlRawAsync("SELECT GlobalId FROM PendingOrchestrations LIMIT 1");
+            }
+            catch
+            {
+                _logger.LogWarning("Schema Patch: Creating missing table 'PendingOrchestrations'");
+                var createPendingTableSql = @"
+                    CREATE TABLE IF NOT EXISTS PendingOrchestrations (
+                        GlobalId TEXT NOT NULL CONSTRAINT PK_PendingOrchestrations PRIMARY KEY,
+                        AddedAt TEXT NOT NULL
+                    );
+                ";
+                await context.Database.ExecuteSqlRawAsync(createPendingTableSql);
+            }
+
             // Patch LibraryEntries columns
             using (var schemaCmd = connection.CreateCommand())
             {
@@ -253,7 +290,9 @@ public class DatabaseService
                     foreach (var (col, def) in newCols)
                     {
                          _logger.LogWarning("Schema Patch: Adding missing column '{Col}' to LibraryEntries", col);
+                         #pragma warning disable EF1002
                          await context.Database.ExecuteSqlRawAsync($"ALTER TABLE LibraryEntries ADD COLUMN {col} {def}");
+                         #pragma warning restore EF1002
                     }
                 }
 
@@ -286,6 +325,7 @@ public class DatabaseService
                     if (!tracksColumns.Contains("ReleaseDate")) newCols.Add(("ReleaseDate", "TEXT NULL"));
                     // CoverArtUrl was already there but check just in case
                     if (!tracksColumns.Contains("CoverArtUrl")) newCols.Add(("CoverArtUrl", "TEXT NULL"));
+                    if (!tracksColumns.Contains("Bitrate")) newCols.Add(("Bitrate", "INTEGER DEFAULT 0"));
                     
                     // Phase 0.1: Musical Intelligence & ORBIT
                     if (!tracksColumns.Contains("MusicalKey")) newCols.Add(("MusicalKey", "TEXT NULL"));
@@ -301,11 +341,16 @@ public class DatabaseService
                     if (!tracksColumns.Contains("FrequencyCutoff")) newCols.Add(("FrequencyCutoff", "INTEGER NULL"));
                     if (!tracksColumns.Contains("IsTrustworthy")) newCols.Add(("IsTrustworthy", "INTEGER NULL"));
                     if (!tracksColumns.Contains("QualityDetails")) newCols.Add(("QualityDetails", "TEXT NULL"));
+                    
+                    // New Flag
+                    if (!tracksColumns.Contains("IsEnriched")) newCols.Add(("IsEnriched", "INTEGER DEFAULT 0"));
 
                     foreach (var (col, def) in newCols)
                     {
                          _logger.LogWarning("Schema Patch: Adding missing column '{Col}' to Tracks", col);
+                         #pragma warning disable EF1002
                          await context.Database.ExecuteSqlRawAsync($"ALTER TABLE Tracks ADD COLUMN {col} {def}");
+                         #pragma warning restore EF1002
                     }
                 }
             }
@@ -334,8 +379,10 @@ public class DatabaseService
 
                     foreach (var (col, def) in newCols)
                     {
-                        _logger.LogWarning("Schema Patch: Adding missing column '{Col}' to PlaylistTracks", col);
-                        await context.Database.ExecuteSqlRawAsync($"ALTER TABLE PlaylistTracks ADD COLUMN {col} {def}");
+                         _logger.LogWarning("Schema Patch: Adding missing column '{Col}' to PlaylistTracks", col);
+                         #pragma warning disable EF1002 // SQL Injection: Safe - Internal string from hardcoded list
+                         await context.Database.ExecuteSqlRawAsync($"ALTER TABLE PlaylistTracks ADD COLUMN {col} {def}");
+                         #pragma warning restore EF1002
                     }
                 }
             }
@@ -474,6 +521,8 @@ public class DatabaseService
                         existingTrack.FrequencyCutoff = track.FrequencyCutoff;
                         existingTrack.IsTrustworthy = track.IsTrustworthy;
                         existingTrack.QualityDetails = track.QualityDetails;
+                        
+                        existingTrack.IsEnriched = track.IsEnriched;
 
                         // Don't update AddedAt - preserve original
                         // context.Tracks.Update() is not needed - EF Core tracks changes automatically
@@ -1175,6 +1224,53 @@ public class DatabaseService
         {
             _logger.LogWarning(ex, "Database VACUUM failed (this is non-critical)");
         }
+    }
+
+    /// <summary>
+    /// Updates a specific track's engagement metrics (Like status, Rating, PlayCount).
+    /// Used by the Media Player UI.
+    /// </summary>
+    public async Task UpdatePlaylistTrackAsync(PlaylistTrackEntity track)
+    {
+        try 
+        {
+            using var connection = GetConnection();
+            await connection.OpenAsync();
+
+            const string sql = @"
+                UPDATE PlaylistTracks 
+                SET IsLiked = @IsLiked,
+                    Rating = @Rating,
+                    PlayCount = @PlayCount,
+                    LastPlayedAt = @LastPlayedAt,
+                    Status = @Status
+                WHERE Id = @Id";
+
+            using var cmd = connection.CreateCommand();
+            cmd.CommandText = sql;
+            
+            cmd.Parameters.AddWithValue("@IsLiked", track.IsLiked);
+            cmd.Parameters.AddWithValue("@Rating", track.Rating);
+            cmd.Parameters.AddWithValue("@PlayCount", track.PlayCount);
+            // Handle nullable types safely for SQLite
+            cmd.Parameters.AddWithValue("@LastPlayedAt", (object?)track.LastPlayedAt ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@Status", track.Status.ToString());
+            cmd.Parameters.AddWithValue("@Id", track.Id);
+
+            await cmd.ExecuteNonQueryAsync();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to update playlist track {Id}", track.Id);
+            throw; // Re-throw to allow ViewModel to handle rollback
+        }
+    }
+
+    private SqliteConnection GetConnection()
+    {
+        var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+        var dbPath = Path.Combine(appData, "SLSKDONET", "library.db");
+        return new SqliteConnection($"Data Source={dbPath}");
     }
 }
 

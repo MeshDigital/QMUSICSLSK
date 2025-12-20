@@ -8,7 +8,7 @@
     <Nullable>enable</Nullable>
     <AssemblyName>SLSKDONET</AssemblyName>
     <RootNamespace>SLSKDONET</RootNamespace>
-    <Version>1.0.0</Version>
+    <Version>0.1.0-alpha</Version>
     <Authors>SLSK_CSV Contributors</Authors>
     <Description>Soulseek batch downloader using Soulseek.NET - Cross-platform with Avalonia UI</Description>
   </PropertyGroup>
@@ -63,6 +63,7 @@
     
     <!-- Dependency Injection -->
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.1" />
+    <PackageReference Include="Microsoft.Extensions.Http" Version="8.0.0" />
     
     <!-- Async/Concurrency -->
     <PackageReference Include="System.Reactive" Version="6.1.0" />

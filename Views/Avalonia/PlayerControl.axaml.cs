@@ -7,6 +7,9 @@ using Avalonia.Interactivity;
 using SLSKDONET.Models;
 using SLSKDONET.Services;
 using SLSKDONET.ViewModels;
+using Avalonia.VisualTree; // Added for FindAncestorOfType
+using Microsoft.Extensions.DependencyInjection;
+// using CommunityToolkit.Mvvm.Input; // Removed - using local AsyncRelayCommand
 
 namespace SLSKDONET.Views.Avalonia;
 
@@ -44,12 +47,16 @@ public partial class PlayerControl : UserControl
         }
     }
 
-    private void OnDrop(object? sender, DragEventArgs e)
+    private async void OnDrop(object? sender, DragEventArgs e)
     {
         // Identify the drop zone
         var dropTarget = e.Source as Control;
-        bool isPlayNowZone = dropTarget != null && (dropTarget.Name == "PlayNowZone" || dropTarget.FindAncestorOfType<Control>(x => x.Name == "PlayNowZone") != null);
-        bool isQueueZone = dropTarget != null && (dropTarget.Name == "QueueZone" || dropTarget.FindAncestorOfType<Control>(x => x.Name == "QueueZone") != null);
+        
+        bool isPlayNowZone = dropTarget != null && (dropTarget.Name == "PlayNowZone" || 
+            dropTarget.GetVisualAncestors().OfType<Control>().Any(x => x.Name == "PlayNowZone"));
+            
+        bool isQueueZone = dropTarget != null && (dropTarget.Name == "QueueZone" || 
+            dropTarget.GetVisualAncestors().OfType<Control>().Any(x => x.Name == "QueueZone"));
 
         // Get the dragged track or album ID
         string? trackGlobalId = null;
@@ -85,13 +92,23 @@ public partial class PlayerControl : UserControl
             // or just trigger PlayAlbum/DownloadAlbum logic.
             if (mainViewModel?.LibraryViewModel != null)
             {
-                var project = await mainViewModel.LibraryViewModel.Projects.AllProjects.FirstOrDefault(p => p.Id == albumId);
+                // This is an in-memory collection, so we can access it synchronously
+                // However, AllProjects is likely an ObservableCollection or similar
+                // We should cast Guid? albumId to Guid before comparison if needed, or rely on == operator
+                
+                var project = mainViewModel.LibraryViewModel.Projects.AllProjects.FirstOrDefault(p => p.Id == albumId);
+                
                 if (project != null)
                 {
                     if (isPlayNowZone)
-                        await mainViewModel.LibraryViewModel.PlayAlbumCommand.ExecuteAsync(project);
+                    {
+                        // Fire and forget
+                        mainViewModel.LibraryViewModel.PlayAlbumCommand.Execute(project);
+                    }
                     else if (isQueueZone)
-                        await mainViewModel.LibraryViewModel.DownloadAlbumCommand.ExecuteAsync(project); // Actually need a "Queue Album" command
+                    {
+                         mainViewModel.LibraryViewModel.DownloadAlbumCommand.Execute(project);
+                    }
                 }
             }
             return;

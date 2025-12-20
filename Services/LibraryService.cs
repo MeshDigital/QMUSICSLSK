@@ -192,7 +192,8 @@ public class LibraryService : ILibraryService
                 CreatedAt = job.CreatedAt,
                 TotalTracks = job.OriginalTracks.Count,
                 SuccessfulCount = 0,
-                FailedCount = 0
+                FailedCount = 0,
+                AlbumArtUrl = job.AlbumArtUrl
             };
 
             await _databaseService.SavePlaylistJobAsync(entity).ConfigureAwait(false);
@@ -438,7 +439,8 @@ public class LibraryService : ILibraryService
             OriginalTracks = originalTracks,
             PlaylistTracks = playlistTracks,
             SuccessfulCount = entity.SuccessfulCount,
-            FailedCount = entity.FailedCount
+            FailedCount = entity.FailedCount,
+            AlbumArtUrl = entity.AlbumArtUrl
         };
 
         job.MissingCount = entity.TotalTracks - entity.SuccessfulCount - entity.FailedCount;

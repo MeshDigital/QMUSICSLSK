@@ -109,7 +109,7 @@ public class TrackListViewModel : ReactiveObject
     {
         Dispatcher.UIThread.Post(() => {
             // If moved from this project, remove it
-            if (_mainViewModel?.SelectedProject?.Id == evt.OldProjectId)
+            if (_mainViewModel?.LibraryViewModel?.SelectedProject?.Id == evt.OldProjectId)
             {
                 var track = CurrentProjectTracks.FirstOrDefault(t => t.GlobalId == evt.TrackGlobalId);
                 if (track != null)
@@ -119,12 +119,12 @@ public class TrackListViewModel : ReactiveObject
                 }
             }
             // If moved to this project, and it's not already here (sanity check)
-            else if (_mainViewModel?.SelectedProject?.Id == evt.NewProjectId)
+            else if (_mainViewModel?.LibraryViewModel?.SelectedProject?.Id == evt.NewProjectId)
             {
                 // We might need to load the track from global or reload. 
                 // For simplicity, if we are in the target project, a refresh might be needed or just reload.
                 // But usually the user is in the source project during drag.
-                _ = LoadProjectTracksAsync(_mainViewModel.SelectedProject);
+                _ = LoadProjectTracksAsync(_mainViewModel.LibraryViewModel.SelectedProject);
             }
         });
     }
@@ -199,7 +199,7 @@ public class TrackListViewModel : ReactiveObject
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
                 CurrentProjectTracks = tracks;
-                RefreshFilteredTracks();
+                // RefreshFilteredTracks is called by property setter, so explicit call is redundant
                 _logger.LogInformation("Loaded {Count} tracks for project {Title}", tracks.Count, job.SourceTitle);
             });
         }
@@ -226,7 +226,7 @@ public class TrackListViewModel : ReactiveObject
         // Phase 6D: Ensure TreeDataGrid source is updated
         Hierarchical.UpdateTracks(filtered);
 
-        OnPropertyChanged(nameof(FilteredTracks));
+        this.RaisePropertyChanged(nameof(FilteredTracks));
     }
 
     private bool FilterTracks(object obj)
@@ -257,8 +257,5 @@ public class TrackListViewModel : ReactiveObject
         // This is just for logging/debugging if needed
     }
 
-    protected void OnPropertyChanged([CallerMemberName] string? propertyName = null)
-    {
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
-    }
+    // ReactiveObject already implements INotifyPropertyChanged
 }

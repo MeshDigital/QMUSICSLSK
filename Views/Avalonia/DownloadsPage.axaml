@@ -57,7 +57,7 @@
                              Foreground="White"
                              Padding="10,8"/>
                     
-                    <ComboBox SelectedIndex="0" Width="150">
+                    <ComboBox SelectedIndex="{Binding DownloadsFilterIndex}" Width="150">
                         <ComboBoxItem Content="All States"/>
                         <ComboBoxItem Content="Downloading"/>
                         <ComboBoxItem Content="Completed"/>
@@ -68,7 +68,18 @@
                 
                 <!-- Bulk Actions -->
                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
-                    <Button Command="{Binding ShowPauseComingSoonCommand}"
+                    <Button Command="{Binding ResumeAllDownloadsCommand}"
+                            Background="#4CAF50"
+                            Foreground="White"
+                            Padding="12,8"
+                            CornerRadius="6">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <TextBlock Text="▶" FontSize="14"/>
+                            <TextBlock Text="Resume All" FontSize="13" FontWeight="SemiBold"/>
+                        </StackPanel>
+                    </Button>
+
+                    <Button Command="{Binding PauseAllDownloadsCommand}"
                             Background="#FFA500"
                             Foreground="White"
                             Padding="12,8"

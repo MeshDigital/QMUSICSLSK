@@ -28,7 +28,7 @@ public partial class App : Application
         AvaloniaXamlLoader.Load(this);
     }
 
-    public override void OnFrameworkInitializationCompleted()
+    public override async void OnFrameworkInitializationCompleted()
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
@@ -73,7 +73,8 @@ public partial class App : Application
                 */
                 
                 // Phase 7: Load ranking strategy and weights from config
-                var config = Services.GetRequiredService<ConfigManager>().GetCurrent();
+                var configDispatcher = Services.GetRequiredService<ConfigManager>();
+                var config = configDispatcher.GetCurrent() ?? new AppConfig();
                 ISortingStrategy strategy = (config.RankingPreset ?? "Balanced") switch
                 {
                     "Quality First" => new QualityFirstStrategy(),
@@ -85,27 +86,7 @@ public partial class App : Application
                 
                 Serilog.Log.Information("Loaded ranking strategy: {Strategy} with custom weights", config.RankingPreset ?? "Balanced");
 
-                // Phase 8: Validate FFmpeg availability
-                try
-                {
-                    var sonicService = Services.GetRequiredService<SonicIntegrityService>();
-                    var ffmpegAvailable = await sonicService.ValidateFfmpegAsync();
-                    
-                    if (!ffmpegAvailable)
-                    {
-                        Serilog.Log.Warning(
-                            "FFmpeg not found in PATH. Sonic Integrity features will be disabled. " +
-                            "Install FFmpeg from Settings → Dependencies.");
-                    }
-                    else
-                    {
-                        Serilog.Log.Information("FFmpeg validation successful - Phase 8 features enabled");
-                    }
-                }
-                catch (Exception ffmpegEx)
-                {
-                    Serilog.Log.Warning(ffmpegEx, "FFmpeg validation failed (non-critical)");
-                }
+                // Phase 8: Validate FFmpeg availability - Moved to background task
 
                 // Create main window and show it immediately
                 var mainVm = Services.GetRequiredService<MainViewModel>();
@@ -123,6 +104,21 @@ public partial class App : Application
                 {
                     try
                     {
+                        // Phase 8: Validate FFmpeg availability (Moved from startup)
+                        try
+                        {
+                            var sonicService = Services.GetRequiredService<SonicIntegrityService>();
+                            var ffmpegAvailable = await sonicService.ValidateFfmpegAsync();
+                            if (!ffmpegAvailable)
+                                Serilog.Log.Warning("FFmpeg not found in PATH. Sonic Integrity features will be disabled.");
+                            else
+                                Serilog.Log.Information("FFmpeg validation successful - Phase 8 features enabled");
+                        }
+                        catch (Exception ffmpegEx)
+                        {
+                            Serilog.Log.Warning(ffmpegEx, "FFmpeg validation failed (non-critical)");
+                        }
+
                         // Initialize DownloadManager
                         var downloadManager = Services.GetRequiredService<DownloadManager>();
                         await downloadManager.InitAsync();
@@ -250,6 +246,7 @@ public partial class App : Application
         services.AddSingleton<ISoulseekCredentialService, SoulseekCredentialService>();
 
         // Spotify services
+        services.AddHttpClient<SpotifyBatchClient>(); // Phase 7: Batch Client for Throttling Fix
         services.AddSingleton<SpotifyInputSource>();
         services.AddSingleton<SpotifyScraperInputSource>();
         

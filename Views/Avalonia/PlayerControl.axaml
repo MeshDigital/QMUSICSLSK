@@ -57,8 +57,8 @@
                     Padding="16"
                     Margin="0,8,0,0">
                 <StackPanel Spacing="8" HorizontalAlignment="Center">
-                    <ProgressRing IsIndeterminate="True" 
-                                  Width="24" Height="24" 
+                    <ProgressBar IsIndeterminate="True" 
+                                  Width="100" Height="4" 
                                   Foreground="#1DB954"
                                   IsVisible="{Binding IsLoading}"/>
                     <TextBlock Text="Loading track..." 

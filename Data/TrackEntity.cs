@@ -19,6 +19,7 @@ public class TrackEntity
     public string Filename { get; set; } = string.Empty;
     public string SoulseekUsername { get; set; } = string.Empty;
     public long Size { get; set; }
+    public int Bitrate { get; set; } // Added for UpgradeScout
     
     // Metadata for re-hydration
     public DateTime AddedAt { get; set; }
@@ -50,6 +51,9 @@ public class TrackEntity
     public int? FrequencyCutoff { get; set; } // Detected frequency limit in Hz
     public bool? IsTrustworthy { get; set; } // False if flagged as upscaled/fake
     public string? QualityDetails { get; set; } // Analysis details
+    
+    // New Flag
+    public bool IsEnriched { get; set; } = false;
 }
 
 /// <summary>
@@ -74,6 +78,11 @@ public class PlaylistJobEntity
     // Phase 1C: Add Soft Delete Flag
     public bool IsDeleted { get; set; } = false;
     public DateTime? DeletedAt { get; set; }
+
+    /// <summary>
+    /// URL for the playlist/album cover art.
+    /// </summary>
+    public string? AlbumArtUrl { get; set; }
     
     [InverseProperty(nameof(PlaylistTrackEntity.Job))]
     public ICollection<PlaylistTrackEntity> Tracks { get; set; } = new List<PlaylistTrackEntity>();
@@ -169,6 +178,9 @@ public class PlaylistTrackEntity
     public int? FrequencyCutoff { get; set; }
     public bool? IsTrustworthy { get; set; }
     public string? QualityDetails { get; set; }
+    
+    // New Flag
+    public bool IsEnriched { get; set; } = false;
     
     public PlaylistJobEntity? Job { get; set; }
 }

@@ -92,6 +92,8 @@ public class ImportPreviewViewModel : INotifyPropertyChanged
     public ICommand DeselectAllCommand { get; }
     public ICommand CancelCommand { get; }
 
+    private CancellationTokenSource? _enrichmentCts;
+
     public event PropertyChangedEventHandler? PropertyChanged;
     public event EventHandler<PlaylistJob>? AddedToLibrary;
     public event EventHandler? Cancelled;
@@ -213,10 +215,18 @@ public class ImportPreviewViewModel : INotifyPropertyChanged
                 ImportedTracks.FirstOrDefault()?.Model.Title ?? "None");
             
             // Start background metadata enrichment
+            // REMOVED: Enrichment should only happen AFTER user confirms import (Add to Library).
+            // This prevents premature API calls and "busy" UI during preview.
+            /*
             if (_metadataService != null)
             {
-                _ = Task.Run(() => EnrichTracksInBackgroundAsync(ImportedTracks.Select(st => st.Model).ToList()));
+                _enrichmentCts?.Cancel();
+                _enrichmentCts = new CancellationTokenSource();
+                var token = _enrichmentCts.Token;
+                
+                _ = Task.Run(() => EnrichTracksInBackgroundAsync(ImportedTracks.Select(st => st.Model).ToList(), token), token);
             }
+            */
         }
         catch (Exception ex)
         {
@@ -230,16 +240,22 @@ public class ImportPreviewViewModel : INotifyPropertyChanged
     /// Enrich tracks with Spotify metadata in the background after UI display.
     /// Updates happen progressively as each track is enriched.
     /// </summary>
-    private async Task EnrichTracksInBackgroundAsync(List<Track> tracks)
+    private async Task EnrichTracksInBackgroundAsync(List<Track> tracks, CancellationToken cancellationToken)
     {
         try
         {
             _logger.LogInformation("Starting background metadata enrichment for {Count} tracks", tracks.Count);
-            StatusMessage = "Fetching metadata...";
+            
+            // Initial delay to let UI settle
+            await Task.Delay(500, cancellationToken);
+            
+            await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() => StatusMessage = "Fetching metadata...");
             
             int enriched = 0;
             foreach (var track in tracks)
             {
+                if (cancellationToken.IsCancellationRequested) break;
+
                 try
                 {
                     // Convert Track to PlaylistTrack for enrichment
@@ -262,6 +278,8 @@ public class ImportPreviewViewModel : INotifyPropertyChanged
                         track.Popularity = playlistTrack.Popularity;
                         track.CanonicalDuration = playlistTrack.CanonicalDuration;
                         track.ReleaseDate = playlistTrack.ReleaseDate;
+                        track.BPM = playlistTrack.BPM;
+                        track.MusicalKey = playlistTrack.MusicalKey;
                         
                         enriched++;
                         
@@ -272,21 +290,29 @@ public class ImportPreviewViewModel : INotifyPropertyChanged
                         });
                     }
                     
-                    // Small delay to avoid API rate limits
-                    await Task.Delay(50);
+                    // Increased delay to respect rate limits (250ms = ~4 req/sec max)
+                    await Task.Delay(250, cancellationToken);
                 }
+                catch (TaskCanceledException) { throw; }
                 catch (Exception ex)
                 {
                     _logger.LogWarning(ex, "Failed to enrich track: {Artist} - {Title}", track.Artist, track.Title);
                 }
             }
             
-            await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+            if (!cancellationToken.IsCancellationRequested)
             {
-                StatusMessage = $"Ready - {enriched}/{tracks.Count} tracks enriched";
-            });
-            
-            _logger.LogInformation("Background enrichment complete: {Enriched}/{Total} tracks", enriched, tracks.Count);
+                await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+                {
+                    StatusMessage = $"Ready - {enriched}/{tracks.Count} tracks enriched";
+                });
+                
+                _logger.LogInformation("Background enrichment complete: {Enriched}/{Total} tracks", enriched, tracks.Count);
+            }
+        }
+        catch (TaskCanceledException)
+        {
+            _logger.LogInformation("Background metadata enrichment was cancelled");
         }
         catch (Exception ex)
         {
@@ -363,16 +389,13 @@ public class ImportPreviewViewModel : INotifyPropertyChanged
                 job.OriginalTracks.Add(track);
             }
 
+            // Queue the project to DownloadManager and navigate to Library
+            await HandlePlaylistJobAddedAsync(job);
+            
             // Notify that tracks have been added
             _logger.LogInformation("Firing AddedToLibrary event for job {JobId}", job.Id);
             AddedToLibrary?.Invoke(this, job);
 
-            _logger.LogInformation("AddedToLibrary event fired. Now queuing to DownloadManager...");
-            
-            // Queue the project to DownloadManager and navigate to Library
-            await HandlePlaylistJobAddedAsync(job);
-            
-            StatusMessage = $"✓ Added {selectedTracks.Count} tracks to library";
             _logger.LogInformation(
                 "Successfully added {Count} tracks to library. JobId: {JobId}, Thread: {ThreadId}",
                 selectedTracks.Count,
@@ -410,6 +433,7 @@ public class ImportPreviewViewModel : INotifyPropertyChanged
 
     private void Cancel()
     {
+        _enrichmentCts?.Cancel();
         _logger.LogInformation("Import preview cancelled");
         StatusMessage = "Preview cancelled";
         Cancelled?.Invoke(this, EventArgs.Empty);
@@ -447,8 +471,7 @@ public class ImportPreviewViewModel : INotifyPropertyChanged
             
             _logger.LogInformation("Navigating to Library page to show job {JobId}...", job.Id);
 
-            // Navigate to Library to see the new job.
-            _navigationService.NavigateTo("Library");
+            // _navigationService.NavigateTo("Library"); // Handled by ImportOrchestrator via AddedToLibrary event
 
             _logger.LogInformation("Navigation to Library completed.");
         }

@@ -1,0 +1,98 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="clr-namespace:SLSKDONET.ViewModels"
+             mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="600"
+             x:Class="SLSKDONET.Views.Avalonia.Controls.SpotifyImportControl"
+             x:Name="Root">
+    
+    <Design.DataContext>
+        <vm:SpotifyImportViewModel/>
+    </Design.DataContext>
+
+    <Grid>
+        <!-- Not Authenticated State -->
+        <Border IsVisible="{Binding ShowLoginButton}" VerticalAlignment="Center" HorizontalAlignment="Center">
+            <StackPanel Spacing="20" HorizontalAlignment="Center">
+                <PathIcon Data="{StaticResource icons_spotify}" Width="64" Height="64" Foreground="#1DB954"/>
+                <TextBlock Text="Connect to Spotify" FontSize="24" FontWeight="Bold" HorizontalAlignment="Center"/>
+                <TextBlock Text="Sign in to browse and import your playlists directly." 
+                           Foreground="#A0A0A0" FontSize="16" HorizontalAlignment="Center"/>
+                
+                <Button Command="{Binding ConnectCommand}"
+                        Classes="primary"
+                        HorizontalAlignment="Center"
+                        Padding="24,12"
+                        CornerRadius="24">
+                    <StackPanel Orientation="Horizontal" Spacing="12">
+                        <TextBlock Text="Login with Spotify" FontSize="16" FontWeight="SemiBold"/>
+                    </StackPanel>
+                </Button>
+            </StackPanel>
+        </Border>
+
+        <!-- Authenticated State: Playlist Grid -->
+        <Grid IsVisible="{Binding ShowPlaylists}" RowDefinitions="Auto,*">
+            <!-- Toolbar -->
+            <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,20">
+                <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+                    <TextBlock Text="My Playlists" FontSize="20" FontWeight="Bold"/>
+                    <ProgressBar IsIndeterminate="True" IsVisible="{Binding IsLoading}" Width="20" Height="20"/>
+                    <TextBlock Text="{Binding StatusMessage}" Foreground="#A0A0A0" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                </StackPanel>
+                
+                <Button Grid.Column="1" Command="{Binding RefreshPlaylistsCommand}" Classes="secondary">
+                    <TextBlock Text="🔄 Refresh"/>
+                </Button>
+            </Grid>
+
+            <!-- Playlists -->
+            <ScrollViewer Grid.Row="1">
+                <ItemsControl ItemsSource="{Binding UserPlaylists}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel Orientation="Horizontal"/>
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Button Command="{Binding #Root.DataContext.ImportPlaylistCommand}"
+                                    CommandParameter="{Binding}"
+                                    Background="Transparent"
+                                    Padding="0"
+                                    Margin="0,0,16,16"
+                                    BorderThickness="0">
+                                <Border Width="160" Background="#252526" CornerRadius="8" ClipToBounds="True">
+                                    <Grid RowDefinitions="160,Auto">
+                                        <!-- Cover Art -->
+                                        <Image Grid.Row="0" Source="{Binding ImageUrl}" Stretch="UniformToFill" Height="160"/>
+                                        <Border Grid.Row="0" Background="#66000000" IsVisible="{Binding ImageUrl, Converter={x:Static StringConverters.IsNullOrEmpty}}">
+                                            <TextBlock Text="🎵" FontSize="48" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                        </Border>
+
+                                        <!-- Details -->
+                                        <Border Grid.Row="1" Padding="12">
+                                            <StackPanel>
+                                                <TextBlock Text="{Binding Name}" FontWeight="Bold" FontSize="14" TextTrimming="CharacterEllipsis"/>
+                                                <TextBlock Text="{Binding Description}" FontSize="12" Foreground="#A0A0A0" Margin="0,4,0,0" TextTrimming="CharacterEllipsis"/>
+                                            </StackPanel>
+                                        </Border>
+                                    </Grid>
+                                    
+                                    <Border.Styles>
+                                        <Style Selector="Border:pointerover">
+                                            <Setter Property="RenderTransform" Value="scale(1.02)"/>
+                                            <Setter Property="BoxShadow" Value="0 4 12 0 #80000000"/>
+                                        </Style>
+                                    </Border.Styles>
+                                </Border>
+                            </Button>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+        </Grid>
+    </Grid>
+</UserControl>

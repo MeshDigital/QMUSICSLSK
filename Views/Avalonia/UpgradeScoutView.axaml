@@ -57,7 +57,7 @@
                         <ListBox ItemsSource="{Binding Candidates}" Background="Transparent" BorderThickness="0">
                             <ListBox.ItemTemplate>
                                 <DataTemplate x:DataType="vm:UpgradeCandidateViewModel">
-                                    <Grid ColumnDefinitions="*,120,Auto" Padding="12,8">
+                                    <Grid ColumnDefinitions="*,120,Auto" Margin="12,8">
                                         <StackPanel Grid.Column="0" Spacing="2">
                                             <TextBlock Text="{Binding Artist}" FontSize="12" Foreground="#888"/>
                                             <TextBlock Text="{Binding Title}" FontWeight="SemiBold" Foreground="White"/>

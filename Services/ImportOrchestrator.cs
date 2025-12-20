@@ -59,6 +59,9 @@ public class ImportOrchestrator
             }
 
             // Phase 7: Diff-based update (skip existing)
+            // REMOVED: Do not filter duplicates here, let the Preview screen handle them visually.
+            // This allows re-importing or updating metadata for existing tracks.
+            /*
             var originalCount = result.Tracks.Count;
             result.Tracks = result.Tracks.Where(t => !_downloadManager.IsTrackAlreadyQueued(t.SpotifyTrackId, t.Artist, t.Title)).ToList();
             var skippedCount = originalCount - result.Tracks.Count;
@@ -67,6 +70,7 @@ public class ImportOrchestrator
             {
                 _logger.LogInformation("Skipped {Count} tracks already in library", skippedCount);
             }
+            */
 
             if (!result.Tracks.Any())
             {
@@ -264,7 +268,17 @@ public class ImportOrchestrator
                 Title = query.Title,
                 Album = query.Album ?? sourceTitle, // Use playlist name as album if not specified
                 Length = query.Length,
-                SourceTitle = sourceTitle
+                SourceTitle = sourceTitle,
+                // Fix: Map metadata fields
+                SpotifyTrackId = query.SpotifyTrackId,
+                SpotifyAlbumId = query.SpotifyAlbumId,
+                SpotifyArtistId = query.SpotifyArtistId,
+                AlbumArtUrl = query.AlbumArtUrl,
+                ArtistImageUrl = query.ArtistImageUrl,
+                Genres = query.Genres,
+                Popularity = query.Popularity,
+                CanonicalDuration = query.CanonicalDuration,
+                ReleaseDate = query.ReleaseDate
             };
             job.OriginalTracks.Add(track);
         }

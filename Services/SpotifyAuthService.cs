@@ -256,6 +256,21 @@ public class SpotifyAuthService
     }
 
     /// <summary>
+    /// Gets the valid access token string directly.
+    /// Needed for SpotifyBatchClient.
+    /// </summary>
+    public async Task<string> GetAccessTokenAsync()
+    {
+         // Ensure we have a valid client first (triggers refresh if needed)
+         await GetAuthenticatedClientAsync();
+         
+         if (_currentTokenResponse?.AccessToken == null)
+             throw new InvalidOperationException("Not authenticated");
+             
+         return _currentTokenResponse.AccessToken;
+    }
+
+    /// <summary>
     /// Signs out the user and clears stored tokens.
     /// </summary>
     public async Task SignOutAsync()

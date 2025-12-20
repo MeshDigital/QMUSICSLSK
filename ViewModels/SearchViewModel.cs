@@ -29,15 +29,23 @@ public class SearchViewModel : INotifyPropertyChanged
 
     public IEnumerable<string> PreferredFormats => new[] { "mp3", "flac", "m4a", "wav" }; // TODO: Load from config
 
-    // Import Preview VM is needed for setting up the view, but orchestration happens via ImportOrchestrator
+    // Child ViewModels
     public ImportPreviewViewModel ImportPreviewViewModel { get; }
+    public SpotifyImportViewModel SpotifyImportViewModel { get; }
 
     // Search input state
     private string _searchQuery = "";
     public string SearchQuery
     {
         get => _searchQuery;
-        set { SetProperty(ref _searchQuery, value); OnPropertyChanged(nameof(CanSearch)); }
+        set 
+        { 
+            if (SetProperty(ref _searchQuery, value))
+            {
+                OnPropertyChanged(nameof(CanSearch));
+                ((AsyncRelayCommand)UnifiedSearchCommand).RaiseCanExecuteChanged();
+            }
+        }
     }
 
     private bool _isAlbumSearch;
@@ -52,6 +60,13 @@ public class SearchViewModel : INotifyPropertyChanged
                 AlbumResults.Clear();
             }
         }
+    }
+    
+    private bool _isSpotifyBrowseMode;
+    public bool IsSpotifyBrowseMode
+    {
+        get => _isSpotifyBrowseMode;
+        set => SetProperty(ref _isSpotifyBrowseMode, value);
     }
 
     private bool _isSearching;
@@ -90,6 +105,7 @@ public class SearchViewModel : INotifyPropertyChanged
     public ICommand ClearSearchCommand { get; }
     public ICommand BrowseCsvCommand { get; }
     public ICommand PasteTracklistCommand { get; }
+    public ICommand BrowseSpotifyCommand { get; }
     public ICommand CancelSearchCommand { get; }
     public ICommand AddToDownloadsCommand { get; }
     public ICommand DownloadAlbumCommand { get; } 
@@ -102,6 +118,7 @@ public class SearchViewModel : INotifyPropertyChanged
         ImportOrchestrator importOrchestrator,
         IEnumerable<IImportProvider> importProviders,
         ImportPreviewViewModel importPreviewViewModel,
+        SpotifyImportViewModel spotifyImportViewModel,
         DownloadManager downloadManager,
         INavigationService navigationService,
         IFileInteractionService fileInteractionService,
@@ -111,9 +128,9 @@ public class SearchViewModel : INotifyPropertyChanged
         _logger = logger;
         _soulseek = soulseek;
         _importOrchestrator = importOrchestrator;
-        _importOrchestrator = importOrchestrator;
         _importProviders = importProviders;
         ImportPreviewViewModel = importPreviewViewModel;
+        SpotifyImportViewModel = spotifyImportViewModel;
         _downloadManager = downloadManager;
         _navigationService = navigationService;
         _fileInteractionService = fileInteractionService;
@@ -124,6 +141,7 @@ public class SearchViewModel : INotifyPropertyChanged
         ClearSearchCommand = new RelayCommand(() => SearchQuery = "");
         BrowseCsvCommand = new AsyncRelayCommand(ExecuteBrowseCsvAsync);
         PasteTracklistCommand = new AsyncRelayCommand(ExecutePasteTracklistAsync);
+        BrowseSpotifyCommand = new RelayCommand(() => IsSpotifyBrowseMode = !IsSpotifyBrowseMode);
         CancelSearchCommand = new RelayCommand(ExecuteCancelSearch);
         AddToDownloadsCommand = new AsyncRelayCommand(ExecuteAddToDownloadsAsync);
         DownloadAlbumCommand = new RelayCommand<object>(param => { /* TODO: Implement single album download */ });

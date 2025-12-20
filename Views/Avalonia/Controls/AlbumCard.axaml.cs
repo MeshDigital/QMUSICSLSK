@@ -4,6 +4,7 @@ using Avalonia.Input;
 using Avalonia.VisualTree;
 using SLSKDONET.Services;
 using SLSKDONET.ViewModels;
+using SLSKDONET.Models; // Added for PlaylistJob
 using System.Linq;
 
 namespace SLSKDONET.Views.Avalonia.Controls;
@@ -57,6 +58,22 @@ public partial class AlbumCard : UserControl
         {
             _dragStartPoint = null;
         }
+    }
+
+    private void OnTapped(object? sender, TappedEventArgs e)
+    {
+         if (e.Handled) return;
+
+         // Find LibraryViewModel and execute commands
+         var libraryPage = this.FindAncestorOfType<LibraryPage>();
+         if (libraryPage?.DataContext is LibraryViewModel libraryVM && DataContext is PlaylistJob job)
+         {
+             if (libraryVM.Projects.OpenProjectCommand.CanExecute(job))
+             {
+                 libraryVM.Projects.OpenProjectCommand.Execute(job);
+                 e.Handled = true;
+             }
+         }
     }
 
     private async void OnDrop(object? sender, DragEventArgs e)

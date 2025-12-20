@@ -209,15 +209,12 @@ namespace SLSKDONET.ViewModels
                 }
             });
             
-            // Check if LibVLC initialized successfully
-            IsPlayerInitialized = _playerService.IsInitialized;
-            if (!IsPlayerInitialized)
-            {
-                // Set diagnostic message if initialization failed
-                TrackTitle = "Player Initialization Failed";
-                TrackArtist = "Check LibVLC files in output directory";
-                System.Diagnostics.Debug.WriteLine("[PlayerViewModel] WARNING: AudioPlayerService failed to initialize. LibVLC native libraries may be missing.");
-            }
+            // Ensure IsPlaying is synced
+            IsPlaying = _playerService.IsPlaying;
+            
+            // Phase 9.6: Removed premature check for IsPlayerInitialized. 
+            // AudioPlayerService initializes lazily, so this check was always failing on startup.
+            // We now rely on Play() to trigger init and handle errors there.
             
             _playerService.PausableChanged += (s, e) => IsPlaying = _playerService.IsPlaying;
             _playerService.EndReached += OnEndReached;
@@ -266,7 +263,19 @@ namespace SLSKDONET.ViewModels
             {
                 var track = CurrentTrack.Model;
                 track.IsLiked = IsCurrentTrackLiked;
-                await _databaseService.UpdatePlaylistTrackAsync(track);
+                
+                // Manually map to Entity for simple update
+                var entity = new SLSKDONET.Data.PlaylistTrackEntity
+                {
+                    Id = track.Id,
+                    IsLiked = track.IsLiked,
+                    Rating = track.Rating,
+                    PlayCount = track.PlayCount,
+                    LastPlayedAt = track.LastPlayedAt,
+                    Status = track.Status
+                };
+
+                await _databaseService.UpdatePlaylistTrackAsync(entity);
             }
             catch (Exception ex)
             {

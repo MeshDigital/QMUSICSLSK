@@ -102,6 +102,7 @@
                         </StackPanel>
                         
                         <Button Background="#0078D4"
+                                Command="{Binding SelectCsvFileCommand}"
                                 Foreground="White"
                                 Padding="24,12"
                                 CornerRadius="8"

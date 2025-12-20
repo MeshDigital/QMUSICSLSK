@@ -3,10 +3,10 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:vm="clr-namespace:SLSKDONET.ViewModels"
-             xmlns:ds="clr-namespace:SimpleAvaloniaDragnDropService;assembly=Simple-Avalonia-DragnDrop-Service"
+             xmlns:ds="clr-namespace:DraggingService;assembly=Simple-Avalonia-DragnDrop-Service"
              mc:Ignorable="d" d:DesignWidth="220" d:DesignHeight="320"
-             x:Class="SLSKDONET.Views.Avalonia.Controls.AlbumCard"
-             ds:Service.AllowedDrop="ORBIT_LibraryTrack">
+             x:Class="SLSKDONET.Views.Avalonia.Controls.AlbumCard">
+             <!-- ds:Service.AllowedDrop="ORBIT_LibraryTrack" -->
     
     <UserControl.Styles>
         <!-- Glassmorphism Card Style -->
@@ -16,7 +16,7 @@
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="CornerRadius" Value="12"/>
             <Setter Property="Padding" Value="12"/>
-            <Setter Property="BoxShadow" Value="0 8px 32px rgba(0,0,0,0.4)"/>
+            <Setter Property="BoxShadow" Value="0 8 32 0 #66000000"/>
             <Setter Property="Transitions">
                 <Transitions>
                     <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.15"/>
@@ -41,7 +41,7 @@
         <!-- Hover Effect -->
         <Style Selector="Border.album-card:pointerover">
             <Setter Property="RenderTransform" Value="scale(1.02)"/>
-            <Setter Property="BoxShadow" Value="0 0 20px rgba(0,163,255,0.3), 0 8px 32px rgba(0,0,0,0.4)"/>
+            <Setter Property="BoxShadow" Value="0 0 20 0 #4D00A3FF, 0 8 32 0 #66000000"/>
             <Setter Property="BorderBrush" Value="#00A3FF"/>
         </Style>
         
@@ -56,7 +56,7 @@
         </Style>
     </UserControl.Styles>
     
-    <Border Classes="album-card" Cursor="Hand" DragDrop.AllowDrop="True">
+    <Border Classes="album-card" Cursor="Hand" DragDrop.AllowDrop="True" Tapped="OnTapped">
         <Grid RowDefinitions="200,Auto,Auto,Auto,Auto,Auto">
             
             <!-- Album Artwork -->
@@ -67,9 +67,9 @@
                     ClipToBounds="True"
                     Background="#2D2D2D">
                 <Grid>
-                    <Image Source="{Binding AlbumArtPath}" 
+                    <Image Source="{Binding AlbumArtUrl}" 
                            Stretch="UniformToFill"
-                           IsVisible="{Binding AlbumArtPath, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                           IsVisible="{Binding AlbumArtUrl, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
                     
                     <!-- Placeholder if no artwork -->
                     <TextBlock Text="🎵" 
@@ -77,7 +77,7 @@
                               HorizontalAlignment="Center" 
                               VerticalAlignment="Center"
                               Foreground="#666"
-                              IsVisible="{Binding !AlbumArtPath, Converter={x:Static StringConverters.IsNullOrEmpty}}"/>
+                              IsVisible="{Binding AlbumArtUrl, Converter={x:Static StringConverters.IsNullOrEmpty}}"/>
                 </Grid>
             </Border>
             

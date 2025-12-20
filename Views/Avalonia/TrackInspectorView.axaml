@@ -39,7 +39,7 @@
                 <Separator Background="#333" Height="1"/>
 
                 <!-- Pro Stats Grid -->
-                <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto" Spacing="16">
+                <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto">
                     <!-- Audio Guard -->
                     <Border Grid.Row="0" Grid.Column="0" Background="#252526" CornerRadius="8" Padding="12">
                         <StackPanel Spacing="4">

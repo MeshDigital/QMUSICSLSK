@@ -184,10 +184,22 @@
                     IsVisible="{Binding !IsNavigationCollapsed}">
                 <StackPanel Margin="0,16,0,0" Spacing="4">
                     <Button Classes="nav" 
+                            Command="{Binding NavigateHomeCommand}"
+                            Classes.selected="{Binding CurrentPageType, Converter={StaticResource EqualityConverter}, ConverterParameter={x:Static models:PageType.Home}}">
+                        <Grid ColumnDefinitions="Auto,*">
+                            <Border Grid.ColumnSpan="2" CornerRadius="4" IsVisible="False"/>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="12">
+                                <TextBlock Text="🏠" FontSize="16"/>
+                                <TextBlock Text="Home" FontSize="14"/>
+                            </StackPanel>
+                        </Grid>
+                    </Button>
+
+                    <Button Classes="nav" 
                             Command="{Binding NavigateSearchCommand}"
                             Classes.selected="{Binding CurrentPageType, Converter={StaticResource EqualityConverter}, ConverterParameter={x:Static models:PageType.Search}}">
                         <Grid ColumnDefinitions="Auto,*">
-                            <Border x:Name="Glow" Grid.ColumnSpan="2" CornerRadius="4" IsVisible="False"/>
+                            <Border Grid.ColumnSpan="2" CornerRadius="4" IsVisible="False"/>
                             <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="12">
                                 <TextBlock Text="🔍" FontSize="16"/>
                                 <TextBlock Text="Search" FontSize="14"/>
@@ -199,7 +211,7 @@
                             Command="{Binding NavigateLibraryCommand}"
                             Classes.selected="{Binding CurrentPageType, Converter={StaticResource EqualityConverter}, ConverterParameter={x:Static models:PageType.Library}}">
                         <Grid ColumnDefinitions="Auto,*">
-                            <Border x:Name="Glow" Grid.ColumnSpan="2" CornerRadius="4" IsVisible="False"/>
+                            <Border Grid.ColumnSpan="2" CornerRadius="4" IsVisible="False"/>
                             <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="12">
                                 <TextBlock Text="📚" FontSize="16"/>
                                 <TextBlock Text="Library" FontSize="14"/>
@@ -211,7 +223,7 @@
                             Command="{Binding NavigateDownloadsCommand}"
                             Classes.selected="{Binding CurrentPageType, Converter={StaticResource EqualityConverter}, ConverterParameter={x:Static models:PageType.Downloads}}">
                         <Grid ColumnDefinitions="Auto,*">
-                            <Border x:Name="Glow" Grid.ColumnSpan="2" CornerRadius="4" IsVisible="False"/>
+                            <Border Grid.ColumnSpan="2" CornerRadius="4" IsVisible="False"/>
                             <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="12">
                                 <TextBlock Text="⬇️" FontSize="16"/>
                                 <TextBlock Text="Downloads" FontSize="14"/>
@@ -223,7 +235,7 @@
                             Command="{Binding NavigateSettingsCommand}"
                             Classes.selected="{Binding CurrentPageType, Converter={StaticResource EqualityConverter}, ConverterParameter={x:Static models:PageType.Settings}}">
                         <Grid ColumnDefinitions="Auto,*">
-                            <Border x:Name="Glow" Grid.ColumnSpan="2" CornerRadius="4" IsVisible="False"/>
+                            <Border Grid.ColumnSpan="2" CornerRadius="4" IsVisible="False"/>
                             <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="12">
                                 <TextBlock Text="⚙️" FontSize="16"/>
                                 <TextBlock Text="Settings" FontSize="14"/>
