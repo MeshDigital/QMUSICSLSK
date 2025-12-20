@@ -69,7 +69,7 @@ public class SpotifyBatchClient
                     {
                          // Stop retrying on auth errors or after max attempts for other errors
                          var errorContent = await response.Content.ReadAsStringAsync(ct);
-                         _log.LogError("Spotify request failed permanently. Status: {Status}, Content: {Content}", response.StatusCode, errorContent);
+                         _log.LogError("Spotify request failed permanently. Url: {Url}, Status: {Status}, Content: {Content}", url, response.StatusCode, errorContent);
                          response.EnsureSuccessStatusCode(); // Will throw HttpRequestException
                     }
 

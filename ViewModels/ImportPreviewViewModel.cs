@@ -115,6 +115,9 @@ public class ImportPreviewViewModel : INotifyPropertyChanged
         SelectAllCommand = new RelayCommand(SelectAll);
         DeselectAllCommand = new RelayCommand(DeselectAll);
         CancelCommand = new RelayCommand(Cancel);
+        
+        MergeCommand = new AsyncRelayCommand(MergeAsync);
+        CreateNewCommand = new AsyncRelayCommand(CreateNewAsync);
     }
 
     /// <summary>
@@ -235,11 +238,151 @@ public class ImportPreviewViewModel : INotifyPropertyChanged
             throw;
         }
     }
-    
+
     /// <summary>
-    /// Enrich tracks with Spotify metadata in the background after UI display.
-    /// Updates happen progressively as each track is enriched.
+    /// Initialize preview mode for streaming - clears existing data and sets headers immediately.
     /// </summary>
+    private bool _isDuplicate;
+    private int _existingTrackCount;
+    private PlaylistJob? _existingJob;
+    private Guid _targetJobId;
+    private string? _sourceUrl;
+
+    public bool IsDuplicate
+    {
+        get => _isDuplicate;
+        set { _isDuplicate = value; OnPropertyChanged(); }
+    }
+
+    public int ExistingTrackCount
+    {
+        get => _existingTrackCount;
+        set { _existingTrackCount = value; OnPropertyChanged(); }
+    }
+
+    public ICommand MergeCommand { get; }
+    public ICommand CreateNewCommand { get; }
+
+    /// <summary>
+    /// Initialize preview mode for streaming - clears existing data and sets headers immediately.
+    /// accepts an optional existing job for deduplication scenarios.
+    /// </summary>
+    public void InitializeStreamingPreview(string sourceTitle, string sourceType, Guid newJobId, string inputUrl, PlaylistJob? existingJob = null)
+    {
+        SourceTitle = sourceTitle;
+        SourceType = sourceType;
+        StatusMessage = "Starting import stream...";
+        IsLoading = true;
+        
+        ImportedTracks.Clear();
+        AlbumGroups.Clear();
+        SelectedCount = 0;
+
+        _sourceUrl = inputUrl;
+        
+        // Deduplication Logic
+        _existingJob = existingJob;
+        if (_existingJob != null)
+        {
+            IsDuplicate = true;
+            ExistingTrackCount = _existingJob.PlaylistTracks.Count; // Assuming Tracks loaded, otherwise TotalTracks
+            if (ExistingTrackCount == 0 && _existingJob.TotalTracks > 0) ExistingTrackCount = _existingJob.TotalTracks;
+            
+            // Default assumes MERGE, so we target the EXISTING ID
+            _targetJobId = _existingJob.Id;
+            StatusMessage = $"Found existing playlist '{_existingJob.SourceTitle}' ({ExistingTrackCount} tracks).";
+        }
+        else
+        {
+             IsDuplicate = false;
+             ExistingTrackCount = 0;
+             _targetJobId = newJobId;
+        }
+    }
+    
+    private async Task MergeAsync()
+    {
+        // Keep target as existing ID
+        // Filter out tracks that are already in the existing job?
+        // For now, simple append logic in AddToLibraryAsync will suffice if we pass the ID.
+        await AddToLibraryAsync();
+    }
+
+    private async Task CreateNewAsync()
+    {
+        // Force a new random ID to avoid collision
+        _targetJobId = Guid.NewGuid();
+        await AddToLibraryAsync();
+    }
+
+    /// <summary>
+    /// Appends a batch of streamed tracks to the preview.
+    /// </summary>
+    public async Task AddTracksToPreviewAsync(IEnumerable<SearchQuery> queries)
+    {
+         if (queries == null || !queries.Any()) return;
+
+         await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+         {
+             var newTracks = new List<SelectableTrack>();
+             foreach (var query in queries)
+             {
+                 var track = new Track
+                 {
+                    Title = query.Title,
+                    Artist = query.Artist,
+                    Album = query.Album,
+                    Length = query.Length,
+                    SpotifyTrackId = query.SpotifyTrackId,
+                    SpotifyAlbumId = query.SpotifyAlbumId,
+                    SpotifyArtistId = query.SpotifyArtistId,
+                    AlbumArtUrl = query.AlbumArtUrl,
+                    ArtistImageUrl = query.ArtistImageUrl,
+                    Genres = query.Genres,
+                    Popularity = query.Popularity,
+                    CanonicalDuration = query.CanonicalDuration,
+                    ReleaseDate = query.ReleaseDate
+                 };
+
+                 // Check library status (simplistic check vs memory cache or just skip for speed)
+                 // For streaming speed, maybe skip checking every single one against DB?
+                 // Or we rely on ImportOrchestrator to have pre-checked?
+                 // Let's assume unchecked for speed.
+
+                 var selectable = new SelectableTrack(track);
+                 selectable.OnSelectionChanged = () => 
+                 {
+                     UpdateSelectedCount();
+                     ((AsyncRelayCommand)AddToLibraryCommand).RaiseCanExecuteChanged();
+                 };
+                 newTracks.Add(selectable);
+                 ImportedTracks.Add(selectable);
+             }
+
+             // Efficiently update groups
+             // Re-grouping everything is expensive, but for 50 items it's okay.
+             // Ideally we just add to existing groups or create new ones.
+             UpdateAlbumGroupsIncremental(newTracks);
+
+             StatusMessage = $"Loaded {ImportedTracks.Count} tracks...";
+             IsLoading = false; // Allow interaction while streaming? Yes.
+         });
+    }
+
+    private void UpdateAlbumGroupsIncremental(List<SelectableTrack> newTracks)
+    {
+        foreach (var track in newTracks)
+        {
+            var albumName = track.Model.Album ?? "[Unknown Album]";
+            var group = AlbumGroups.FirstOrDefault(g => g.Album == albumName);
+            if (group == null)
+            {
+                group = new AlbumGroupViewModel { Album = albumName };
+                AlbumGroups.Add(group);
+            }
+            group.Tracks.Add(track);
+        }
+    }
     private async Task EnrichTracksInBackgroundAsync(List<Track> tracks, CancellationToken cancellationToken)
     {
         try
@@ -366,11 +509,12 @@ public class ImportPreviewViewModel : INotifyPropertyChanged
         // Create PlaylistJob to group all tracks
         var job = new PlaylistJob
         {
-            Id = Guid.NewGuid(),
+            Id = _targetJobId, // Use the deterministic or existing ID
             SourceTitle = SourceTitle,
             SourceType = SourceType,
-            CreatedAt = DateTime.UtcNow,
-            DestinationFolder = "" // Use default
+            CreatedAt = _existingJob?.CreatedAt ?? DateTime.UtcNow, // Keep original date if merging
+            DestinationFolder = _existingJob?.DestinationFolder ?? "", // Keep original folder
+            SourceUrl = _sourceUrl
         };
 
         try

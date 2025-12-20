@@ -34,3 +34,23 @@ public interface IImportProvider
     /// <returns>Result containing tracks or error information</returns>
     Task<ImportResult> ImportAsync(string input);
 }
+
+/// <summary>
+/// Extended interface for providers that can stream results page-by-page.
+/// Allows for immediate UI updates during large imports.
+/// </summary>
+public interface IStreamingImportProvider : IImportProvider
+{
+    /// <summary>
+    /// Stream tracks as they are discovered/fetched.
+    /// Yields batches of tracks (e.g. pages from an API).
+    /// </summary>
+    IAsyncEnumerable<ImportBatchResult> ImportStreamAsync(string input);
+}
+
+public class ImportBatchResult
+{
+    public required List<SearchQuery> Tracks { get; set; }
+    public string SourceTitle { get; set; } = string.Empty;
+    public int TotalEstimated { get; set; }
+}

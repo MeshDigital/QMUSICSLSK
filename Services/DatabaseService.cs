@@ -138,6 +138,12 @@ public class DatabaseService
                 _logger.LogWarning("Schema Patch: Adding missing column 'AlbumArtUrl' to PlaylistJobs");
                 await context.Database.ExecuteSqlRawAsync("ALTER TABLE PlaylistJobs ADD COLUMN AlbumArtUrl TEXT NULL");
             }
+
+            if (!existingColumns.Contains("SourceUrl"))
+            {
+                _logger.LogWarning("Schema Patch: Adding missing column 'SourceUrl' to PlaylistJobs");
+                await context.Database.ExecuteSqlRawAsync("ALTER TABLE PlaylistJobs ADD COLUMN SourceUrl TEXT NULL");
+            }
             
             _logger.LogInformation("[{Ms}ms] Database Init: Schema patches completed", sw.ElapsedMilliseconds);
             

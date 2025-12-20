@@ -83,6 +83,8 @@ public class PlaylistJobEntity
     /// URL for the playlist/album cover art.
     /// </summary>
     public string? AlbumArtUrl { get; set; }
+
+    public string? SourceUrl { get; set; }
     
     [InverseProperty(nameof(PlaylistTrackEntity.Job))]
     public ICollection<PlaylistTrackEntity> Tracks { get; set; } = new List<PlaylistTrackEntity>();

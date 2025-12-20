@@ -108,20 +108,89 @@ public class SpotifyLikedSongsImportProvider : IImportProvider
             var track = item.Track;
             if (track == null) continue;
 
-            var query = new SearchQuery
-            {
-                Title = track.Name,
-                Artist = track.Artists.FirstOrDefault()?.Name ?? "Unknown Artist",
-                Album = track.Album.Name,
-                SpotifyTrackId = track.Id,
-                ReleaseDate = !string.IsNullOrEmpty(track.Album.ReleaseDate) ? DateTime.TryParse(track.Album.ReleaseDate, out var d) ? d : null : null,
-                CanonicalDuration = track.DurationMs,
-                Popularity = track.Popularity,
-                AlbumArtUrl = track.Album.Images?.FirstOrDefault()?.Url
-            };
-            
+            var query = MapToSearchQuery(track);
             tracks.Add(query);
         }
         await Task.CompletedTask;
+    }
+
+    private SearchQuery MapToSearchQuery(FullTrack track)
+    {
+        return new SearchQuery
+        {
+            Title = track.Name,
+            Artist = track.Artists.FirstOrDefault()?.Name ?? "Unknown Artist",
+            Album = track.Album.Name,
+            SpotifyTrackId = track.Id,
+            ReleaseDate = !string.IsNullOrEmpty(track.Album.ReleaseDate) ? DateTime.TryParse(track.Album.ReleaseDate, out var d) ? d : null : null,
+            CanonicalDuration = track.DurationMs,
+            Popularity = track.Popularity,
+            AlbumArtUrl = track.Album.Images?.FirstOrDefault()?.Url
+        };
+    }
+
+    public async IAsyncEnumerable<ImportBatchResult> ImportStreamAsync(string input)
+    {
+        if (!await _authService.IsAuthenticatedAsync()) yield break;
+        
+        var client = await _authService.GetAuthenticatedClientAsync();
+        Paging<SavedTrack> page;
+
+        try 
+        {
+            _logger.LogInformation("Streaming Spotify Liked Songs...");
+            page = await client.Library.GetTracks(new LibraryTracksRequest { Limit = 50 });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to start Spotify stream");
+            yield break;
+        }
+
+        int total = page.Total ?? 0;
+        
+        // Yield first page
+        var firstBatch = new List<SearchQuery>();
+        await ProcessPage(page, firstBatch);
+        yield return new ImportBatchResult 
+        { 
+            Tracks = firstBatch, 
+            SourceTitle = "Liked Songs (Spotify)",
+            TotalEstimated = total 
+        };
+
+        // Fetch remaining pages
+        while (page.Next != null)
+        {
+            ImportBatchResult? batchResult = null;
+            try
+            {
+                await Task.Delay(100); // Rate limiting
+                page = await client.NextPage(page);
+                
+                var batch = new List<SearchQuery>();
+                await ProcessPage(page, batch);
+                
+                if (batch.Any())
+                {
+                    batchResult = new ImportBatchResult 
+                    { 
+                        Tracks = batch, 
+                        SourceTitle = "Liked Songs (Spotify)",
+                        TotalEstimated = total 
+                    };
+                }
+            }
+            catch (Exception ex)
+            {
+                 _logger.LogError(ex, "Error streaming page");
+                 break; // Stop on error but keep what we have
+            }
+
+            if (batchResult != null)
+            {
+                yield return batchResult;
+            }
+        }
     }
 }

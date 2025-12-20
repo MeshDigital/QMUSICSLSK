@@ -6,7 +6,7 @@
              x:Class="SLSKDONET.Views.Avalonia.ImportPreviewPage"
              Background="#1E1E1E" Foreground="White">
     
-    <Grid RowDefinitions="Auto,Auto,*,Auto">
+    <Grid RowDefinitions="Auto,Auto,Auto,*,Auto">
         
         <!-- Header -->
         <Border Grid.Row="0" Background="#252526" Padding="24,20" BorderBrush="#3E3E3E" BorderThickness="0,0,0,1">
@@ -20,8 +20,44 @@
             </StackPanel>
         </Border>
 
+
+
+        <!-- Deduplication Alert Banner -->
+        <Border Grid.Row="1" Background="#663300" BorderBrush="#FF8C00" BorderThickness="0,0,0,1" Padding="16,12" IsVisible="{Binding IsDuplicate}">
+            <Grid ColumnDefinitions="*,Auto">
+                <StackPanel Orientation="Horizontal" Spacing="16" VerticalAlignment="Center">
+                    <TextBlock Text="⚠️" FontSize="20" VerticalAlignment="Center"/>
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="Existing Playlist Found" FontWeight="Bold" Foreground="#FFD580"/>
+                        <TextBlock Foreground="#FFD580" FontSize="12">
+                            <TextBlock.Text>
+                                <MultiBinding StringFormat="We found an existing playlist with {0} tracks. Do you want to merge new tracks into it?">
+                                    <Binding Path="ExistingTrackCount"/>
+                                </MultiBinding>
+                            </TextBlock.Text>
+                        </TextBlock>
+                    </StackPanel>
+                </StackPanel>
+                
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="12">
+                    <Button Command="{Binding CreateNewCommand}" Background="#424242" Foreground="White" Padding="12,6" CornerRadius="4">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <TextBlock Text="📄" FontSize="14"/> <!-- Clone Icon -->
+                            <TextBlock Text="Create New Clone" FontSize="12"/>
+                        </StackPanel>
+                    </Button>
+                    <Button Command="{Binding MergeCommand}" Background="#FF8C00" Foreground="Black" Padding="12,6" CornerRadius="4">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <TextBlock Text="🔗" FontSize="14"/> <!-- Link/Merge Icon -->
+                            <TextBlock Text="Merge to Existing" FontSize="12" FontWeight="SemiBold"/>
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+            </Grid>
+        </Border>
+
         <!-- Toolbar -->
-        <Border Grid.Row="1" Background="#1E1E1E" Padding="24,16" BorderBrush="#3E3E3E" BorderThickness="0,0,0,1">
+        <Border Grid.Row="2" Background="#1E1E1E" Padding="24,16" BorderBrush="#3E3E3E" BorderThickness="0,0,0,1">
             <Grid ColumnDefinitions="*,Auto">
                 <!-- Left: Selection Actions -->
                 <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8">
@@ -64,7 +100,7 @@
         </Border>
 
         <!-- Track List -->
-        <DataGrid Grid.Row="2"
+        <DataGrid Grid.Row="3"
                   ItemsSource="{Binding ImportedTracks}"
                   AutoGenerateColumns="False"
                   Background="Transparent"
@@ -142,7 +178,7 @@
         </DataGrid>
 
         <!-- Footer Actions -->
-        <Border Grid.Row="3" 
+        <Border Grid.Row="4" 
                 Background="#252526" 
                 BorderBrush="#3E3E3E" 
                 BorderThickness="0,1,0,0" 

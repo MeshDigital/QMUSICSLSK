@@ -44,6 +44,11 @@ public class PlaylistJob : INotifyPropertyChanged
     public string? AlbumArtUrl { get; set; }
 
     /// <summary>
+    /// Source URL for duplicate detection (e.g. Spotify URI/URL).
+    /// </summary>
+    public string? SourceUrl { get; set; }
+
+    /// <summary>
     /// The complete, original list of tracks fetched from the source.
     /// This list is never modified; it represents the full source.
     /// </summary>
