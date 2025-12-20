@@ -51,7 +51,7 @@ public class HierarchicalLibraryViewModel
                             }
                         };
                     }, false), // Disable recycling
-                    new GridLength(40)),
+                    width: new GridLength(40)),
                 new HierarchicalExpanderColumn<ILibraryNode>(
                     new TextColumn<ILibraryNode, string>("Title", x => x.Title ?? "Unknown"),
                     x => x is AlbumNode album ? album.Tracks : null),
@@ -81,8 +81,9 @@ public class HierarchicalLibraryViewModel
                                 }
                             }
                         };
+
                     }, false),
-                    new GridLength(100)),
+                    width: new GridLength(100)),
             }
         };
     }
