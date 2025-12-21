@@ -118,6 +118,12 @@ public class SettingsViewModel : INotifyPropertyChanged
         get => _config.SpotifyClientSecret ?? "";
         set { _config.SpotifyClientSecret = value; OnPropertyChanged(); }
     }
+
+    public bool ClearSpotifyOnExit
+    {
+        get => _config.ClearSpotifyOnExit;
+        set { _config.ClearSpotifyOnExit = value; OnPropertyChanged(); }
+    }
     
     // Phase 2.4: Ranking Strategy Selection
     public string SelectedRankingMode
