@@ -20,6 +20,7 @@ public class SettingsViewModel : INotifyPropertyChanged
     private readonly IFileInteractionService _fileInteractionService;
     private readonly SpotifyAuthService _spotifyAuthService;
     private readonly ISpotifyMetadataService _spotifyMetadataService;
+    private readonly IDialogService _dialogService;
 
     // Hardcoded public client ID provided by user/project
     // Ideally this would be in a secured config, but for this desktop app scenario it's acceptable as a default.
@@ -348,7 +349,8 @@ public class SettingsViewModel : INotifyPropertyChanged
         ConfigManager configManager,
         IFileInteractionService fileInteractionService,
         SpotifyAuthService spotifyAuthService,
-        ISpotifyMetadataService spotifyMetadataService)
+        ISpotifyMetadataService spotifyMetadataService,
+        IDialogService dialogService)
     {
         _logger = logger;
         _config = config;
@@ -356,6 +358,7 @@ public class SettingsViewModel : INotifyPropertyChanged
         _fileInteractionService = fileInteractionService;
         _spotifyAuthService = spotifyAuthService;
         _spotifyMetadataService = spotifyMetadataService;
+        _dialogService = dialogService;
 
         // Ensure default Client ID is set if empty
         if (string.IsNullOrEmpty(_config.SpotifyClientId))
@@ -561,12 +564,17 @@ public class SettingsViewModel : INotifyPropertyChanged
                 await CheckSpotifyConnectionStatusAsync();
                 UseSpotifyApi = true; // Auto-enable API usage on success
                 _configManager.Save(_config); // Save the enabled state
+                await _dialogService.ShowAlertAsync("Success", "Spotify connected successfully!");
+            }
+            else
+            {
+                await _dialogService.ShowAlertAsync("Connection Failed", "Authorization was cancelled or completed with errors.");
             }
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Spotify connection failed");
-            // TODO: Show error notification
+            await _dialogService.ShowAlertAsync("Connection Failed", $"Could not connect to Spotify.\nDetails: {ex.Message}");
         }
         finally
         {
