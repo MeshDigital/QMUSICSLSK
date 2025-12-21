@@ -358,7 +358,7 @@
             </ScrollViewer>
 
             <!-- Track Search Results -->
-            <ScrollViewer IsVisible="{Binding !IsImportPreviewVisible}">
+            <ScrollViewer>
                 <StackPanel Margin="24,0,24,24" IsVisible="{Binding !IsAlbumSearch}">
                      <StackPanel IsVisible="{Binding !IsSpotifyBrowseMode}">
                     <!-- Results Header -->
@@ -514,12 +514,5 @@
             </Grid>
         </Border>
         </Grid>
-        
-        <!-- Import Preview Overlay - Layer 1 (on top) -->
-        <Border Background="#1E1E1E"
-                IsVisible="{Binding IsImportPreviewVisible}"
-                ZIndex="1">
-            <views:ImportPreviewPage DataContext="{Binding ImportPreviewViewModel}"/>
-        </Border>
     </Grid>
 </UserControl>

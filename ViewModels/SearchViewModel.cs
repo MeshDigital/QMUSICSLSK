@@ -96,7 +96,6 @@ public class SearchViewModel : INotifyPropertyChanged
     public int MaxBitrate { get; set; } = 3000;
 
     // UI State
-    public bool IsImportPreviewVisible => _navigationService.CurrentPage?.GetType().Name.Contains("ImportPreview") == true;
 
     public bool CanSearch => !string.IsNullOrWhiteSpace(SearchQuery);
 
