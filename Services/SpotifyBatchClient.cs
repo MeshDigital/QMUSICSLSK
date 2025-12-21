@@ -82,8 +82,13 @@ public class SpotifyBatchClient
                 }
 
                 var json = await response.Content.ReadAsStringAsync(ct);
-                // Use case-insensitive deserialization
-                var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                // Use case-insensitive deserialization with enum string converter
+                // This is critical for Spotify API responses like ItemType enum
+                var options = new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true,
+                    Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() }
+                };
                 return JsonSerializer.Deserialize<T>(json, options)!;
             }
         }

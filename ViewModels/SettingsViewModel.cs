@@ -30,7 +30,7 @@ public class SettingsViewModel : INotifyPropertyChanged
     // Settings Properties
     public string DownloadPath
     {
-        get => _config.DownloadDirectory;
+        get => _config.DownloadDirectory ?? "";
         set { _config.DownloadDirectory = value; OnPropertyChanged(); }
     }
 
@@ -109,13 +109,13 @@ public class SettingsViewModel : INotifyPropertyChanged
 
     public string SpotifyClientId
     {
-        get => _config.SpotifyClientId;
+        get => _config.SpotifyClientId ?? "";
         set { _config.SpotifyClientId = value; OnPropertyChanged(); }
     }
     
     public string SpotifyClientSecret
     {
-        get => _config.SpotifyClientSecret;
+        get => _config.SpotifyClientSecret ?? "";
         set { _config.SpotifyClientSecret = value; OnPropertyChanged(); }
     }
     

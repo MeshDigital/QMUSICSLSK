@@ -98,6 +98,24 @@ public class SoulseekAdapter : ISoulseekAdapter, IDisposable
             throw new InvalidOperationException("Not connected to Soulseek");
         }
 
+        // Wait for Soulseek to establish connection before searching
+        // Fixes: "The server connection must be connected and logged in" error on startup
+        int waitRetries = 0;
+        const int maxWaitRetries = 10;
+        const int retryDelayMs = 500;
+        while (!_client.State.HasFlag(SoulseekClientStates.Connected) && waitRetries < maxWaitRetries)
+        {
+            _logger.LogInformation("Waiting for Soulseek connection before searching (retry {Attempt}/{Max})...", waitRetries + 1, maxWaitRetries);
+            await Task.Delay(retryDelayMs, ct);
+            waitRetries++;
+        }
+
+        if (!_client.State.HasFlag(SoulseekClientStates.Connected))
+        {
+            _logger.LogError("Soulseek failed to connect within {Seconds} seconds", maxWaitRetries * retryDelayMs / 1000.0);
+            throw new InvalidOperationException($"Soulseek failed to connect in time ({maxWaitRetries * retryDelayMs}ms). Cannot perform search.");
+        }
+
         try
         {
             var minBitrateStr = bitrateFilter.Min?.ToString() ?? "0";

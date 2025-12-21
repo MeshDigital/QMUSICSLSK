@@ -24,6 +24,7 @@ public class SpotifyAuthService
     private SpotifyClient? _authenticatedClient;
     private PKCETokenResponse? _currentTokenResponse;
     private DateTime _tokenExpiresAt;
+    private DateTime _lastTokenRefreshTime = DateTime.MinValue; // Track last refresh for throttling
     private readonly SemaphoreSlim _authLock = new(1, 1);
     private Task? _refreshTask;
 
@@ -348,6 +349,16 @@ public class SpotifyAuthService
 
     private async Task RefreshAccessTokenInternalAsync()
     {
+        // Throttle: Don't refresh if we just refreshed less than 5 minutes ago
+        // This prevents "double refresh" glitch when both InitializeAsync and VerifyConnectionAsync trigger refreshes
+        const int throttleMinutes = 5;
+        var timeSinceLastRefresh = DateTime.UtcNow - _lastTokenRefreshTime;
+        if (timeSinceLastRefresh.TotalMinutes < throttleMinutes && _currentTokenResponse != null)
+        {
+            _logger.LogInformation("Token refresh throttled: last refresh was {Seconds} seconds ago", timeSinceLastRefresh.TotalSeconds);
+            return;
+        }
+
         var refreshToken = await _tokenStorage.LoadRefreshTokenAsync();
         if (string.IsNullOrEmpty(refreshToken))
         {
@@ -372,6 +383,7 @@ public class SpotifyAuthService
 
             _currentTokenResponse = tokenResponse;
             _tokenExpiresAt = DateTime.UtcNow.AddSeconds(tokenResponse.ExpiresIn);
+            _lastTokenRefreshTime = DateTime.UtcNow; // Record refresh time for throttling
 
             // Update stored refresh token if a new one was provided
             if (!string.IsNullOrEmpty(tokenResponse.RefreshToken))
