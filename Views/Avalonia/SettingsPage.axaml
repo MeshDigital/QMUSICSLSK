@@ -456,7 +456,7 @@
                             </Button>
                         </StackPanel>
 
-                        <Button Command="{Binding ConnectSpotifyCommand}"
+                        <Button Command="{Binding RestartSpotifyAuthCommand}"
                                 IsVisible="{Binding IsAuthenticating}"
                                 Background="#444"
                                 Padding="12,8"

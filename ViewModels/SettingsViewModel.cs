@@ -306,6 +306,8 @@ public class SettingsViewModel : INotifyPropertyChanged
         get => _isAuthenticating;
         set
         {
+            _logger.LogInformation("IsAuthenticating changing from {Old} to {New} (StackTrace: {Trace})", 
+                _isAuthenticating, value, Environment.StackTrace);
             if (SetProperty(ref _isAuthenticating, value))
             {
                 // Notify all Spotify commands to re-evaluate their CanExecute state
@@ -313,6 +315,7 @@ public class SettingsViewModel : INotifyPropertyChanged
                 (DisconnectSpotifyCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
                 (RevokeAndReAuthCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
                 (TestSpotifyConnectionCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+                (RestartSpotifyAuthCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
             }
         }
     }
@@ -325,6 +328,7 @@ public class SettingsViewModel : INotifyPropertyChanged
     public ICommand TestSpotifyConnectionCommand { get; }
     public ICommand ClearSpotifyCacheCommand { get; }
     public ICommand RevokeAndReAuthCommand { get; }
+    public ICommand RestartSpotifyAuthCommand { get; }
     public ICommand CheckFfmpegCommand { get; } // Phase 8: Dependency validation
 
     // Phase 8: FFmpeg Dependency State
@@ -389,6 +393,7 @@ public class SettingsViewModel : INotifyPropertyChanged
         ClearSpotifyCacheCommand = new AsyncRelayCommand(ClearSpotifyCacheAsync);
         RevokeAndReAuthCommand = new AsyncRelayCommand(RevokeAndReAuthAsync, () => IsSpotifyConnected && !IsAuthenticating);
         CheckFfmpegCommand = new AsyncRelayCommand(CheckFfmpegAsync); // Phase 8
+        RestartSpotifyAuthCommand = new AsyncRelayCommand(RestartSpotifyAuthAsync, () => IsAuthenticating);
 
         // Explicitly initialize IsAuthenticating to false
         IsAuthenticating = false;
@@ -673,6 +678,31 @@ public class SettingsViewModel : INotifyPropertyChanged
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to clear cache via Settings");
+        }
+    }
+
+    /// <summary>
+    /// Allows restarting a stuck authentication flow while UI shows "Authentication Active".
+    /// Enabled only when IsAuthenticating is true.
+    /// </summary>
+    private async Task RestartSpotifyAuthAsync()
+    {
+        try
+        {
+            _logger.LogInformation("Restarting Spotify authentication flow...");
+            // Clear the authenticating flag to re-enable connect logic
+            IsAuthenticating = false;
+            // Immediately start a fresh connect attempt
+            await ConnectSpotifyAsync();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to restart Spotify authentication");
+            IsAuthenticating = false;
+        }
+        finally
+        {
+            (RestartSpotifyAuthCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
         }
     }
 
