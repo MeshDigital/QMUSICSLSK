@@ -71,6 +71,11 @@ public class ConfigManager
                 SpotifyUsePublicOnly = !bool.TryParse(config["Spotify:SpotifyUsePublicOnly"], out var supo) || supo,
                 SpotifyClientId = config["Spotify:SpotifyClientId"],
                 SpotifyClientSecret = config["Spotify:SpotifyClientSecret"],
+                SpotifyUseApi = bool.TryParse(config["Spotify:SpotifyUseApi"], out var sua) && sua,
+                SpotifyRememberAuth = !bool.TryParse(config["Spotify:SpotifyRememberAuth"], out var sra) || sra,
+                SpotifyCallbackPort = int.TryParse(config["Spotify:SpotifyCallbackPort"], out var scp) ? scp : 5000,
+                SpotifyRedirectUri = config["Spotify:SpotifyRedirectUri"] ?? "http://127.0.0.1:5000/callback",
+                                ClearSpotifyOnExit = bool.TryParse(config["Spotify:ClearSpotifyOnExit"], out var csoe) && csoe,
                 SearchLengthToleranceSeconds = int.TryParse(config["Download:SearchLengthToleranceSeconds"], out var tol) ? tol : 3,
                 FuzzyMatchEnabled = !bool.TryParse(config["Download:FuzzyMatchEnabled"], out var fz) || fz,
                 MaxSearchAttempts = int.TryParse(config["Download:MaxSearchAttempts"], out var msa) ? msa : 3,
@@ -118,6 +123,11 @@ public class ConfigManager
         iniContent.AppendLine($"SpotifyClientId = {config.SpotifyClientId}");
         iniContent.AppendLine($"SpotifyClientSecret = {config.SpotifyClientSecret}");
         iniContent.AppendLine($"SpotifyUsePublicOnly = {config.SpotifyUsePublicOnly}");
+        iniContent.AppendLine($"SpotifyCallbackPort = {config.SpotifyCallbackPort}");
+        iniContent.AppendLine($"SpotifyRedirectUri = {config.SpotifyRedirectUri}");
+        iniContent.AppendLine($"SpotifyRememberAuth = {config.SpotifyRememberAuth}");
+        iniContent.AppendLine($"SpotifyUseApi = {config.SpotifyUseApi}");
+        iniContent.AppendLine($"ClearSpotifyOnExit = {config.ClearSpotifyOnExit}");
 
         iniContent.AppendLine();
         iniContent.AppendLine("[Download]");

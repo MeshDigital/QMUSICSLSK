@@ -208,13 +208,24 @@ public class ProjectListViewModel : INotifyPropertyChanged
 
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
+                // Performance fix: Batch add items instead of one-by-one to avoid repeated UI reflows
+                // Clear collection
                 AllProjects.Clear();
-                foreach (var job in jobs.OrderByDescending(j => j.CreatedAt))
+                
+                // Add all items at once in sorted order
+                var sortedJobs = jobs.OrderByDescending(j => j.CreatedAt).ToList();
+                foreach (var job in sortedJobs)
                 {
                     AllProjects.Add(job);
                 }
 
                 _logger.LogInformation("Loaded {Count} projects", AllProjects.Count);
+                
+                // Select first project if available
+                if (AllProjects.Count > 0)
+                {
+                    SelectedProject = AllProjects[0];
+                }
             });
         }
         catch (Exception ex)

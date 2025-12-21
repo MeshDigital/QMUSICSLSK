@@ -197,14 +197,15 @@ public class MetadataEnrichmentOrchestrator : IDisposable
                 if (!batch.Any()) continue;
 
                 // Process the batch
-                 if (!_spotifyAuthService.IsAuthenticated)
+                if (!_spotifyAuthService.IsAuthenticated)
                 {
-                     _logger.LogDebug("Skipping metadata enrichment: User not authenticated with Spotify.");
-                     // Mark all as done so they don't hang ? Or just ignore?
-                     // If we ignore, they will be "missing" metadata which is fine.
-                     // But we should clean up pending orchestrations.
-                     foreach(var t in batch) await _databaseService.RemovePendingOrchestrationAsync(t.TrackUniqueHash);
-                     continue;
+                    _logger.LogDebug("Skipping metadata enrichment for {Count} tracks: User not authenticated with Spotify.", batch.Count);
+                    // Clean up pending orchestrations since we won't process them
+                    foreach(var t in batch)
+                    {
+                        await _databaseService.RemovePendingOrchestrationAsync(t.TrackUniqueHash);
+                    }
+                    continue;
                 }
 
                 // Split into "Has Spotify ID" vs "Needs Search"

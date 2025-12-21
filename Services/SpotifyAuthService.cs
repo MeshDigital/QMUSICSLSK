@@ -24,6 +24,7 @@ public class SpotifyAuthService
     private SpotifyClient? _authenticatedClient;
     private PKCETokenResponse? _currentTokenResponse;
     private DateTime _tokenExpiresAt;
+    private DateTime _lastTokenRefreshTime = DateTime.MinValue; // Track last refresh for throttling
     private readonly SemaphoreSlim _authLock = new(1, 1);
     private Task? _refreshTask;
 
@@ -59,31 +60,111 @@ public class SpotifyAuthService
     }
 
     /// <summary>
+    /// Proactively verifies Spotify connection on app startup.
+    /// This method VALIDATES the stored token by making an actual API call,
+    /// rather than just checking if a token file exists.
+    /// 
+    /// This is the fix for the "zombie token" bug where the app would show
+    /// "Connected" after restart but the token was actually invalid.
+    /// </summary>
+    public async Task VerifyConnectionAsync()
+    {
+        try
+        {
+            _logger.LogInformation("Starting proactive Spotify connection verification...");
+
+            // Load token from secure storage
+            var refreshToken = await _tokenStorage.LoadRefreshTokenAsync();
+            if (string.IsNullOrEmpty(refreshToken))
+            {
+                _logger.LogInformation("No stored refresh token found - user is not authenticated");
+                IsAuthenticated = false;
+                return;
+            }
+
+            _logger.LogInformation("Stored refresh token found, attempting to validate...");
+
+            // Try to refresh the token to verify it's still valid with Spotify
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            var verifyTask = Task.Run(async () =>
+            {
+                try
+                {
+                    await RefreshAccessTokenAsync();
+                    // If refresh succeeded, we're authenticated
+                    IsAuthenticated = _authenticatedClient != null;
+                    
+                    if (IsAuthenticated)
+                    {
+                        _logger.LogInformation("✓ Token verification succeeded - user is authenticated");
+                    }
+                    else
+                    {
+                        _logger.LogWarning("✗ Token verification failed - RefreshAccessTokenAsync did not create client");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "✗ Token verification failed during refresh - clearing invalid token");
+                    IsAuthenticated = false;
+                    // Don't re-throw; we want to degrade gracefully
+                }
+            }, cts.Token);
+
+            await verifyTask;
+        }
+        catch (OperationCanceledException)
+        {
+            _logger.LogWarning("Token verification timed out after 5 seconds - assuming not authenticated");
+            IsAuthenticated = false;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Unexpected error during Spotify connection verification");
+            IsAuthenticated = false;
+        }
+    }
+
+    /// <summary>
     /// Checks if the user is currently authenticated with Spotify.
     /// Does not trigger a refresh if the current token is still valid.
     /// </summary>
     public async Task<bool> IsAuthenticatedAsync()
     {
-        // 1. Check if we have a valid client and non-expired token
-        if (_authenticatedClient != null && DateTime.UtcNow < _tokenExpiresAt.AddMinutes(-1))
-        {
-            return true;
-        }
-
-        // 2. Check if we have a stored refresh token
-        var refreshToken = await _tokenStorage.LoadRefreshTokenAsync();
-        if (string.IsNullOrEmpty(refreshToken))
-            return false;
-
-        // 3. Try to refresh the token to verify it's still valid
         try
         {
-            await RefreshAccessTokenAsync();
-            return _authenticatedClient != null;
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+            var checkTask = Task.Run(async () =>
+            {
+                // 1. Check if we have a valid client and non-expired token
+                if (_authenticatedClient != null && DateTime.UtcNow < _tokenExpiresAt.AddMinutes(-1))
+                {
+                    return true;
+                }
+
+                // 2. Check if we have a stored refresh token
+                var refreshToken = await _tokenStorage.LoadRefreshTokenAsync();
+                if (string.IsNullOrEmpty(refreshToken))
+                    return false;
+
+                // 3. Try to refresh the token to verify it's still valid
+                try
+                {
+                    await RefreshAccessTokenAsync();
+                    return _authenticatedClient != null;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "IsAuthenticatedAsync check failed during refresh");
+                    return false;
+                }
+            }, cts.Token);
+
+            return await checkTask;
         }
-        catch (Exception ex)
+        catch (OperationCanceledException)
         {
-            _logger.LogWarning(ex, "IsAuthenticatedAsync check failed during refresh");
+            _logger.LogWarning("IsAuthenticatedAsync timed out after 3 seconds");
             return false;
         }
     }
@@ -147,6 +228,9 @@ public class SpotifyAuthService
 
             // Open browser
             OpenBrowser(authUrl.ToString());
+
+            // Ensure any previous listener is stopped
+            _httpServer.Stop();
 
             // Wait for callback with a 2-minute timeout
             string? authCode = null;
@@ -217,7 +301,12 @@ public class SpotifyAuthService
             _logger.LogInformation("Refresh token stored securely");
         }
 
-    // Create authenticated client
+        // Save the successful callback port to config for deterministic RedirectUri
+        // This ensures future auth attempts use the same port that worked
+        _config.SpotifyCallbackPort = new Uri(_config.SpotifyRedirectUri).Port;
+        _logger.LogInformation("Saved Spotify callback port {Port} for future auth attempts", _config.SpotifyCallbackPort);
+
+        // Create authenticated client
         _authenticatedClient = new SpotifyClient(tokenResponse.AccessToken);
         IsAuthenticated = true;
 
@@ -274,6 +363,16 @@ public class SpotifyAuthService
 
     private async Task RefreshAccessTokenInternalAsync()
     {
+        // Throttle: Don't refresh if we just refreshed less than 5 minutes ago
+        // This prevents "double refresh" glitch when both InitializeAsync and VerifyConnectionAsync trigger refreshes
+        const int throttleMinutes = 5;
+        var timeSinceLastRefresh = DateTime.UtcNow - _lastTokenRefreshTime;
+        if (timeSinceLastRefresh.TotalMinutes < throttleMinutes && _currentTokenResponse != null)
+        {
+            _logger.LogInformation("Token refresh throttled: last refresh was {Seconds} seconds ago", timeSinceLastRefresh.TotalSeconds);
+            return;
+        }
+
         var refreshToken = await _tokenStorage.LoadRefreshTokenAsync();
         if (string.IsNullOrEmpty(refreshToken))
         {
@@ -298,6 +397,7 @@ public class SpotifyAuthService
 
             _currentTokenResponse = tokenResponse;
             _tokenExpiresAt = DateTime.UtcNow.AddSeconds(tokenResponse.ExpiresIn);
+            _lastTokenRefreshTime = DateTime.UtcNow; // Record refresh time for throttling
 
             // Update stored refresh token if a new one was provided
             if (!string.IsNullOrEmpty(tokenResponse.RefreshToken))
@@ -390,8 +490,14 @@ public class SpotifyAuthService
     /// </summary>
     public async Task<PrivateUser> GetCurrentUserAsync()
     {
-        var client = await GetAuthenticatedClientAsync();
-        return await client.UserProfile.Current();
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        var userTask = Task.Run(async () =>
+        {
+            var client = await GetAuthenticatedClientAsync();
+            return await client.UserProfile.Current();
+        }, cts.Token);
+
+        return await userTask;
     }
 
     /// <summary>
@@ -423,6 +529,35 @@ public class SpotifyAuthService
         {
             _logger.LogError(ex, "Failed to open browser");
             throw new InvalidOperationException($"Failed to open browser. Please manually navigate to: {url}", ex);
+        }
+    }
+
+    /// <summary>
+    /// Clears cached Spotify credentials (diagnostic method for testing auth issues).
+    /// This is useful to confirm if the app has a "poisoned" token cache.
+    /// </summary>
+    public async Task ClearCachedCredentialsAsync()
+    {
+        try
+        {
+            _logger.LogInformation("Clearing cached Spotify credentials...");
+
+            // Delete the stored refresh token
+            await _tokenStorage.DeleteRefreshTokenAsync();
+
+            // Clear in-memory auth state
+            _authenticatedClient = null;
+            _currentTokenResponse = null;
+            _currentCodeVerifier = null;
+            IsAuthenticated = false;
+            _lastTokenRefreshTime = DateTime.MinValue;
+
+            _logger.LogInformation("✓ Spotify credentials cleared. User must re-authenticate.");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to clear Spotify credentials");
+            throw;
         }
     }
 }

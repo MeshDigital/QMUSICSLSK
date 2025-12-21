@@ -65,6 +65,13 @@ public class SpotifyMetadataService : ISpotifyMetadataService
     /// </summary>
     public async Task<FullTrack?> FindTrackAsync(string artist, string title, int? durationMs = null)
     {
+        // Check if user is authenticated
+        if (!await _authService.IsAuthenticatedAsync())
+        {
+            _logger.LogDebug("Skipping Spotify search: Not authenticated");
+            return null;
+        }
+
         // 1. Check Cache
         string searchQuery = $"{artist} - {title}";
         string cacheKey = $"search:{StringDistanceUtils.Normalize(searchQuery)}";
@@ -90,6 +97,13 @@ public class SpotifyMetadataService : ISpotifyMetadataService
 
     public async Task<bool> EnrichTrackAsync(PlaylistTrack track)
     {
+        // Check if user is authenticated before attempting enrichment
+        if (!await _authService.IsAuthenticatedAsync())
+        {
+            _logger.LogDebug("Skipping enrichment for {Artist} - {Title}: Not authenticated", track.Artist, track.Title);
+            return false;
+        }
+
         var metadata = await FindTrackAsync(track.Artist, track.Title, null);
 
         if (metadata == null) return false;
@@ -126,6 +140,18 @@ public class SpotifyMetadataService : ISpotifyMetadataService
         var results = new Dictionary<string, TrackAudioFeatures?>();
         var distinctIds = spotifyIds.Distinct().ToList();
         var missingIds = new List<string>();
+
+        // Check if authenticated before API calls
+        if (!await _authService.IsAuthenticatedAsync())
+        {
+            _logger.LogDebug("Skipping audio features batch: Not authenticated");
+            // Return empty dictionary with nulls for all IDs
+            foreach (var id in distinctIds)
+            {
+                results[id] = null;
+            }
+            return results;
+        }
 
         // 1. Check Cache
         foreach (var id in distinctIds)

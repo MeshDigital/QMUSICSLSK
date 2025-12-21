@@ -213,6 +213,8 @@ public class MainViewModel : INotifyPropertyChanged
 
     private void NavigateToSettings()
     {
+        // Safety: ensure Spotify auth UI isn't stuck disabled on arrival
+        try { SettingsViewModel.IsAuthenticating = false; } catch {}
         _navigationService.NavigateTo("Settings");
     }
 

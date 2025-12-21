@@ -9,7 +9,6 @@ using SLSKDONET.Services;
 using SLSKDONET.Services.Platform;
 using SLSKDONET.Services.Ranking;
 using SLSKDONET.Views; // For AsyncRelayCommand
-using Avalonia.Media;
 
 namespace SLSKDONET.ViewModels;
 
@@ -21,7 +20,6 @@ public class SettingsViewModel : INotifyPropertyChanged
     private readonly IFileInteractionService _fileInteractionService;
     private readonly SpotifyAuthService _spotifyAuthService;
     private readonly ISpotifyMetadataService _spotifyMetadataService;
-    private readonly IDialogService _dialogService;
 
     // Hardcoded public client ID provided by user/project
     // Ideally this would be in a secured config, but for this desktop app scenario it's acceptable as a default.
@@ -119,6 +117,12 @@ public class SettingsViewModel : INotifyPropertyChanged
     {
         get => _config.SpotifyClientSecret ?? "";
         set { _config.SpotifyClientSecret = value; OnPropertyChanged(); }
+    }
+
+    public bool ClearSpotifyOnExit
+    {
+        get => _config.ClearSpotifyOnExit;
+        set { _config.ClearSpotifyOnExit = value; OnPropertyChanged(); }
     }
     
     // Phase 2.4: Ranking Strategy Selection
@@ -278,20 +282,15 @@ public class SettingsViewModel : INotifyPropertyChanged
             {
                 OnPropertyChanged(nameof(SpotifyStatusColor));
                 OnPropertyChanged(nameof(SpotifyStatusIcon));
-                
-                // Re-evaluate command accessibility
                 (ConnectSpotifyCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
                 (DisconnectSpotifyCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+                (RevokeAndReAuthCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
                 (TestSpotifyConnectionCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
             }
         }
     }
 
-    // Use static brushes to avoid parsing on every get/binding update
-    private static readonly IBrush ConnectedBrush = SolidColorBrush.Parse("#1DB954");
-    private static readonly IBrush DisconnectedBrush = SolidColorBrush.Parse("#333333");
-
-    public IBrush SpotifyStatusColor => IsSpotifyConnected ? ConnectedBrush : DisconnectedBrush;
+    public string SpotifyStatusColor => IsSpotifyConnected ? "#1DB954" : "#333333";
     public string SpotifyStatusIcon => IsSpotifyConnected ? "✓" : "🚫";
 
     private string _spotifyDisplayName = "Not Connected";
@@ -302,19 +301,66 @@ public class SettingsViewModel : INotifyPropertyChanged
     }
 
     private bool _isAuthenticating;
+    private DateTime _authStateSetAt = DateTime.MinValue;
+    private CancellationTokenSource? _authWatchdogCts;
     public bool IsAuthenticating
     {
         get => _isAuthenticating;
         set
         {
+            _logger.LogInformation("IsAuthenticating changing from {Old} to {New} (StackTrace: {Trace})", 
+                _isAuthenticating, value, Environment.StackTrace);
             if (SetProperty(ref _isAuthenticating, value))
             {
-                // notify commands if needed, or rely on command manager
+                if (value)
+                {
+                    _authStateSetAt = DateTime.UtcNow;
+                    StartAuthWatchdog();
+                }
+                else
+                {
+                    _authWatchdogCts?.Cancel();
+                    _authWatchdogCts = null;
+                }
+                // Notify all Spotify commands to re-evaluate their CanExecute state
                 (ConnectSpotifyCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
                 (DisconnectSpotifyCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+                (RevokeAndReAuthCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
                 (TestSpotifyConnectionCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
-                (ResetAuthStateCommand as RelayCommand)?.RaiseCanExecuteChanged();
+                (RestartSpotifyAuthCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
             }
+        }
+    }
+
+    private void StartAuthWatchdog()
+    {
+        try
+        {
+            _authWatchdogCts?.Cancel();
+            _authWatchdogCts = new CancellationTokenSource();
+            var token = _authWatchdogCts.Token;
+
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(20), token);
+                    if (!token.IsCancellationRequested && IsAuthenticating)
+                    {
+                        _logger.LogWarning("Auth UI watchdog: clearing stuck IsAuthenticating after 20s");
+                        IsAuthenticating = false;
+                    }
+                }
+                catch (OperationCanceledException) { }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Auth UI watchdog encountered an error");
+                }
+            }, token);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to start auth watchdog");
         }
     }
 
@@ -323,9 +369,10 @@ public class SettingsViewModel : INotifyPropertyChanged
     public ICommand BrowseSharedFolderCommand { get; }
     public ICommand ConnectSpotifyCommand { get; }
     public ICommand DisconnectSpotifyCommand { get; }
-    public ICommand TestSpotifyConnectionCommand { get; } // New Diagnostic Command
-    public ICommand ResetAuthStateCommand { get; } // Manual reset for stuck auth state
+    public ICommand TestSpotifyConnectionCommand { get; }
     public ICommand ClearSpotifyCacheCommand { get; }
+    public ICommand RevokeAndReAuthCommand { get; }
+    public ICommand RestartSpotifyAuthCommand { get; }
     public ICommand CheckFfmpegCommand { get; } // Phase 8: Dependency validation
 
     // Phase 8: FFmpeg Dependency State
@@ -356,7 +403,7 @@ public class SettingsViewModel : INotifyPropertyChanged
         set => SetProperty(ref _ffmpegVersion, value);
     }
 
-    public IBrush FfmpegBorderColor => IsFfmpegInstalled ? SolidColorBrush.Parse("#1DB954") : SolidColorBrush.Parse("#FFA500");
+    public string FfmpegBorderColor => IsFfmpegInstalled ? "#1DB954" : "#FFA500";
 
     public SettingsViewModel(
         ILogger<SettingsViewModel> logger,
@@ -364,8 +411,7 @@ public class SettingsViewModel : INotifyPropertyChanged
         ConfigManager configManager,
         IFileInteractionService fileInteractionService,
         SpotifyAuthService spotifyAuthService,
-        ISpotifyMetadataService spotifyMetadataService,
-        IDialogService dialogService)
+        ISpotifyMetadataService spotifyMetadataService)
     {
         _logger = logger;
         _config = config;
@@ -373,7 +419,6 @@ public class SettingsViewModel : INotifyPropertyChanged
         _fileInteractionService = fileInteractionService;
         _spotifyAuthService = spotifyAuthService;
         _spotifyMetadataService = spotifyMetadataService;
-        _dialogService = dialogService;
 
         // Ensure default Client ID is set if empty
         if (string.IsNullOrEmpty(_config.SpotifyClientId))
@@ -386,30 +431,32 @@ public class SettingsViewModel : INotifyPropertyChanged
         SaveSettingsCommand = new RelayCommand(SaveSettings);
         BrowseDownloadPathCommand = new AsyncRelayCommand(BrowseDownloadPathAsync);
         BrowseSharedFolderCommand = new AsyncRelayCommand(BrowseSharedFolderAsync);
-        ConnectSpotifyCommand = new AsyncRelayCommand(ConnectSpotifyAsync, () => !IsAuthenticating);
-        DisconnectSpotifyCommand = new AsyncRelayCommand(DisconnectSpotifyAsync);
-        TestSpotifyConnectionCommand = new AsyncRelayCommand(TestSpotifyConnectionAsync, () => !IsAuthenticating && IsSpotifyConnected);
-        ResetAuthStateCommand = new RelayCommand(ResetAuthState, () => true);
+        ConnectSpotifyCommand = new AsyncRelayCommand(ConnectSpotifyAsync, () => !IsAuthenticating && !IsSpotifyConnected);
+        DisconnectSpotifyCommand = new AsyncRelayCommand(DisconnectSpotifyAsync, () => !IsAuthenticating && IsSpotifyConnected);
+        TestSpotifyConnectionCommand = new AsyncRelayCommand(TestSpotifyConnectionAsync, () => IsSpotifyConnected && !IsAuthenticating);
         ClearSpotifyCacheCommand = new AsyncRelayCommand(ClearSpotifyCacheAsync);
+        RevokeAndReAuthCommand = new AsyncRelayCommand(RevokeAndReAuthAsync, () => IsSpotifyConnected && !IsAuthenticating);
         CheckFfmpegCommand = new AsyncRelayCommand(CheckFfmpegAsync); // Phase 8
+        RestartSpotifyAuthCommand = new AsyncRelayCommand(RestartSpotifyAuthAsync, () => IsAuthenticating);
 
-        // Safe initialization on background thread to prevent UI lock
-        Task.Run(async () => 
+        // Explicitly initialize IsAuthenticating to false
+        IsAuthenticating = false;
+
+        // Note: Initial Spotify verification is already done in App.axaml.cs during startup
+        // via SpotifyAuthService.VerifyConnectionAsync() to fix the "zombie token" bug.
+        // Just set initial display based on current auth state
+        if (_spotifyAuthService.IsAuthenticated)
         {
-            // Small delay to allow UI to render first
-            await Task.Delay(500);
-            await CheckSpotifyConnectionStatusAsync();
-        });
+            IsSpotifyConnected = true;
+            SpotifyDisplayName = "Connected";
+        }
+        else
+        {
+            IsSpotifyConnected = false;
+            SpotifyDisplayName = "Not Connected";
+        }
 
         _ = CheckFfmpegAsync(); // Phase 8: Check FFmpeg on startup
-        
-        // Subscribe to auth changes to update UI automatically
-        _spotifyAuthService.AuthenticationChanged += (s, isAuthenticated) => 
-        {
-            // Re-run status check to update User Profile/Display Name
-             Avalonia.Threading.Dispatcher.UIThread.Post(async () => await CheckSpotifyConnectionStatusAsync());
-        };
-
         UpdateLivePreview();
     }
 
@@ -550,44 +597,6 @@ public class SettingsViewModel : INotifyPropertyChanged
             return (false, "");
         }
     }
-
-    private async Task CheckSpotifyConnectionStatusAsync()
-    {
-        // Don't set IsAuthenticating = true for the background check
-        // It locks the UI unnecessarily on startup.
-        
-        try
-        {
-            // Safety timeout of 5 seconds for the check
-            var checkTask = _spotifyAuthService.IsAuthenticatedAsync();
-            var timeoutTask = Task.Delay(5000);
-            
-            if (await Task.WhenAny(checkTask, timeoutTask) == timeoutTask)
-            {
-                _logger.LogWarning("Spotify connection check timed out");
-                // Don't change connection state on timeout
-                return;
-            }
-
-            if (await checkTask)
-            {
-                var user = await _spotifyAuthService.GetCurrentUserAsync();
-                SpotifyDisplayName = user.DisplayName ?? user.Id;
-                IsSpotifyConnected = true;
-            }
-            else
-            {
-                IsSpotifyConnected = false;
-                SpotifyDisplayName = "Not Connected";
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Failed to check Spotify connection status");
-            IsSpotifyConnected = false;
-        }
-    }
-
     private async Task ConnectSpotifyAsync()
     {
         try
@@ -599,61 +608,32 @@ public class SettingsViewModel : INotifyPropertyChanged
 
             var success = await _spotifyAuthService.StartAuthorizationAsync();
             
-            // CRITICAL: Reset flag immediately after auth attempt completes
-            // This prevents permanent UI lockup if post-auth checks hang
-            IsAuthenticating = false;
-            
             if (success)
             {
-                // Post-auth checks wrapped separately to avoid blocking UI
-                try
-                {
-                    await CheckSpotifyConnectionStatusAsync();
-                    UseSpotifyApi = true; // Auto-enable API usage on success
-                    _configManager.Save(_config); // Save the enabled state
-                    await _dialogService.ShowAlertAsync("Success", "Spotify connected successfully!");
-                }
-                catch (Exception postAuthEx)
-                {
-                    _logger.LogWarning(postAuthEx, "Post-auth check failed, but connection succeeded");
-                    // Don't fail the whole flow if just the status check fails
-                    UseSpotifyApi = true;
-                    _configManager.Save(_config);
-                }
+                // Update display based on new auth state
+                IsSpotifyConnected = _spotifyAuthService.IsAuthenticated;
+                SpotifyDisplayName = IsSpotifyConnected ? "Connected" : "Not Connected";
+                UseSpotifyApi = true; // Auto-enable API usage on success
+                _configManager.Save(_config); // Save the enabled state
             }
-            else
-            {
-                await _dialogService.ShowAlertAsync("Connection Failed", "Authorization was cancelled or completed with errors.");
-            }
+        }
+        catch (TimeoutException ex)
+        {
+            _logger.LogError(ex, "Spotify connection timed out");
+            SpotifyDisplayName = "Timeout - Try again";
+            IsSpotifyConnected = false;
+        }
+        catch (InvalidOperationException ex) when (ex.Message.Contains("Port") || ex.Message.Contains("port"))
+        {
+            _logger.LogError(ex, "Port conflict during Spotify connection");
+            SpotifyDisplayName = "Port conflict - Restart app";
+            IsSpotifyConnected = false;
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Spotify connection failed");
-            await _dialogService.ShowAlertAsync("Connection Failed", $"Could not connect to Spotify.\nDetails: {ex.Message}");
-        }
-        finally
-        {
-            // Safety net: ensure flag is always reset
-            IsAuthenticating = false;
-        }
-    }
-
-    private async Task TestSpotifyConnectionAsync()
-    {
-        try
-        {
-            IsAuthenticating = true;
-            bool isAlive = await _spotifyAuthService.TestConnectionAsync();
-            
-            if (isAlive)
-            {
-                await _dialogService.ShowAlertAsync("Connection Valid", $"Success! Token is valid for user: {SpotifyDisplayName}");
-            }
-            else
-            {
-                await _dialogService.ShowAlertAsync("Connection Error", "Token appears invalid or expired. Please reconnect.");
-                IsSpotifyConnected = false;
-            }
+            SpotifyDisplayName = $"Error: {ex.Message.Substring(0, Math.Min(30, ex.Message.Length))}...";
+            IsSpotifyConnected = false;
         }
         finally
         {
@@ -666,19 +646,37 @@ public class SettingsViewModel : INotifyPropertyChanged
         await _spotifyAuthService.SignOutAsync();
         IsSpotifyConnected = false;
         SpotifyDisplayName = "Not Connected";
-        UseSpotifyApi = false; 
-        
-        await _dialogService.ShowAlertAsync("Disconnected", "Spotify account disconnected and tokens cleared.");
+        UseSpotifyApi = false; // Optional: Auto-disable? Maybe let user decide.
     }
 
-    public void ResetAuthState()
+    private async Task TestSpotifyConnectionAsync()
     {
-        _logger.LogInformation("Manually resetting authentication state");
-        IsAuthenticating = false;
-        
-        // Force commands to re-evaluate their CanExecute state
-        (ConnectSpotifyCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
-        (TestSpotifyConnectionCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+        try
+        {
+            IsAuthenticating = true;
+            _logger.LogInformation("Testing Spotify connection...");
+
+            await _spotifyAuthService.VerifyConnectionAsync();
+            var stillAuthenticated = _spotifyAuthService.IsAuthenticated;
+
+            IsSpotifyConnected = stillAuthenticated;
+            SpotifyDisplayName = stillAuthenticated ? "Connected" : "Not Connected";
+
+            if (!stillAuthenticated)
+            {
+                _logger.LogWarning("Spotify test failed; clearing cached credentials for a clean retry");
+                await _spotifyAuthService.ClearCachedCredentialsAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Spotify connection test failed");
+        }
+        finally
+        {
+            IsAuthenticating = false;
+            (TestSpotifyConnectionCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+        }
     }
 
     private void SaveSettings()
@@ -727,6 +725,31 @@ public class SettingsViewModel : INotifyPropertyChanged
         }
     }
 
+    /// <summary>
+    /// Allows restarting a stuck authentication flow while UI shows "Authentication Active".
+    /// Enabled only when IsAuthenticating is true.
+    /// </summary>
+    private async Task RestartSpotifyAuthAsync()
+    {
+        try
+        {
+            _logger.LogInformation("Restarting Spotify authentication flow...");
+            // Clear the authenticating flag to re-enable connect logic
+            IsAuthenticating = false;
+            // Immediately start a fresh connect attempt
+            await ConnectSpotifyAsync();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to restart Spotify authentication");
+            IsAuthenticating = false;
+        }
+        finally
+        {
+            (RestartSpotifyAuthCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+        }
+    }
+
     protected void OnPropertyChanged([CallerMemberName] string? propertyName = null)
     {
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
@@ -738,5 +761,52 @@ public class SettingsViewModel : INotifyPropertyChanged
         field = value;
         OnPropertyChanged(propertyName);
         return true;
+    }
+
+    /// <summary>
+    /// Diagnostic method: Clears cached credentials and re-authenticates.
+    /// Useful for testing if the app has a "poisoned" token cache.
+    /// </summary>
+    private async Task RevokeAndReAuthAsync()
+    {
+        try
+        {
+            IsAuthenticating = true;
+            _logger.LogInformation("Revoking cached credentials and re-authenticating...");
+            
+            // Step 1: Clear cached credentials
+            await _spotifyAuthService.ClearCachedCredentialsAsync();
+            IsSpotifyConnected = false;
+            SpotifyDisplayName = "Not Connected";
+            
+            _logger.LogInformation("Credentials cleared. Starting fresh authentication...");
+            
+            // Step 2: Start fresh authentication
+            var success = await _spotifyAuthService.StartAuthorizationAsync();
+            
+            if (success)
+            {
+                // Update display based on new auth state
+                IsSpotifyConnected = _spotifyAuthService.IsAuthenticated;
+                SpotifyDisplayName = IsSpotifyConnected ? "Connected" : "Not Connected";
+                UseSpotifyApi = true;
+                _configManager.Save(_config);
+                _logger.LogInformation("✓ Revoke & Re-auth completed successfully");
+            }
+            else
+            {
+                _logger.LogWarning("Revoke & Re-auth failed - user cancelled or error occurred");
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Revoke & Re-auth failed");
+            // TODO: Show error notification to user
+        }
+        finally
+        {
+            IsAuthenticating = false;
+            (RevokeAndReAuthCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+        }
     }
 }

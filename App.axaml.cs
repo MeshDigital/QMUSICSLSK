@@ -35,6 +35,25 @@ public partial class App : Application
             // Configure services
             Services = ConfigureServices();
 
+            // Register exit hook to clear Spotify credentials if diagnostic flag is enabled
+            desktop.Exit += (_, __) =>
+            {
+                try
+                {
+                    var config = Services?.GetService<ConfigManager>()?.GetCurrent();
+                    if (config?.ClearSpotifyOnExit ?? false)
+                    {
+                        var spotifyAuthService = Services?.GetService<SpotifyAuthService>();
+                        spotifyAuthService?.ClearCachedCredentialsAsync().Wait();
+                        Serilog.Log.Information("Cleared Spotify credentials on exit (ClearSpotifyOnExit enabled)");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Serilog.Log.Warning(ex, "Failed to clear Spotify credentials on exit");
+                }
+            };
+
             try
             {
                 // Initialize database before anything else (required for app to function)
@@ -104,6 +123,18 @@ public partial class App : Application
                 {
                     try
                     {
+                        // CRITICAL FIX: Proactively verify Spotify connection on startup
+                        // This prevents the "zombie token" bug where tokens are invalid but UI shows "Connected"
+                        try
+                        {
+                            var spotifyAuthService = Services.GetRequiredService<SpotifyAuthService>();
+                            await spotifyAuthService.VerifyConnectionAsync();
+                        }
+                        catch (Exception spotifyEx)
+                        {
+                            Serilog.Log.Warning(spotifyEx, "Spotify connection verification failed (non-critical)");
+                        }
+
                         // Phase 8: Validate FFmpeg availability (Moved from startup)
                         try
                         {
@@ -451,4 +482,5 @@ public partial class App : Application
         
         Serilog.Log.Information("[Maintenance] Daily maintenance completed");
     }
+
 }
