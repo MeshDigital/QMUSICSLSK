@@ -408,6 +408,7 @@
                     <StackPanel Orientation="Horizontal" Spacing="12" Margin="180,0,0,0" IsVisible="{Binding IsAuthenticating, Converter={StaticResource BoolInverseConverter}}">
                         <Button Command="{Binding ConnectSpotifyCommand}"
                                 IsVisible="{Binding IsSpotifyConnected, Converter={StaticResource BoolInverseConverter}}"
+                            IsEnabled="{Binding IsAuthenticating, Converter={StaticResource BoolInverseConverter}}"
                                 Background="#1DB954"
                                 Padding="20,10"
                                 CornerRadius="4">
@@ -419,6 +420,7 @@
 
                         <Button Command="{Binding DisconnectSpotifyCommand}"
                                 IsVisible="{Binding IsSpotifyConnected}"
+                            IsEnabled="{Binding IsAuthenticating, Converter={StaticResource BoolInverseConverter}}"
                                 Background="#444"
                                 BorderBrush="#D32F2F"
                                 BorderThickness="1"
@@ -432,6 +434,7 @@
                         
                         <Button Command="{Binding TestSpotifyConnectionCommand}"
                                 IsVisible="{Binding IsSpotifyConnected}"
+                            IsEnabled="{Binding IsAuthenticating, Converter={StaticResource BoolInverseConverter}}"
                                 Background="#333"
                                 Padding="16,10"
                                 CornerRadius="4"
@@ -444,6 +447,7 @@
 
                         <Button Command="{Binding RevokeAndReAuthCommand}"
                                 IsVisible="{Binding IsSpotifyConnected}"
+                            IsEnabled="{Binding IsAuthenticating, Converter={StaticResource BoolInverseConverter}}"
                                 Background="#8B1E1E"
                                 BorderBrush="#D32F2F"
                                 BorderThickness="1"
