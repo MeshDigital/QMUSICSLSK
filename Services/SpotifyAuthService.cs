@@ -52,18 +52,8 @@ public class SpotifyAuthService
         _httpServer = httpServer;
         _tokenStorage = tokenStorage;
         
-        // Fire and forget initial check
-        Task.Run(async () => 
-        {
-            try
-            {
-                IsAuthenticated = await IsAuthenticatedAsync();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Failed to check initial Spotify auth state");
-            }
-        });
+        // Initial check is now handled by consumers (e.g. SettingsViewModel) explicitly
+        // to avoid race conditions with file storage during startup.
     }
 
     /// <summary>

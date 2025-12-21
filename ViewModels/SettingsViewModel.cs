@@ -282,7 +282,11 @@ public class SettingsViewModel : INotifyPropertyChanged
         }
     }
 
-    public IBrush SpotifyStatusColor => IsSpotifyConnected ? SolidColorBrush.Parse("#1DB954") : SolidColorBrush.Parse("#333333");
+    // Use static brushes to avoid parsing on every get/binding update
+    private static readonly IBrush ConnectedBrush = SolidColorBrush.Parse("#1DB954");
+    private static readonly IBrush DisconnectedBrush = SolidColorBrush.Parse("#333333");
+
+    public IBrush SpotifyStatusColor => IsSpotifyConnected ? ConnectedBrush : DisconnectedBrush;
     public string SpotifyStatusIcon => IsSpotifyConnected ? "✓" : "🚫";
 
     private string _spotifyDisplayName = "Not Connected";
@@ -380,8 +384,14 @@ public class SettingsViewModel : INotifyPropertyChanged
         ClearSpotifyCacheCommand = new AsyncRelayCommand(ClearSpotifyCacheAsync);
         CheckFfmpegCommand = new AsyncRelayCommand(CheckFfmpegAsync); // Phase 8
 
-        // check initial connection status
-        _ = CheckSpotifyConnectionStatusAsync();
+        // Safe initialization on background thread to prevent UI lock
+        Task.Run(async () => 
+        {
+            // Small delay to allow UI to render first
+            await Task.Delay(500);
+            await CheckSpotifyConnectionStatusAsync();
+        });
+
         _ = CheckFfmpegAsync(); // Phase 8: Check FFmpeg on startup
         UpdateLivePreview();
     }
@@ -526,10 +536,11 @@ public class SettingsViewModel : INotifyPropertyChanged
 
     private async Task CheckSpotifyConnectionStatusAsync()
     {
+        // Don't set IsAuthenticating = true for the background check
+        // It locks the UI unnecessarily on startup.
+        
         try
         {
-            IsAuthenticating = true;
-            
             // Safety timeout of 5 seconds for the check
             var checkTask = _spotifyAuthService.IsAuthenticatedAsync();
             var timeoutTask = Task.Delay(5000);
@@ -537,8 +548,7 @@ public class SettingsViewModel : INotifyPropertyChanged
             if (await Task.WhenAny(checkTask, timeoutTask) == timeoutTask)
             {
                 _logger.LogWarning("Spotify connection check timed out");
-                IsSpotifyConnected = false;
-                SpotifyDisplayName = "Check Timed Out";
+                // Don't change connection state on timeout
                 return;
             }
 
@@ -558,10 +568,6 @@ public class SettingsViewModel : INotifyPropertyChanged
         {
             _logger.LogWarning(ex, "Failed to check Spotify connection status");
             IsSpotifyConnected = false;
-        }
-        finally
-        {
-            IsAuthenticating = false;
         }
     }
 
