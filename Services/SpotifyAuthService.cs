@@ -64,26 +64,40 @@ public class SpotifyAuthService
     /// </summary>
     public async Task<bool> IsAuthenticatedAsync()
     {
-        // 1. Check if we have a valid client and non-expired token
-        if (_authenticatedClient != null && DateTime.UtcNow < _tokenExpiresAt.AddMinutes(-1))
-        {
-            return true;
-        }
-
-        // 2. Check if we have a stored refresh token
-        var refreshToken = await _tokenStorage.LoadRefreshTokenAsync();
-        if (string.IsNullOrEmpty(refreshToken))
-            return false;
-
-        // 3. Try to refresh the token to verify it's still valid
         try
         {
-            await RefreshAccessTokenAsync();
-            return _authenticatedClient != null;
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+            var checkTask = Task.Run(async () =>
+            {
+                // 1. Check if we have a valid client and non-expired token
+                if (_authenticatedClient != null && DateTime.UtcNow < _tokenExpiresAt.AddMinutes(-1))
+                {
+                    return true;
+                }
+
+                // 2. Check if we have a stored refresh token
+                var refreshToken = await _tokenStorage.LoadRefreshTokenAsync();
+                if (string.IsNullOrEmpty(refreshToken))
+                    return false;
+
+                // 3. Try to refresh the token to verify it's still valid
+                try
+                {
+                    await RefreshAccessTokenAsync();
+                    return _authenticatedClient != null;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "IsAuthenticatedAsync check failed during refresh");
+                    return false;
+                }
+            }, cts.Token);
+
+            return await checkTask;
         }
-        catch (Exception ex)
+        catch (OperationCanceledException)
         {
-            _logger.LogWarning(ex, "IsAuthenticatedAsync check failed during refresh");
+            _logger.LogWarning("IsAuthenticatedAsync timed out after 3 seconds");
             return false;
         }
     }
@@ -379,8 +393,14 @@ public class SpotifyAuthService
     /// </summary>
     public async Task<PrivateUser> GetCurrentUserAsync()
     {
-        var client = await GetAuthenticatedClientAsync();
-        return await client.UserProfile.Current();
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        var userTask = Task.Run(async () =>
+        {
+            var client = await GetAuthenticatedClientAsync();
+            return await client.UserProfile.Current();
+        }, cts.Token);
+
+        return await userTask;
     }
 
     /// <summary>

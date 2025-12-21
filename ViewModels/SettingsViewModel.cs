@@ -374,8 +374,11 @@ public class SettingsViewModel : INotifyPropertyChanged
         ClearSpotifyCacheCommand = new AsyncRelayCommand(ClearSpotifyCacheAsync);
         CheckFfmpegCommand = new AsyncRelayCommand(CheckFfmpegAsync); // Phase 8
 
-        // check initial connection status
-        _ = CheckSpotifyConnectionStatusAsync();
+        // Explicitly initialize IsAuthenticating to false
+        IsAuthenticating = false;
+
+        // Delay initial check to avoid blocking UI startup
+        _ = Task.Delay(500).ContinueWith(_ => CheckSpotifyConnectionStatusAsync());
         _ = CheckFfmpegAsync(); // Phase 8: Check FFmpeg on startup
         UpdateLivePreview();
     }
@@ -522,22 +525,36 @@ public class SettingsViewModel : INotifyPropertyChanged
     {
         try
         {
-            if (await _spotifyAuthService.IsAuthenticatedAsync())
+            // Wrap the entire check in a timeout to prevent UI freezing
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(6));
+            var checkTask = Task.Run(async () =>
             {
-                var user = await _spotifyAuthService.GetCurrentUserAsync();
-                SpotifyDisplayName = user.DisplayName ?? user.Id;
-                IsSpotifyConnected = true;
-            }
-            else
-            {
-                IsSpotifyConnected = false;
-                SpotifyDisplayName = "Not Connected";
-            }
+                if (await _spotifyAuthService.IsAuthenticatedAsync())
+                {
+                    var user = await _spotifyAuthService.GetCurrentUserAsync();
+                    SpotifyDisplayName = user.DisplayName ?? user.Id;
+                    IsSpotifyConnected = true;
+                }
+                else
+                {
+                    IsSpotifyConnected = false;
+                    SpotifyDisplayName = "Not Connected";
+                }
+            }, cts.Token);
+
+            await checkTask;
+        }
+        catch (OperationCanceledException)
+        {
+            _logger.LogWarning("Spotify connection check timed out after 6 seconds");
+            IsSpotifyConnected = false;
+            SpotifyDisplayName = "Check Timed Out";
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Failed to check Spotify connection status");
             IsSpotifyConnected = false;
+            SpotifyDisplayName = "Not Connected";
         }
     }
 
