@@ -393,14 +393,13 @@
             <views:TrackInspectorView DataContext="{Binding TrackInspector}"/>
         </Border>
 
-        <!-- Phase 8: Upgrade Scout Overlay -->
-        <Border Grid.Column="0" Grid.ColumnSpan="5"
-                Background="#99000000"
-                IsVisible="{Binding IsUpgradeScoutVisible}"
-                ZIndex="500">
-            <Panel VerticalAlignment="Center" HorizontalAlignment="Center" Width="900" Height="700">
-                <views:UpgradeScoutView DataContext="{Binding UpgradeScout}"/>
-            </Panel>
-        </Border>
+        <!-- Phase 8: Upgrade Scout Overlay - Only rendered when visible -->
+        <Panel Grid.Column="0" Grid.ColumnSpan="5" ZIndex="500" IsVisible="{Binding IsUpgradeScoutVisible}">
+            <Border Background="#99000000">
+                <Panel VerticalAlignment="Center" HorizontalAlignment="Center" Width="900" Height="700">
+                    <views:UpgradeScoutView DataContext="{Binding UpgradeScout}"/>
+                </Panel>
+            </Border>
+        </Panel>
     </Grid>
 </UserControl>
