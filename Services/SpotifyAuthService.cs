@@ -138,7 +138,17 @@ public class SpotifyAuthService
             OpenBrowser(authUrl.ToString());
 
             // Wait for callback
-            var authCode = await _httpServer.WaitForCallbackAsync(_config.SpotifyRedirectUri, cancellationToken);
+            // Wait for callback with better error handling
+            string? authCode = null;
+            try 
+            {
+                authCode = await _httpServer.WaitForCallbackAsync(_config.SpotifyRedirectUri, cancellationToken);
+            }
+            catch (InvalidOperationException)
+            {
+                // Port conflict or listener failure
+                throw; 
+            }
 
             if (string.IsNullOrEmpty(authCode))
             {
@@ -282,6 +292,24 @@ public class SpotifyAuthService
         IsAuthenticated = false;
 
         _logger.LogInformation("User signed out, tokens cleared");
+    }
+
+    /// <summary>
+    /// Tests the connection by attempting to fetch the current user profile.
+    /// </summary>
+    public async Task<bool> TestConnectionAsync()
+    {
+        try
+        {
+             var client = await GetAuthenticatedClientAsync();
+             var user = await client.UserProfile.Current();
+             return user != null;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Spotify connection test failed");
+            return false;
+        }
     }
 
     /// <summary>

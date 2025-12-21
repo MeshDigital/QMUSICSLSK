@@ -160,6 +160,14 @@ Search results invisible - Import Preview overlay covering entire search area.
   - Removed cramped side-panel from `LibraryPage`.
 - **Result**: More screen space for Library, and Inspector is now accessible from anywhere (future-proof).
 
+### 4. Spotify Integration: Robustness & Diagnostics 🔐
+- **Issue**: Sign-on was "bugged" due to port conflicts (5000) and strict URL matching (trailing slashes).
+- **Fixes**:
+  - **Universal Listener**: Refactored `LocalHttpServer` to listen on root (`http://localhost:{port}/`) to capture all callbacks.
+  - **Robustness**: Improved error handling for port conflicts and network hangs.
+  - **Diagnostics**: Added **"Test Connection"** button in Settings to manually verify token validity.
+- **Result**: Connection process is now reliable, and users have tools to self-diagnose issues.
+
 ---
 
 **Session Summary**: Fixed 3 critical issues (1 performance, 2 UI), cleaned up technical debt, verified media player stability. All changes committed and ready for production testing.

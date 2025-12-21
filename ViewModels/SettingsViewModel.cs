@@ -311,6 +311,7 @@ public class SettingsViewModel : INotifyPropertyChanged
     public ICommand BrowseSharedFolderCommand { get; }
     public ICommand ConnectSpotifyCommand { get; }
     public ICommand DisconnectSpotifyCommand { get; }
+    public ICommand TestSpotifyConnectionCommand { get; } // New Diagnostic Command
     public ICommand ClearSpotifyCacheCommand { get; }
     public ICommand CheckFfmpegCommand { get; } // Phase 8: Dependency validation
 
@@ -374,6 +375,7 @@ public class SettingsViewModel : INotifyPropertyChanged
         BrowseSharedFolderCommand = new AsyncRelayCommand(BrowseSharedFolderAsync);
         ConnectSpotifyCommand = new AsyncRelayCommand(ConnectSpotifyAsync, () => !IsAuthenticating);
         DisconnectSpotifyCommand = new AsyncRelayCommand(DisconnectSpotifyAsync);
+        TestSpotifyConnectionCommand = new AsyncRelayCommand(TestSpotifyConnectionAsync, () => !IsAuthenticating && IsSpotifyConnected);
         ClearSpotifyCacheCommand = new AsyncRelayCommand(ClearSpotifyCacheAsync);
         CheckFfmpegCommand = new AsyncRelayCommand(CheckFfmpegAsync); // Phase 8
 
@@ -596,12 +598,37 @@ public class SettingsViewModel : INotifyPropertyChanged
         }
     }
 
+    private async Task TestSpotifyConnectionAsync()
+    {
+        try
+        {
+            IsAuthenticating = true;
+            bool isAlive = await _spotifyAuthService.TestConnectionAsync();
+            
+            if (isAlive)
+            {
+                await _dialogService.ShowAlertAsync("Connection Valid", $"Success! Token is valid for user: {SpotifyDisplayName}");
+            }
+            else
+            {
+                await _dialogService.ShowAlertAsync("Connection Error", "Token appears invalid or expired. Please reconnect.");
+                IsSpotifyConnected = false;
+            }
+        }
+        finally
+        {
+            IsAuthenticating = false;
+        }
+    }
+
     private async Task DisconnectSpotifyAsync()
     {
         await _spotifyAuthService.SignOutAsync();
         IsSpotifyConnected = false;
         SpotifyDisplayName = "Not Connected";
-        UseSpotifyApi = false; // Optional: Auto-disable? Maybe let user decide.
+        UseSpotifyApi = false; 
+        
+        await _dialogService.ShowAlertAsync("Disconnected", "Spotify account disconnected and tokens cleared.");
     }
 
     private void SaveSettings()

@@ -412,6 +412,15 @@
                             </StackPanel>
                         </Button>
                         
+                        <Button Command="{Binding TestSpotifyConnectionCommand}"
+                                IsVisible="{Binding IsSpotifyConnected}"
+                                Background="#3E3E3E"
+                                Padding="16,10"
+                                CornerRadius="20"
+                                ToolTip.Tip="Verify connection">
+                             <TextBlock Text="🔄 Test" FontSize="14" FontWeight="Bold" Foreground="White"/>
+                        </Button>
+                        
                         <ProgressBar IsIndeterminate="True" 
                                      Width="24" Height="24"
                                      IsVisible="{Binding IsAuthenticating}"/>
