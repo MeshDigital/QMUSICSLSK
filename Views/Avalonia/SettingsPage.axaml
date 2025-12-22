@@ -107,7 +107,7 @@
                     <TextBlock Text="Default Search Filters" FontSize="16" FontWeight="SemiBold" Foreground="White"/>
                     
                     <!-- Min Bitrate -->
-                    <Grid ColumnDefinitions="180,100,*">
+                    <Grid ColumnDefinitions="180,150,*">
                         <TextBlock Grid.Column="0" Text="Min Bitrate:" VerticalAlignment="Center" Foreground="#DDD"/>
                         <NumericUpDown Grid.Column="1" 
                                        Value="{Binding MinBitrate, Mode=TwoWay}"
@@ -124,7 +124,7 @@
                     </Grid>
                     
                     <!-- Max Bitrate -->
-                    <Grid ColumnDefinitions="180,100,*">
+                    <Grid ColumnDefinitions="180,150,*">
                         <TextBlock Grid.Column="0" Text="Max Bitrate:" VerticalAlignment="Center" Foreground="#DDD"/>
                         <NumericUpDown Grid.Column="1" 
                                        Value="{Binding MaxBitrate, Mode=TwoWay}"
@@ -202,7 +202,7 @@
                     </Grid>
 
                     <!-- Relaxation Timeout -->
-                    <Grid ColumnDefinitions="180,100,*" IsEnabled="{Binding EnableRelaxationStrategy}">
+                    <Grid ColumnDefinitions="180,150,*" IsEnabled="{Binding EnableRelaxationStrategy}">
                         <TextBlock Grid.Column="0" Text="Relaxation Timeout:" VerticalAlignment="Center" Foreground="#DDD"/>
                         <NumericUpDown Grid.Column="1" 
                                        Value="{Binding RelaxationTimeoutSeconds}"
