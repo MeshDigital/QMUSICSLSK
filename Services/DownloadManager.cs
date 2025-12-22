@@ -39,9 +39,11 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
     // NEW Services
     private readonly DownloadDiscoveryService _discoveryService;
     private readonly MetadataEnrichmentOrchestrator _enrichmentOrchestrator;
+    private readonly PathProviderService _pathProvider;
 
-    // Concurrency control
+    // Phase 2.5: Concurrency control with SemaphoreSlim throttling
     private readonly CancellationTokenSource _globalCts = new();
+    private readonly SemaphoreSlim _downloadSemaphore = new(4, 4); // Max 4 concurrent downloads
     private Task? _processingTask;
 
     // Global State managed via Events
@@ -66,7 +68,8 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
         ILibraryService libraryService,
         IEventBus eventBus,
         DownloadDiscoveryService discoveryService,
-        MetadataEnrichmentOrchestrator enrichmentOrchestrator)
+        MetadataEnrichmentOrchestrator enrichmentOrchestrator,
+        PathProviderService pathProvider)
     {
         _logger = logger;
         _config = config;
@@ -77,6 +80,7 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
         _eventBus = eventBus;
         _discoveryService = discoveryService;
         _enrichmentOrchestrator = enrichmentOrchestrator;
+        _pathProvider = pathProvider;
 
         // Initialize from config, but allow runtime changes
         MaxActiveDownloads = _config.MaxConcurrentDownloads > 0 ? _config.MaxConcurrentDownloads : 3;
@@ -613,25 +617,28 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
                     continue;
                 }
 
-                int currentActive = 0;
-                lock (_collectionLock)
-                {
-                    currentActive = _downloads.Count(t => t.IsActive);
-                }
-
-                if (currentActive >= MaxActiveDownloads)
-                {
-                    await Task.Delay(1000, token);
-                    continue;
-                }
-
-                if (nextContext.State != PlaylistTrackState.Pending) continue;
+                // CRITICAL: Wait for one of the 4 semaphore slots to open up
+                // This blocks until a slot is available, ensuring max 4 concurrent downloads
+                await _downloadSemaphore.WaitAsync(token);
 
                 // Transition state via update method
                 await UpdateStateAsync(nextContext, PlaylistTrackState.Searching);
 
-                // Start processing in background
-                _ = Task.Run(async () => await ProcessTrackAsync(nextContext, token), token);
+                // Fire-and-forget pattern with guaranteed semaphore release
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        await ProcessTrackAsync(nextContext, token);
+                    }
+                    finally
+                    {
+                        // ALWAYS release the semaphore, even if processing crashes
+                        _downloadSemaphore.Release();
+                        _logger.LogDebug("Released semaphore slot. Available slots: {Available}/4", 
+                            _downloadSemaphore.CurrentCount);
+                    }
+                }, token);
             }
             catch (OperationCanceledException)
             {

@@ -328,6 +328,9 @@ public partial class App : Application
         // Rekordbox export service
         services.AddSingleton<RekordboxXmlExporter>();
 
+        // Phase 2.5: Path provider for safe folder structure
+        services.AddSingleton<PathProviderService>();
+
         // Download manager
         services.AddSingleton<DownloadManager>();
 
