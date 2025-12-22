@@ -391,8 +391,8 @@ public class SpotifyAuthService
 
             var tokenRequest = new PKCETokenRefreshRequest(_config.SpotifyClientId, refreshToken);
 
-            var config = SpotifyClientConfig.CreateDefault();
-            var oauthClient = new OAuthClient(config);
+            var oauthConfig = SpotifyClientConfig.CreateDefault();
+            var oauthClient = new OAuthClient(oauthConfig);
 
             // Add 30-second timeout to token refresh
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
@@ -408,8 +408,12 @@ public class SpotifyAuthService
                 await _tokenStorage.SaveRefreshTokenAsync(tokenResponse.RefreshToken);
             }
 
-            // Create new authenticated client
-            _authenticatedClient = new SpotifyClient(tokenResponse.AccessToken);
+            // Create new authenticated client with retry handler
+            var config = SpotifyClientConfig
+                .CreateDefault(tokenResponse.AccessToken)
+                .WithRetryHandler(new SimpleRetryHandler()); // Automatic 429 handling
+            
+            _authenticatedClient = new SpotifyClient(config);
             IsAuthenticated = true;
 
             _logger.LogInformation("Successfully refreshed access token");

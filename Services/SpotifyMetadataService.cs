@@ -171,74 +171,40 @@ public class SpotifyMetadataService : ISpotifyMetadataService
     public async Task<Dictionary<string, TrackAudioFeatures?>> GetAudioFeaturesBatchAsync(IEnumerable<string> spotifyIds)
     {
         var results = new Dictionary<string, TrackAudioFeatures?>();
-        var distinctIds = spotifyIds
-            .Select(id => id.Replace("spotify:track:", ""))
-            .Distinct()
-            .ToList();
-        var missingIds = new List<string>();
+        var idList = spotifyIds.Distinct().ToList();
+        
+        if (!idList.Any()) return results;
 
-        // Check if authenticated before API calls
-        if (!await _authService.IsAuthenticatedAsync())
+        try
         {
-            _logger.LogDebug("Skipping audio features batch: Not authenticated");
-            // Return empty dictionary with nulls for all IDs
-            foreach (var id in distinctIds)
+            // Get authenticated client
+            var client = await _authService.GetAuthenticatedClientAsync();
+            
+            // Spotify API limit: 100 IDs per request
+            var chunks = idList.Chunk(100);
+            
+            foreach (var chunk in chunks)
             {
-                results[id] = null;
-            }
-            return results;
-        }
-
-        // 1. Check Cache
-        foreach (var id in distinctIds)
-        {
-            string cacheKey = $"features:{id}";
-            var cached = await GetFromCacheAsync<TrackAudioFeatures>(cacheKey);
-            if (cached != null)
-            {
-                results[id] = cached;
-            }
-            else
-            {
-                missingIds.Add(id);
-            }
-        }
-
-        if (!missingIds.Any()) return results;
-
-        // 2. Refresh Token
-        await UpdateBatchClientTokenAsync();
-
-        // 3. Batch Fetch via SpotifyBatchClient
-        var fetchedFeatures = await _batchClient.BatchAsync(missingIds, 100, async chunkIds => 
-        {
-            string url = $"https://api.spotify.com/v1/audio-features?ids={chunkIds}";
-            var response = await _batchClient.GetAsync<TracksAudioFeaturesResponse>(url);
-            return response; // Return the whole response container
-        });
-
-        // 4. Process Results
-        // Flatten the list of responses (each response contains a list of features)
-        foreach (var response in fetchedFeatures)
-        {
-            if (response?.AudioFeatures == null) continue;
-
-            foreach (var feature in response.AudioFeatures)
-            {
-                if (feature != null && !string.IsNullOrEmpty(feature.Id))
+                var request = new TracksAudioFeaturesRequest(chunk.ToList());
+                var response = await client.Tracks.GetSeveralAudioFeatures(request);
+                
+                if (response?.AudioFeatures != null)
                 {
-                    results[feature.Id] = feature;
-                    await SaveToCacheAsync($"features:{feature.Id}", feature, PositiveCacheDuration);
+                    foreach (var feature in response.AudioFeatures)
+                    {
+                        if (feature != null && !string.IsNullOrEmpty(feature.Id))
+                        {
+                            results[feature.Id] = feature;
+                        }
+                    }
                 }
             }
         }
-
-        // Fill missing keys with nulls (if any remain)
-        foreach (var id in missingIds)
+        catch (Exception ex)
         {
-            if (!results.ContainsKey(id)) results[id] = null;
+            _logger.LogError(ex, "Failed to batch fetch audio features");
         }
-
+        
         return results;
     }
 
@@ -252,17 +218,24 @@ public class SpotifyMetadataService : ISpotifyMetadataService
     {
         try
         {
-            await UpdateBatchClientTokenAsync();
-
-            string query = Uri.EscapeDataString($"{artist} {title}");
-            string url = $"https://api.spotify.com/v1/search?q={query}&type=track&limit=5";
+            // Get authenticated client (automatically refreshes token if needed)
+            var client = await _authService.GetAuthenticatedClientAsync();
             
-            var response = await _batchClient.GetAsync<SearchResponse>(url);
+            // Build search query
+            var query = $"{artist} {title}";
             
-            if (response?.Tracks?.Items == null || !response.Tracks.Items.Any())
+            // Use native library search method
+            var searchRequest = new SearchRequest(SearchRequest.Types.Track, query)
+            {
+                Limit = 5  // Get top 5 results for fuzzy matching
+            };
+            
+            var searchResult = await client.Search.Item(searchRequest);
+            
+            if (searchResult?.Tracks?.Items == null || !searchResult.Tracks.Items.Any())
                 return null;
 
-            var candidates = response.Tracks.Items;
+            var candidates = searchResult.Tracks.Items;
             FullTrack? bestMatch = null;
             double bestScore = 0;
 
