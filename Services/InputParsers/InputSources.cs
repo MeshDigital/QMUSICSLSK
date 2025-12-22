@@ -130,7 +130,8 @@ public class CsvInputSource : IInputSource
                 Album = album,
                 Length = length,
                 AlbumTrackCount = trackCount,
-                DownloadMode = mode
+                DownloadMode = mode,
+                IsEnriched = false
             };
         }
         catch (Exception ex)

@@ -18,17 +18,20 @@ public class DownloadDiscoveryService
 {
     private readonly ILogger<DownloadDiscoveryService> _logger;
     private readonly SearchOrchestrationService _searchOrchestrator;
+    private readonly SearchResultMatcher _matcher;
     private readonly AppConfig _config;
     private readonly IEventBus _eventBus;
 
     public DownloadDiscoveryService(
         ILogger<DownloadDiscoveryService> logger,
         SearchOrchestrationService searchOrchestrator,
+        SearchResultMatcher matcher,
         AppConfig config,
         IEventBus eventBus)
     {
         _logger = logger;
         _searchOrchestrator = searchOrchestrator;
+        _matcher = matcher;
         _config = config;
         _eventBus = eventBus;
     }
@@ -81,40 +84,19 @@ public class DownloadDiscoveryService
                 return null;
             }
 
-            // 3. Select Best Match with "The Brain" (Smart Duration Matching)
-            var candidates = allTracks;
-            
-            // Phase 0.3/0.4: Smart Match - Duration Gating
-            // We use a tolerance of 15 seconds to account for silence or slight version differences,
-            // but strict enough to separate Radio Edits from Extended Mixes.
-            if (track.CanonicalDuration.HasValue && track.CanonicalDuration.Value > 0)
-            {
-                var expectedDurationSec = track.CanonicalDuration.Value / 1000.0;
-                var toleranceSec = 15.0; 
-                
-                var smartMatches = candidates
-                    .Where(t => t.Length.HasValue && Math.Abs(t.Length.Value - expectedDurationSec) <= toleranceSec)
-                    .ToList();
+            // 3. Select Best Match with "The Brain" (Metadata Matching)
+            // Use SearchResultMatcher which checks Duration, BPM, Artist/Title similarity
+            var bestMatch = _matcher.FindBestMatch(track, allTracks);
 
-                if (smartMatches.Any())
-                {
-                    _logger.LogInformation("🧠 BRAIN: Smart Match Active! Found {Count} candidates matching duration {Duration}s (+/- {Tolerance}s)", 
-                        smartMatches.Count, (int)expectedDurationSec, toleranceSec);
-                    
-                    // Promote smart matches, effectively filtering out the others from the top spot
-                    candidates = smartMatches;
-                }
-                else
-                {
-                     // Fallback strategy: If no track matches the duration, we warn but allow the "best available" logic to take over
-                     _logger.LogWarning("🧠 BRAIN: No candidates matched expected duration {Duration}s. Falling back to best available from {Total} results.", 
-                        (int)expectedDurationSec, candidates.Count);
-                }
+            if (bestMatch != null)
+            {
+                _logger.LogInformation("🧠 BRAIN: Matcher selected: {Filename} (Score > 0.7)", bestMatch.Filename);
+                return bestMatch;
             }
 
-            // Since SearchOrchestrator already ranks results using ResultSorter (which considers bitrate, completeness, etc.),
-            // the first result of our filtered (or unfiltered) list *should* be the best one according to our criteria.
-            var bestMatch = candidates.First();
+            // Fallback: If matcher found nothing good (garbage results?), return the highest quality file found
+            _logger.LogWarning("🧠 BRAIN: No suitable metadata match found. Falling back to highest quality result.");
+            bestMatch = allTracks.First(); // SearchOrchestrator sorts by Quality DESC
 
             _logger.LogInformation("Best match found: {Filename} ({Bitrate}kbps, {Length}s)", 
                 bestMatch.Filename, bestMatch.Bitrate, bestMatch.Length);

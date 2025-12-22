@@ -154,6 +154,10 @@ public partial class App : Application
                         var downloadManager = Services.GetRequiredService<DownloadManager>();
                         await downloadManager.InitAsync();
                         _ = downloadManager.StartAsync();
+
+                        // Start Library Enrichment Worker (Phase 1)
+                        var enrichmentWorker = Services.GetRequiredService<LibraryEnrichmentWorker>();
+                        enrichmentWorker.Start();
                         
                         // Load projects into the LibraryViewModel that's bound to UI
                         // CRITICAL: Use mainVm.LibraryViewModel (the one shown in UI)
@@ -288,6 +292,10 @@ public partial class App : Application
         services.AddSingleton<ISpotifyMetadataService, SpotifyMetadataService>();
         services.AddSingleton<SpotifyMetadataService>(); // Keep concrete registration just in case
         services.AddSingleton<ArtworkCacheService>(); // Phase 0: Artwork caching
+        
+        // Phase 1: Library Enrichment
+        services.AddSingleton<SpotifyEnrichmentService>();
+        services.AddSingleton<LibraryEnrichmentWorker>();
 
         // Input parsers
         services.AddSingleton<CsvInputSource>();
@@ -333,6 +341,9 @@ public partial class App : Application
 
         // Download manager
         services.AddSingleton<DownloadManager>();
+        
+        // Phase 2.5: Download Center ViewModel (singleton observer)
+        services.AddSingleton<ViewModels.Downloads.DownloadCenterViewModel>();
 
         // Database
         services.AddSingleton<DatabaseService>();
@@ -355,7 +366,8 @@ public partial class App : Application
         // Orchestration Services
         services.AddSingleton<SearchOrchestrationService>();
         services.AddSingleton<DownloadOrchestrationService>();
-        services.AddSingleton<DownloadDiscoveryService>(); // Phase 3.1
+        services.AddSingleton<DownloadDiscoveryService>();
+        services.AddSingleton<SearchResultMatcher>(); // Phase 3.1
         services.AddSingleton<MetadataEnrichmentOrchestrator>(); // Phase 3.1
         services.AddSingleton<SonicIntegrityService>(); // Phase 8: Sonic Integrity
         services.AddSingleton<LibraryUpgradeScout>(); // Phase 8: Self-Healing Library

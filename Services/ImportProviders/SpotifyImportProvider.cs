@@ -86,16 +86,34 @@ public class SpotifyImportProvider : IStreamingImportProvider
     }
     public async IAsyncEnumerable<ImportBatchResult> ImportStreamAsync(string input)
     {
-        var result = await ImportAsync(input);
-        
-        if (result.Success && result.Tracks.Any())
+        // Use API streaming if configured, otherwise fallback to scraper (which is mostly blocking/single-batch)
+        var useApi = _spotifyInputSource.IsConfigured;
+
+        if (useApi)
         {
-            yield return new ImportBatchResult
+             await foreach (var batch in _spotifyInputSource.ParseStreamAsync(input))
+             {
+                 yield return new ImportBatchResult
+                 {
+                     Tracks = batch,
+                     SourceTitle = batch.FirstOrDefault()?.SourceTitle ?? "Spotify Playlist",
+                     TotalEstimated = batch.FirstOrDefault()?.TotalTracks ?? 0
+                 };
+             }
+        }
+        else
+        {
+            // Scraper fallback (blocking)
+            var result = await ImportAsync(input);
+            if (result.Success && result.Tracks.Any())
             {
-                Tracks = result.Tracks,
-                SourceTitle = result.SourceTitle,
-                TotalEstimated = result.Tracks.Count
-            };
+                yield return new ImportBatchResult
+                {
+                    Tracks = result.Tracks,
+                    SourceTitle = result.SourceTitle,
+                    TotalEstimated = result.Tracks.Count
+                };
+            }
         }
     }
 }

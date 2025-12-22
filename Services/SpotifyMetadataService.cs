@@ -170,7 +170,10 @@ public class SpotifyMetadataService : ISpotifyMetadataService
     public async Task<Dictionary<string, TrackAudioFeatures?>> GetAudioFeaturesBatchAsync(IEnumerable<string> spotifyIds)
     {
         var results = new Dictionary<string, TrackAudioFeatures?>();
-        var distinctIds = spotifyIds.Distinct().ToList();
+        var distinctIds = spotifyIds
+            .Select(id => id.Replace("spotify:track:", ""))
+            .Distinct()
+            .ToList();
         var missingIds = new List<string>();
 
         // Check if authenticated before API calls

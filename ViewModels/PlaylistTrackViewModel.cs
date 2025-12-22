@@ -180,6 +180,8 @@ public class PlaylistTrackViewModel : INotifyPropertyChanged, Library.ILibraryNo
              OnPropertyChanged(nameof(Album));
              OnPropertyChanged(nameof(CoverArtUrl));
              OnPropertyChanged(nameof(SpotifyTrackId));
+             OnPropertyChanged(nameof(IsEnriched));
+             OnPropertyChanged(nameof(MetadataStatus));
         });
     }
 
@@ -307,6 +309,30 @@ public class PlaylistTrackViewModel : INotifyPropertyChanged, Library.ILibraryNo
     }
 
     public string? SpotifyAlbumId => Model.SpotifyAlbumId;
+
+    public bool IsEnriched
+    {
+        get => Model.IsEnriched;
+        set
+        {
+            if (Model.IsEnriched != value)
+            {
+                Model.IsEnriched = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(MetadataStatus));
+            }
+        }
+    }
+
+    public string MetadataStatus
+    {
+        get
+        {
+            if (Model.IsEnriched) return "Enriched";
+            if (!string.IsNullOrEmpty(Model.SpotifyTrackId)) return "Identified"; // Partial state
+            return "Pending"; // Waiting for enrichment worker
+        }
+    }
 
     // Phase 1: UI Metadata
     

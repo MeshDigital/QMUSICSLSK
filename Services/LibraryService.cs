@@ -190,12 +190,18 @@ public class LibraryService : ILibraryService
                 SourceType = job.SourceType,
                 DestinationFolder = job.DestinationFolder,
                 CreatedAt = job.CreatedAt,
-                TotalTracks = job.OriginalTracks.Count,
-                SuccessfulCount = 0,
-                FailedCount = 0,
+                TotalTracks = job.TotalTracks > 0 ? job.TotalTracks : job.OriginalTracks.Count,
+                SuccessfulCount = job.SuccessfulCount,
+                FailedCount = job.FailedCount,
+                MissingCount = job.MissingCount,
 
                 AlbumArtUrl = job.AlbumArtUrl,
-                SourceUrl = job.SourceUrl
+                SourceUrl = job.SourceUrl,
+                
+                // Phase 2.5: Persistence
+                IsUserPaused = job.IsUserPaused,
+                DateStarted = job.DateStarted,
+                DateUpdated = job.DateUpdated
             };
 
             await _databaseService.SavePlaylistJobAsync(entity).ConfigureAwait(false);
@@ -447,7 +453,12 @@ public class LibraryService : ILibraryService
             FailedCount = entity.FailedCount,
 
             AlbumArtUrl = entity.AlbumArtUrl,
-            SourceUrl = entity.SourceUrl
+            SourceUrl = entity.SourceUrl,
+            
+            // Phase 2.5
+            IsUserPaused = entity.IsUserPaused,
+            DateStarted = entity.DateStarted,
+            DateUpdated = entity.DateUpdated
         };
 
         job.MissingCount = entity.TotalTracks - entity.SuccessfulCount - entity.FailedCount;

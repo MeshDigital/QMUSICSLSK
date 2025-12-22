@@ -8,10 +8,17 @@
 
 ### Recent Updates (December 21, 2025)
 ### Recent Updates (December 21, 2025)
-- ✅ **Library & Import 2.0 Refinement**: Multi-select support, floating action bar (FAB), and sidebar project filtering.
-- ✅ **Performance**: Offloaded DB checks in import preview to background threads.
-- ✅ **Stability**: Fixed TreeDataGrid selection configuration and async compilation errors.
-- ✅ **Search performance**: Streaming results with incremental ranking.
+### Recent Updates (December 22, 2025)
+- ✅ **Download Stability**: Fixed "Download Album" button binding and layout (CompactPlaylistTemplate).
+- ✅ **API Rate Limits**: Fixed "Single-Item Batch" bug in Enrichment Orchestrator using Smart Buffer (250ms).
+- ✅ **Streaming Import**: Implemented `IAsyncEnumerable` streaming for Spotify imports (50-track batches) for instant responsiveness.
+- ✅ **Enrichment Control**: Added "Use Spotify API" toggle to dynamically enable/disable background metadata fetching.
+- ✅ **Decoupling**: Ensured downloads continue gracefully even if Spotify enrichment fails (403/Auth errors).
+- ✅ **Validation**: Sanitized Spotify IDs to reduce API errors.
+
+### Recent Updates (December 21, 2025)
+- ✅ **Library & Import 2.0 Refinement**: Multi-select support, Floating Action Bar (FAB), side-filtering.
+- ✅ **Performance**: Background DB checks, faster search rendering.
 
 ### 🚨 Technical Debt & Stability (Pending FIX)
 - [ ] **N+1 Query Pattern Risk**: Refactor project loading to use eager loading (.Include) for track counts to prevent performance degradation.
@@ -55,22 +62,22 @@
 
 ---
 
-## Phase 0: Metadata Gravity Well (8-12 hours) 🔴⭐ FOUNDATION
+## Phase 0: Metadata Gravity Well (8-12 hours) 🔴⭐ FOUNDATION - COMPLETE ✅
 
 ### 0.1 Database Schema Evolution (3 hours)
-**Priority**: ⭐⭐⭐ CRITICAL - LOAD BEARING
+**Priority**: ⭐⭐⭐ CRITICAL - LOAD BEARING - COMPLETE ✅
 
 **What to Build**:
-- [ ] Add `SpotifyTrackId` (string, nullable) to `PlaylistTrackEntity`
-- [ ] Add `SpotifyAlbumId` (string, nullable)
-- [ ] Add `SpotifyArtistId` (string, nullable)
-- [ ] Add `AlbumArtUrl` (string, nullable)
-- [ ] Add `ArtistImageUrl` (string, nullable)
-- [ ] Add `Genres` (string, JSON array)
-- [ ] Add `Popularity` (int, 0-100)
-- [ ] Add `CanonicalDuration` (int, milliseconds)
-- [ ] Add `ReleaseDate` (DateTime, nullable)
-- [ ] Create database migration script
+- [x] Add `SpotifyTrackId` (string, nullable) to `PlaylistTrackEntity`
+- [x] Add `SpotifyAlbumId` (string, nullable)
+- [x] Add `SpotifyArtistId` (string, nullable)
+- [x] Add `AlbumArtUrl` (string, nullable)
+- [x] Add `ArtistImageUrl` (string, nullable)
+- [x] Add `Genres` (string, JSON array)
+- [x] Add `Popularity` (int, 0-100)
+- [x] Add `CanonicalDuration` (int, milliseconds)
+- [x] Add `ReleaseDate` (DateTime, nullable)
+- [x] Create database migration script
 
 **Files to Modify**:
 - `Data/Entities/PlaylistTrackEntity.cs`
@@ -92,16 +99,16 @@
 ---
 
 ### 0.2 Spotify Metadata Service (4 hours)
-**Priority**: ⭐⭐⭐ CRITICAL
+**Priority**: ⭐⭐⭐ CRITICAL - COMPLETE ✅
 
 **What to Build**:
-- [ ] `SpotifyMetadataService` class
-- [ ] `GetTrackMetadata(artist, title)` - lookup by search
-- [ ] `GetTrackById(spotifyId)` - lookup by ID
-- [ ] `EnrichPlaylistTrack(track)` - attach metadata to track
-- [ ] Metadata cache (SQLite table)
-- [ ] Rate limiting (30 req/sec Spotify limit)
-- [ ] Batch requests (up to 50 tracks per call)
+- [x] `SpotifyMetadataService` class (`SpotifyEnrichmentService`)
+- [x] `GetTrackMetadata(artist, title)` - lookup by search
+- [x] `GetTrackById(spotifyId)` - lookup by ID
+- [x] `EnrichPlaylistTrack(track)` - attach metadata to track
+- [x] Metadata cache (via `IsEnriched` flag and DB storage)
+- [x] Rate limiting (30 req/sec Spotify limit)
+- [x] Batch requests (up to 50 tracks per call)
 
 **Files to Create**:
 - `Services/SpotifyMetadataService.cs` (new)
@@ -125,14 +132,14 @@
 ---
 
 ### 0.3 Import Integration (3 hours)
-**Priority**: ⭐⭐⭐ HIGH
+**Priority**: ⭐⭐⭐ HIGH - COMPLETE ✅
 
 **What to Build**:
-- [ ] Update `SpotifyImportProvider` to store Spotify IDs
-- [ ] Update `CsvImportProvider` to lookup metadata
-- [ ] Update `DownloadManager` to enrich post-download
-- [ ] Add "Fetching metadata..." status messages
-- [ ] Background metadata enrichment for existing tracks
+- [x] Update `SpotifyImportProvider` to store Spotify IDs
+- [x] Update `CsvImportProvider` to lookup metadata (via background worker)
+- [x] Update `DownloadManager` to enrich post-download (integrated into Discovery)
+- [x] Add "Fetching metadata..." status messages (via UI column)
+- [x] Background metadata enrichment for existing tracks
 
 **Files to Modify**:
 - `Services/ImportProviders/SpotifyImportProvider.cs`

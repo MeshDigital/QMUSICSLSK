@@ -76,6 +76,69 @@ public class SpotifyInputSource : IInputSource
 		return queries;
 	}
 
+    public async IAsyncEnumerable<List<SearchQuery>> ParseStreamAsync(string url)
+    {
+        if (!IsConfigured)
+            throw new InvalidOperationException("Spotify API is not configured or authenticated.");
+
+        _logger.LogInformation("Spotify API: parsing stream {Url}", url);
+
+        var client = await GetClientAsync();
+
+        if (url.Equals("liked", StringComparison.OrdinalIgnoreCase) || url.Contains("liked-songs"))
+        {
+            var response = await client.Library.GetTracks();
+            var total = response.Total ?? 0;
+            var batch = new List<SearchQuery>();
+
+            await foreach (var item in client.Paginate(response))
+            {
+                if (item.Track != null)
+                {
+                    batch.Add(MapToSearchQuery(item.Track, "Liked Songs", total));
+                    
+                    // Yield every 50 tracks
+                    if (batch.Count >= 50)
+                    {
+                         yield return new List<SearchQuery>(batch);
+                         batch.Clear();
+                    }
+                }
+            }
+            if (batch.Any()) yield return batch;
+        }
+        else
+        {
+            var playlistId = ExtractPlaylistId(url);
+            if (string.IsNullOrEmpty(playlistId))
+                throw new InvalidOperationException("Invalid Spotify playlist URL.");
+
+            var playlist = await client.Playlists.Get(playlistId);
+            var total = playlist.Tracks?.Total ?? 0;
+            var playlistName = playlist.Name ?? "Spotify Playlist";
+            var batch = new List<SearchQuery>();
+            
+            if (playlist.Tracks != null)
+            {
+                await foreach (var item in client.Paginate(playlist.Tracks))
+                {
+                    if (item.Track is FullTrack track)
+                    {
+                        batch.Add(MapToSearchQuery(track, playlistName, total));
+                        
+                        // Yield every 50 tracks to keep UI responsive
+                        if (batch.Count >= 50)
+                        {
+                             yield return new List<SearchQuery>(batch);
+                             batch.Clear();
+                        }
+                    }
+                }
+                if (batch.Any()) yield return batch;
+            }
+        }
+    }
+
 	private async Task<List<SearchQuery>> FetchPlaylistTracksAsync(SpotifyClient client, string playlistId)
 	{
 		var queries = new List<SearchQuery>();
@@ -115,7 +178,9 @@ public class SpotifyInputSource : IInputSource
 			AlbumArtUrl = track.Album?.Images?.FirstOrDefault()?.Url,
 			Popularity = track.Popularity,
 			CanonicalDuration = track.DurationMs,
-			ReleaseDate = DateTime.TryParse(track.Album?.ReleaseDate, out var rd) ? rd : null
+			ReleaseDate = DateTime.TryParse(track.Album?.ReleaseDate, out var rd) ? rd : null,
+            ISRC = track.ExternalIds != null && track.ExternalIds.ContainsKey("isrc") ? track.ExternalIds["isrc"] : null,
+            IsEnriched = false // Enriched means "Has Audio Features", which we fetch later
 		};
 	}
 

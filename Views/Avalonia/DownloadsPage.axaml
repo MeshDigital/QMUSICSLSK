@@ -2,84 +2,42 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="clr-namespace:SLSKDONET.ViewModels.Downloads"
              mc:Ignorable="d" d:DesignWidth="1200" d:DesignHeight="800"
              x:Class="SLSKDONET.Views.Avalonia.DownloadsPage"
+             x:DataType="vm:DownloadCenterViewModel"
              Background="#1E1E1E" Foreground="White">
     
-    <Grid RowDefinitions="Auto,Auto,*">
+    <Grid RowDefinitions="Auto,*">
         
         <!-- Header -->
         <Border Grid.Row="0" Background="#252526" Padding="24,20" BorderBrush="#3E3E3E" BorderThickness="0,0,0,1">
             <Grid ColumnDefinitions="*,Auto">
                 <StackPanel Grid.Column="0" Spacing="8">
-                    <TextBlock Text="Downloads" FontSize="28" FontWeight="Bold" Foreground="White"/>
+                    <TextBlock Text="Download Center" FontSize="28" FontWeight="Bold" Foreground="White"/>
                     <StackPanel Orientation="Horizontal" Spacing="16">
                         <TextBlock Foreground="#A0A0A0" FontSize="13">
-                            <Run Text="{Binding SuccessfulCount}"/>
-                            <Run Text=" completed" Foreground="#4CAF50"/>
+                            <Run Text="{Binding ActiveCount}"/>
+                            <Run Text=" active" Foreground="#4CAF50"/>
                         </TextBlock>
                         <TextBlock Foreground="#A0A0A0" FontSize="13">
-                            <Run Text="{Binding TodoCount}"/>
-                            <Run Text=" pending" Foreground="#FFA500"/>
+                            <Run Text="{Binding QueuedCount}"/>
+                            <Run Text=" queued" Foreground="#FFA500"/>
                         </TextBlock>
                         <TextBlock Foreground="#A0A0A0" FontSize="13">
-                            <Run Text="{Binding FailedCount}"/>
-                            <Run Text=" failed" Foreground="#F44336"/>
+                            <Run Text="{Binding CompletedTodayCount}"/>
+                            <Run Text=" completed" Foreground="#2196F3"/>
                         </TextBlock>
+                        <TextBlock Text="{Binding GlobalSpeed, StringFormat='⚡ {0}'}" 
+                                   Foreground="#00BCD4" 
+                                   FontSize="13"
+                                   FontWeight="SemiBold"/>
                     </StackPanel>
                 </StackPanel>
                 
-                <!-- Overall Progress -->
-                <StackPanel Grid.Column="1" Spacing="4" MinWidth="200">
-                    <TextBlock Text="{Binding DownloadProgressPercentage, StringFormat='Overall Progress: {0:F1}%'}" 
-                               FontSize="13" 
-                               Foreground="#A0A0A0"
-                               HorizontalAlignment="Right"/>
-                    <ProgressBar Value="{Binding DownloadProgressPercentage}" 
-                                 Maximum="100" 
-                                 Height="8" 
-                                 Background="#333" 
-                                 Foreground="#4CAF50"
-                                 CornerRadius="4"/>
-                </StackPanel>
-            </Grid>
-        </Border>
-
-        <!-- Toolbar -->
-        <Border Grid.Row="1" Background="#1E1E1E" Padding="24,16" BorderBrush="#3E3E3E" BorderThickness="0,0,0,1">
-            <Grid ColumnDefinitions="*,Auto">
-                <!-- Search/Filter -->
-                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="12">
-                    <TextBox Text="{Binding DownloadsSearchText, Mode=TwoWay}"
-                             Watermark="Search downloads..."
-                             Width="250"
-                             Background="#252526"
-                             Foreground="White"
-                             Padding="10,8"/>
-                    
-                    <ComboBox SelectedIndex="{Binding DownloadsFilterIndex}" Width="150">
-                        <ComboBoxItem Content="All States"/>
-                        <ComboBoxItem Content="Downloading"/>
-                        <ComboBoxItem Content="Completed"/>
-                        <ComboBoxItem Content="Failed"/>
-                        <ComboBoxItem Content="Pending"/>
-                    </ComboBox>
-                </StackPanel>
-                
-                <!-- Bulk Actions -->
+                <!-- Global Actions -->
                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
-                    <Button Command="{Binding ResumeAllDownloadsCommand}"
-                            Background="#4CAF50"
-                            Foreground="White"
-                            Padding="12,8"
-                            CornerRadius="6">
-                        <StackPanel Orientation="Horizontal" Spacing="6">
-                            <TextBlock Text="▶" FontSize="14"/>
-                            <TextBlock Text="Resume All" FontSize="13" FontWeight="SemiBold"/>
-                        </StackPanel>
-                    </Button>
-
-                    <Button Command="{Binding PauseAllDownloadsCommand}"
+                    <Button Command="{Binding PauseAllCommand}"
                             Background="#FFA500"
                             Foreground="White"
                             Padding="12,8"
@@ -89,173 +47,339 @@
                             <TextBlock Text="Pause All" FontSize="13" FontWeight="SemiBold"/>
                         </StackPanel>
                     </Button>
-                    
-                    <Button Command="{Binding CancelDownloadsCommand}"
-                            Background="#D32F2F"
+
+                    <Button Command="{Binding ResumeAllCommand}"
+                            Background="#4CAF50"
                             Foreground="White"
                             Padding="12,8"
                             CornerRadius="6">
                         <StackPanel Orientation="Horizontal" Spacing="6">
-                            <TextBlock Text="⏹" FontSize="14"/>
-                            <TextBlock Text="Cancel All" FontSize="13" FontWeight="SemiBold"/>
+                            <TextBlock Text="▶" FontSize="14"/>
+                            <TextBlock Text="Resume All" FontSize="13" FontWeight="SemiBold"/>
                         </StackPanel>
                     </Button>
                 </StackPanel>
             </Grid>
         </Border>
 
-        <!-- Downloads Grid -->
-        <DataGrid Grid.Row="2"
-                  x:Name="DownloadsGrid"
-                  ItemsSource="{Binding FilteredGlobalTracks}"
-                  AutoGenerateColumns="False"
-                  Background="Transparent"
-                  BorderThickness="0"
-                  GridLinesVisibility="Horizontal"
-                  RowBackground="Transparent"
-                  Foreground="#DDD"
-                  HeadersVisibility="Column"
-                  CanUserReorderColumns="False"
-                  CanUserResizeColumns="True"
-                  CanUserSortColumns="False"
-                  IsReadOnly="True">
-            
-            <DataGrid.Styles>
-                <Style Selector="DataGridRow:pointerover">
-                    <Setter Property="Background" Value="#1AFFFFFF"/>
+        <!-- Tab Control -->
+        <TabControl Grid.Row="1" Background="Transparent" Padding="0">
+            <TabControl.Styles>
+                <Style Selector="TabItem">
+                    <Setter Property="FontSize" Value="14"/>
+                    <Setter Property="Padding" Value="16,12"/>
                 </Style>
-                <Style Selector="DataGridRow:selected">
-                    <Setter Property="Background" Value="#2A0078D4"/>
+                <Style Selector="TabItem:selected">
+                    <Setter Property="Foreground" Value="#4CAF50"/>
                 </Style>
-            </DataGrid.Styles>
+            </TabControl.Styles>
 
-            <DataGrid.Columns>
-                <!-- State -->
-                <DataGridTemplateColumn Header="State" Width="120">
-                    <DataGridTemplateColumn.CellTemplate>
-                        <DataTemplate>
-                            <Border CornerRadius="4" 
-                                    Padding="8,4" 
-                                    Background="{Binding StatusColor}"
-                                    HorizontalAlignment="Left">
-                                <TextBlock Text="{Binding State}" 
-                                           FontSize="11" 
-                                           Foreground="White"
-                                           FontWeight="SemiBold"/>
-                            </Border>
-                        </DataTemplate>
-                    </DataGridTemplateColumn.CellTemplate>
-                </DataGridTemplateColumn>
-                
-                <!-- Artist - Title -->
-                <DataGridTemplateColumn Header="Track" Width="4*">
-                    <DataGridTemplateColumn.CellTemplate>
-                        <DataTemplate>
-                            <StackPanel Spacing="2">
-                                <TextBlock FontWeight="Bold" Foreground="White">
-                                    <Run Text="{Binding Artist}"/>
-                                    <Run Text=" - " Foreground="#666"/>
-                                    <Run Text="{Binding Title}"/>
-                                </TextBlock>
-                                <TextBlock Text="{Binding ErrorMessage}" 
-                                           Foreground="#F44336" 
-                                           FontSize="10"
-                                           TextTrimming="CharacterEllipsis"
-                                           IsVisible="{Binding !!ErrorMessage}"/>
+            <!-- Active Downloads Tab -->
+            <TabItem Header="Active">
+                <Grid RowDefinitions="Auto,*">
+                    <!-- Empty State -->
+                    <Border Grid.Row="1" 
+                            IsVisible="{Binding !ActiveDownloads.Count}"
+                            VerticalAlignment="Center"
+                            HorizontalAlignment="Center">
+                        <StackPanel Spacing="12" HorizontalAlignment="Center">
+                            <TextBlock Text="📥" FontSize="48" HorizontalAlignment="Center" Opacity="0.3"/>
+                            <TextBlock Text="No active downloads" 
+                                       FontSize="18" 
+                                       Foreground="#808080"
+                                       HorizontalAlignment="Center"/>
+                            <TextBlock Text="Downloads will appear here automatically" 
+                                       FontSize="13" 
+                                       Foreground="#606060"
+                                       HorizontalAlignment="Center"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Download List (Virtualized) -->
+                    <ScrollViewer Grid.Row="1">
+                        <ItemsControl ItemsSource="{Binding ActiveDownloads}">
+                            <!-- Phase 2.5: Virtualization for performance with large lists -->
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <VirtualizingStackPanel/>
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <!-- Download Item Card -->
+                                    <Border Background="#252526" 
+                                            BorderBrush="#3E3E3E" 
+                                            BorderThickness="0,0,0,1"
+                                            Padding="20,16">
+                                        <Grid ColumnDefinitions="Auto,*,Auto">
+                                            <!-- Album Art -->
+                                            <Border Grid.Column="0" 
+                                                    Width="56" 
+                                                    Height="56" 
+                                                    CornerRadius="4"
+                                                    Background="#333"
+                                                    Margin="0,0,16,0">
+                                                <Grid>
+                                                    <Image Source="{Binding AlbumArtUrl}"
+                                                           Stretch="UniformToFill"
+                                                           IsVisible="{Binding !!AlbumArtUrl}"/>
+                                                    <TextBlock Text="🎵" 
+                                                               FontSize="24" 
+                                                               HorizontalAlignment="Center"
+                                                               VerticalAlignment="Center"
+                                                               Foreground="#666"
+                                                               IsVisible="{Binding !AlbumArtUrl}"/>
+                                                </Grid>
+                                            </Border>
+
+                                            <!-- Track Info & Progress -->
+                                            <StackPanel Grid.Column="1" Spacing="8" VerticalAlignment="Center">
+                                                <!-- Track Title -->
+                                                <TextBlock FontWeight="Bold" FontSize="14" Foreground="White">
+                                                    <Run Text="{Binding ArtistName}"/>
+                                                    <Run Text=" - " Foreground="#666"/>
+                                                    <Run Text="{Binding TrackTitle}"/>
+                                                </TextBlock>
+                                                
+                                                <!-- Album Name -->
+                                                <TextBlock Text="{Binding AlbumName}" 
+                                                           FontSize="12" 
+                                                           Foreground="#A0A0A0"/>
+                                                
+                                                <!-- Progress Bar -->
+                                                <Grid RowDefinitions="Auto,Auto" ColumnDefinitions="*,Auto">
+                                                    <ProgressBar Grid.Row="0" Grid.Column="0"
+                                                                 Value="{Binding Progress}" 
+                                                                 Maximum="100" 
+                                                                 Height="6" 
+                                                                 Background="#333" 
+                                                                 Foreground="#4CAF50"
+                                                                 CornerRadius="3"/>
+                                                    
+                                                    <!-- Progress Info -->
+                                                    <StackPanel Grid.Row="1" Grid.Column="0"
+                                                                Orientation="Horizontal" 
+                                                                Spacing="12" 
+                                                                Margin="0,4,0,0">
+                                                        <TextBlock Text="{Binding BytesDisplay}" 
+                                                                   FontSize="11" 
+                                                                   Foreground="#AAA"/>
+                                                        <TextBlock Text="•" 
+                                                                   FontSize="11" 
+                                                                   Foreground="#666"/>
+                                                        <TextBlock Text="{Binding SpeedDisplay}" 
+                                                                   FontSize="11" 
+                                                                   Foreground="#00BCD4"
+                                                                   FontWeight="SemiBold"/>
+                                                        <TextBlock Text="•" 
+                                                                   FontSize="11" 
+                                                                   Foreground="#666"/>
+                                                        <TextBlock Text="{Binding StatusText}" 
+                                                                   FontSize="11" 
+                                                                   Foreground="#FFA500"/>
+                                                    </StackPanel>
+                                                    
+                                                    <!-- Percent -->
+                                                    <TextBlock Grid.Row="0" Grid.Column="1"
+                                                               Text="{Binding ProgressPercentText}" 
+                                                               FontSize="11" 
+                                                               Foreground="#AAA"
+                                                               Margin="8,0,0,0"
+                                                               VerticalAlignment="Center"/>
+                                                </Grid>
+                                            </StackPanel>
+
+                                            <!-- Action Buttons -->
+                                            <StackPanel Grid.Column="2" 
+                                                        Orientation="Horizontal" 
+                                                        Spacing="6"
+                                                        VerticalAlignment="Center">
+                                                <!-- Pause -->
+                                                <Button Command="{Binding PauseCommand}"
+                                                        IsVisible="{Binding CanPause}"
+                                                        Background="Transparent"
+                                                        BorderThickness="0"
+                                                        Padding="10,8"
+                                                        ToolTip.Tip="Pause">
+                                                    <TextBlock Text="⏸" FontSize="18" Foreground="#FFC107"/>
+                                                </Button>
+                                                
+                                                <!-- Resume -->
+                                                <Button Command="{Binding ResumeCommand}"
+                                                        IsVisible="{Binding CanResume}"
+                                                        Background="Transparent"
+                                                        BorderThickness="0"
+                                                        Padding="10,8"
+                                                        ToolTip.Tip="Resume">
+                                                    <TextBlock Text="▶" FontSize="18" Foreground="#4CAF50"/>
+                                                </Button>
+                                                
+                                                <!-- Cancel -->
+                                                <Button Command="{Binding CancelCommand}"
+                                                        IsVisible="{Binding CanCancel}"
+                                                        Background="Transparent"
+                                                        BorderThickness="0"
+                                                        Padding="10,8"
+                                                        ToolTip.Tip="Cancel">
+                                                    <TextBlock Text="❌" FontSize="16" Foreground="#F44336"/>
+                                                </Button>
+                                            </StackPanel>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </Grid>
+            </TabItem>
+
+            <!-- Completed Downloads Tab -->
+            <TabItem Header="Completed">
+                <Grid RowDefinitions="Auto,*">
+                    <!-- Clear Button -->
+                    <Border Grid.Row="0" Background="#1E1E1E" Padding="16,12" BorderBrush="#3E3E3E" BorderThickness="0,0,0,1">
+                        <Button Command="{Binding ClearCompletedCommand}"
+                                HorizontalAlignment="Right"
+                                Background="#333"
+                                Foreground="White"
+                                Padding="12,8"
+                                CornerRadius="6">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <TextBlock Text="🗑️" FontSize="12"/>
+                                <TextBlock Text="Clear All" FontSize="13"/>
                             </StackPanel>
-                        </DataTemplate>
-                    </DataGridTemplateColumn.CellTemplate>
-                </DataGridTemplateColumn>
+                        </Button>
+                    </Border>
 
-                <!-- Progress -->
-                <DataGridTemplateColumn Header="Progress" Width="200">
-                    <DataGridTemplateColumn.CellTemplate>
-                        <DataTemplate>
-                            <Grid RowDefinitions="Auto,Auto">
-                                <ProgressBar Grid.Row="0"
-                                             Value="{Binding Progress}" 
-                                             Maximum="1" 
-                                             Height="6" 
-                                             Background="#333" 
-                                             Foreground="#4CAF50"
-                                             CornerRadius="3"/>
-                                <StackPanel Grid.Row="1" 
-                                            Orientation="Horizontal" 
-                                            Spacing="8" 
-                                            Margin="0,4,0,0">
-                                    <TextBlock Text="{Binding Progress, StringFormat='{}{0:P0}'}" 
-                                               FontSize="10" 
-                                               Foreground="#AAA"/>
-                                    <TextBlock Text="{Binding CurrentSpeed}" 
-                                               FontSize="10" 
-                                               Foreground="#AAA"
-                                               IsVisible="{Binding !!CurrentSpeed}"/>
-                                </StackPanel>
-                            </Grid>
-                        </DataTemplate>
-                    </DataGridTemplateColumn.CellTemplate>
-                </DataGridTemplateColumn>
+                    <!-- Empty State -->
+                    <Border Grid.Row="1" 
+                            IsVisible="{Binding !CompletedDownloads.Count}"
+                            VerticalAlignment="Center"
+                            HorizontalAlignment="Center">
+                        <StackPanel Spacing="12" HorizontalAlignment="Center">
+                            <TextBlock Text="✅" FontSize="48" HorizontalAlignment="Center" Opacity="0.3"/>
+                            <TextBlock Text="No completed downloads" 
+                                       FontSize="18" 
+                                       Foreground="#808080"
+                                       HorizontalAlignment="Center"/>
+                        </StackPanel>
+                    </Border>
 
-                <!-- Actions -->
-                <DataGridTemplateColumn Header="Actions" Width="180">
-                    <DataGridTemplateColumn.CellTemplate>
-                        <DataTemplate>
-                            <StackPanel Orientation="Horizontal" Spacing="4">
-                                <!-- Pause -->
-                                <Button Command="{Binding PauseCommand}"
-                                        IsVisible="{Binding CanPause}"
-                                        Background="Transparent"
-                                        BorderThickness="0"
-                                        Padding="8,4"
-                                        ToolTip.Tip="Pause">
-                                    <TextBlock Text="⏸" FontSize="16" Foreground="#FFC107"/>
-                                </Button>
-                                
-                                <!-- Resume -->
-                                <Button Command="{Binding ResumeCommand}"
-                                        IsVisible="{Binding CanResume}"
-                                        Background="Transparent"
-                                        BorderThickness="0"
-                                        Padding="8,4"
-                                        ToolTip.Tip="Resume">
-                                    <TextBlock Text="▶" FontSize="16" Foreground="#4CAF50"/>
-                                </Button>
-                                
-                                <!-- Cancel -->
-                                <Button Command="{Binding CancelCommand}"
-                                        IsVisible="{Binding CanCancel}"
-                                        Background="Transparent"
-                                        BorderThickness="0"
-                                        Padding="8,4"
-                                        ToolTip.Tip="Cancel">
-                                    <TextBlock Text="⏹" FontSize="16" Foreground="#F44336"/>
-                                </Button>
-                                
-                                <!-- Hard Retry -->
-                                <Button Command="{Binding FindNewVersionCommand}"
-                                        IsVisible="{Binding CanHardRetry}"
-                                        Background="Transparent"
-                                        BorderThickness="0"
-                                        Padding="8,4"
-                                        ToolTip.Tip="Find New Version">
-                                    <TextBlock Text="♻" FontSize="16" Foreground="#FF9800" FontWeight="Bold"/>
-                                </Button>
-                                
-                                <!-- Delete -->
-                                <Button Command="{Binding DataContext.DeleteTrackCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
-                                        CommandParameter="{Binding}"
-                                        IsVisible="{Binding CanDeleteFile}"
-                                        Background="Transparent"
-                                        BorderThickness="0"
-                                        Padding="8,4"
-                                        ToolTip.Tip="Delete File">
-                                    <TextBlock Text="🗑️" FontSize="16" Foreground="#D32F2F"/>
-                                </Button>
+                    <!-- Completed List -->
+                    <ScrollViewer Grid.Row="1">
+                        <ItemsControl ItemsSource="{Binding CompletedDownloads}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <VirtualizingStackPanel/>
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Background="#252526" 
+                                            BorderBrush="#3E3E3E" 
+                                            BorderThickness="0,0,0,1"
+                                            Padding="20,12">
+                                        <Grid ColumnDefinitions="Auto,*,Auto">
+                                            <TextBlock Grid.Column="0" Text="✅" FontSize="20" Margin="0,0,12,0" VerticalAlignment="Center"/>
+                                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                                <TextBlock FontWeight="SemiBold" FontSize="13" Foreground="White">
+                                                    <Run Text="{Binding ArtistName}"/>
+                                                    <Run Text=" - " Foreground="#666"/>
+                                                    <Run Text="{Binding TrackTitle}"/>
+                                                </TextBlock>
+                                                <TextBlock Text="{Binding AlbumName}" FontSize="11" Foreground="#808080"/>
+                                            </StackPanel>
+                                            <TextBlock Grid.Column="2" 
+                                                       Text="{Binding BytesDisplay}" 
+                                                       FontSize="11" 
+                                                       Foreground="#808080"
+                                                       VerticalAlignment="Center"/>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </Grid>
+            </TabItem>
+
+            <!-- Failed Downloads Tab -->
+            <TabItem Header="Failed">
+                <Grid RowDefinitions="Auto,*">
+                    <!-- Clear Button -->
+                    <Border Grid.Row="0" Background="#1E1E1E" Padding="16,12" BorderBrush="#3E3E3E" BorderThickness="0,0,0,1">
+                        <Button Command="{Binding ClearFailedCommand}"
+                                HorizontalAlignment="Right"
+                                Background="#333"
+                                Foreground="White"
+                                Padding="12,8"
+                                CornerRadius="6">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <TextBlock Text="🗑️" FontSize="12"/>
+                                <TextBlock Text="Clear All" FontSize="13"/>
                             </StackPanel>
-                        </DataTemplate>
-                    </DataGridTemplateColumn.CellTemplate>
-                </DataGridTemplateColumn>
-            </DataGrid.Columns>
-        </DataGrid>
+                        </Button>
+                    </Border>
+
+                    <!-- Empty State -->
+                    <Border Grid.Row="1" 
+                            IsVisible="{Binding !FailedDownloads.Count}"
+                            VerticalAlignment="Center"
+                            HorizontalAlignment="Center">
+                        <StackPanel Spacing="12" HorizontalAlignment="Center">
+                            <TextBlock Text="💯" FontSize="48" HorizontalAlignment="Center" Opacity="0.3"/>
+                            <TextBlock Text="No failed downloads" 
+                                       FontSize="18" 
+                                       Foreground="#808080"
+                                       HorizontalAlignment="Center"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Failed List -->
+                    <ScrollViewer Grid.Row="1">
+                        <ItemsControl ItemsSource="{Binding FailedDownloads}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <VirtualizingStackPanel/>
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Background="#252526" 
+                                            BorderBrush="#3E3E3E" 
+                                            BorderThickness="0,0,0,1"
+                                            Padding="20,12">
+                                        <Grid ColumnDefinitions="Auto,*,Auto">
+                                            <TextBlock Grid.Column="0" Text="❌" FontSize="20" Margin="0,0,12,0" VerticalAlignment="Center"/>
+                                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                                <TextBlock FontWeight="SemiBold" FontSize="13" Foreground="White">
+                                                    <Run Text="{Binding ArtistName}"/>
+                                                    <Run Text=" - " Foreground="#666"/>
+                                                    <Run Text="{Binding TrackTitle}"/>
+                                                </TextBlock>
+                                                <TextBlock Text="{Binding AlbumName}" FontSize="11" Foreground="#808080"/>
+                                            </StackPanel>
+                                            <Button Grid.Column="2"
+                                                    Command="{Binding RetryCommand}"
+                                                    Background="#FF9800"
+                                                    Foreground="White"
+                                                    Padding="12,6"
+                                                    CornerRadius="6"
+                                                    VerticalAlignment="Center">
+                                                <StackPanel Orientation="Horizontal" Spacing="4">
+                                                    <TextBlock Text="♻" FontSize="12"/>
+                                                    <TextBlock Text="Retry" FontSize="12" FontWeight="SemiBold"/>
+                                                </StackPanel>
+                                            </Button>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </Grid>
+            </TabItem>
+        </TabControl>
     </Grid>
 </UserControl>

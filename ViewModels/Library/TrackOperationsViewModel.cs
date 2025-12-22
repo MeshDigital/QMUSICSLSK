@@ -93,18 +93,18 @@ public class TrackOperationsViewModel : INotifyPropertyChanged
         _downloadManager.HardRetryTrack(track.GlobalId);
     }
 
-    private void ExecutePause(PlaylistTrackViewModel? track)
+    private async void ExecutePause(PlaylistTrackViewModel? track)
     {
         if (track == null) return;
         _logger.LogInformation("Pausing track: {Title}", track.Title);
-        _downloadManager.PauseTrack(track.GlobalId);
+        await _downloadManager.PauseTrackAsync(track.GlobalId);
     }
 
-    private void ExecuteResume(PlaylistTrackViewModel? track)
+    private async void ExecuteResume(PlaylistTrackViewModel? track)
     {
         if (track == null) return;
         _logger.LogInformation("Resuming track: {Title}", track.Title);
-        _downloadManager.ResumeTrack(track.GlobalId);
+        await _downloadManager.ResumeTrackAsync(track.GlobalId);
     }
 
     private void ExecuteCancel(PlaylistTrackViewModel? track)

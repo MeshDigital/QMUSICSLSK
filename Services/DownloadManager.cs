@@ -102,24 +102,23 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
         {
             if (e.Album is PlaylistJob job)
             {
-                _logger.LogInformation("Processing DownloadAlbumRequest for Project: {Title}", job.SourceTitle);
-                // If it's a full project, we might need to load tracks if they aren't populated?
-                // QueueProject handles this if OriginalTracks are present.
-                // But usually this comes from Library where PlaylistTracks should be loaded?
-                // If checking LibraryViewModel, DownloadAlbumCommand passes the Job.
+                _logger.LogInformation("📢 Processing DownloadAlbumRequest for Project: {Title}", job.SourceTitle);
                 
                 // Ensure tracks are loaded
                  _ = Task.Run(async () => 
                  {
+                     _logger.LogInformation("🔍 Loading tracks for project {Id}...", job.Id);
                      var tracks = await _libraryService.LoadPlaylistTracksAsync(job.Id);
+                     
                      if (tracks.Any())
                      {
+                         _logger.LogInformation("✅ Found {Count} tracks, queuing...", tracks.Count);
                          QueueTracks(tracks);
-                         _logger.LogInformation("Queued {Count} tracks for project {Title}", tracks.Count, job.SourceTitle);
+                         _logger.LogInformation("🚀 Queued {Count} tracks for project {Title}", tracks.Count, job.SourceTitle);
                      }
                      else
                      {
-                         _logger.LogWarning("No tracks found for project {Title} (ID: {Id})", job.SourceTitle, job.Id);
+                         _logger.LogWarning("⚠️ No tracks found for project {Title} (ID: {Id}) - Database might be empty or tracks missing", job.SourceTitle, job.Id);
                      }
                  });
             }
@@ -556,7 +555,8 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
             if (job != null)
             {
                 job.IsUserPaused = true;
-                await _libraryService.UpdatePlaylistJobAsync(job);
+                // Update via LibraryService (uses Save internally)
+                await _libraryService.SavePlaylistJobAsync(job);
             }
         }
         catch (Exception ex)
@@ -565,6 +565,27 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
         }
         
         _logger.LogInformation("⏸️ Paused track: {Artist} - {Title} (user-initiated)", ctx.Model.Artist, ctx.Model.Title);
+    }
+
+    /// <summary>
+    /// Pauses all active downloads.
+    /// </summary>
+    public async Task PauseAllAsync() 
+    {
+        List<DownloadContext> active;
+        lock (_collectionLock)
+        {
+             active = _downloads.Where(d => d.IsActive).ToList();
+        }
+
+        if (active.Any())
+        {
+            _logger.LogInformation("⏸️ Pausing all {Count} active downloads...", active.Count);
+            foreach(var d in active) 
+            {
+                 await PauseTrackAsync(d.GlobalId);
+            }
+        }
     }
 
     public async Task ResumeTrackAsync(string globalId)
@@ -717,9 +738,13 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
                 DownloadContext? nextContext = null;
                 lock (_collectionLock)
                 {
+                    // Phase 2: Enrichment Gate
+                    // Only pick up tracks that are Enriched (have Audio Features + ID)
+                    // OR if they have been pending for > 5 minutes (fail-safe for enrichment timeouts)
                     nextContext = _downloads.FirstOrDefault(t => 
                         t.State == PlaylistTrackState.Pending && 
-                        (!t.NextRetryTime.HasValue || t.NextRetryTime.Value <= DateTime.Now));
+                        (!t.NextRetryTime.HasValue || t.NextRetryTime.Value <= DateTime.Now) &&
+                        (t.Model.IsEnriched || (DateTime.Now - t.Model.AddedAt).TotalMinutes > 5));
                 }
 
                 if (nextContext == null)

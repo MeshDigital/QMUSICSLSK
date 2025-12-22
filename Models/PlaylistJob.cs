@@ -145,6 +145,21 @@ public class PlaylistJob : INotifyPropertyChanged
     }
 
     /// <summary>
+    /// True if user manually paused downloads (don't auto-resume on crash recovery).
+    /// </summary>
+    public bool IsUserPaused { get; set; } = false;
+    
+    /// <summary>
+    /// When the first track in this job started downloading.
+    /// </summary>
+    public DateTime? DateStarted { get; set; }
+    
+    /// <summary>
+    /// Last time the download orchestrator touched this job.
+    /// </summary>
+    public DateTime DateUpdated { get; set; } = DateTime.UtcNow;
+
+    /// <summary>
     /// Overall progress percentage for this job (0-100).
     /// Calculated as: (SuccessfulCount + FailedCount) / TotalTracks * 100
     /// </summary>

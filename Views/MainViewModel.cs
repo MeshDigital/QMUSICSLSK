@@ -621,19 +621,19 @@ public class MainViewModel : INotifyPropertyChanged
     }
 
     // Command Implementations
-    private void PauseAllDownloads()
+    private async void PauseAllDownloads()
     {
         foreach (var track in AllGlobalTracks.Where(t => t.CanPause))
         {
-            _downloadManager.PauseTrack(track.GlobalId);
+            await _downloadManager.PauseTrackAsync(track.GlobalId);
         }
     }
 
-    private void ResumeAllDownloads()
+    private async void ResumeAllDownloads()
     {
         foreach (var track in AllGlobalTracks.Where(t => t.State == PlaylistTrackState.Paused))
         {
-            _downloadManager.ResumeTrack(track.GlobalId);
+            await _downloadManager.ResumeTrackAsync(track.GlobalId);
         }
     }
 

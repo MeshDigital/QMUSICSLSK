@@ -5,7 +5,23 @@
 
 ---
 
-## ✅ Recently Completed (Dec 18, 2025)
+## ✅ Recently Completed (Dec 22, 2025)
+
+### v1.2.2 - Responsiveness & Robustness - COMPLETE
+**Impact**: Fixes critical blockers in download flow and import experience.
+- **Fixed Download Button**: Restored functionality to the "Download Album" button in Library view (Binding fix).
+- **Streaming Import**: Replaced blocking "wait for all 2000 tracks" with instant-start batch loading (50 tracks/batch).
+- **Enrichment Toggle**: Added `AppConfig.SpotifyUseApi` switch to allow "Download Only" mode without metadata queries.
+- **Fail-Safe Architecture**: Spotify 403/Auth errors no longer block the download pipeline (Decoupled Orchestrator).
+- **ID Sanitization**: Auto-repair of malformed Spotify IDs (`spotify:track:` prefix stripping).
+
+### Phase 2: Spotify Enrichment Pipeline (Dec 22, 2025) - COMPLETE
+**Impact**: Intelligent downloads and high-fidelity metadata.
+- **4-Stage Pipeline**: Decoupled ingestion, identification, enrichment, and matching.
+- **Deep Audio Analysis**: Fetches BPM, Energy, and Valence for all tracks.
+- **Smart Matching**: Uses enriched metadata (Duration, BPM) to filter Soulseek results ("The Brain").
+- **UI Visibility**: Added "Metadata Status" column (✨ Enriched, 🆔 Identified, ⏳ Pending).
+- **Two-Pass Worker**: Efficient background processing with batched API calls.
 
 ### Performance Overhaul (Phase 2) - COMPLETE
 **Impact**: 60x-100x performance improvements

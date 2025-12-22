@@ -26,6 +26,7 @@ public class MetadataEnrichmentOrchestrator : IDisposable
     private readonly SpotifyAuthService _spotifyAuthService; // Injected for strict auth check
     private readonly SonicIntegrityService _sonicIntegrityService;
     private readonly IEventBus _eventBus; // Injected
+    private readonly Configuration.AppConfig _config;
 
     // Queue for tracks needing enrichment
     private readonly ConcurrentQueue<PlaylistTrack> _enrichmentQueue = new(); // Use Model
@@ -40,7 +41,8 @@ public class MetadataEnrichmentOrchestrator : IDisposable
         DatabaseService databaseService,
         SpotifyAuthService spotifyAuthService,
         SonicIntegrityService sonicIntegrityService,
-        IEventBus eventBus)
+        IEventBus eventBus,
+        Configuration.AppConfig config)
     {
         _logger = logger;
         _metadataService = metadataService;
@@ -49,6 +51,7 @@ public class MetadataEnrichmentOrchestrator : IDisposable
         _spotifyAuthService = spotifyAuthService;
         _sonicIntegrityService = sonicIntegrityService;
         _eventBus = eventBus;
+        _config = config;
     }
 
     public void Start()
@@ -177,33 +180,35 @@ public class MetadataEnrichmentOrchestrator : IDisposable
             {
                 await _signal.WaitAsync(token); // Wait for item
                 
+                // Smart Buffer: Always wait a bit to be greedy and let the queue fill
+                // The producer (DownloadManager) might be slow (DB lookups per track).
+                await Task.Delay(250, token);
+                
                 // Dequeue a batch of items
                 var batch = new List<PlaylistTrack>();
                 
                 // Try to fill batch up to 50 items
-                // Always take at least one (we just waited for it)
-                if (_enrichmentQueue.TryDequeue(out var first))
+                while (batch.Count < 50 && _enrichmentQueue.TryDequeue(out var item))
                 {
-                    batch.Add(first);
-                    
-                    // Try to grab more if available properly
-                    // Limit loop to avoid blocking too long
-                    while (batch.Count < 50 && _enrichmentQueue.TryDequeue(out var next))
-                    {
-                        batch.Add(next);
-                    }
+                     batch.Add(item);
                 }
 
                 if (!batch.Any()) continue;
 
+                _logger.LogInformation("Orchestrator processing batch of {Count} tracks", batch.Count);
+
                 // Process the batch
-                if (!_spotifyAuthService.IsAuthenticated)
+                // Check if Enrichment is Globally Enabled AND User is Authenticated
+                if (!_config.SpotifyUseApi || !_spotifyAuthService.IsAuthenticated)
                 {
-                    _logger.LogDebug("Skipping metadata enrichment for {Count} tracks: User not authenticated with Spotify.", batch.Count);
-                    // Clean up pending orchestrations since we won't process them
-                    foreach(var t in batch)
+                    var reason = !_config.SpotifyUseApi ? "Enrichment Disabled in Settings" : "Not Authenticated";
+                    _logger.LogDebug("Skipping metadata enrichment for {Count} tracks: {Reason}", batch.Count, reason);
+                    
+                    // Proceed to finalize tracks immediately without enrichment
+                    // This ensures "Download Only" flow works perfectly
+                    foreach (var track in batch)
                     {
-                        await _databaseService.RemovePendingOrchestrationAsync(t.TrackUniqueHash);
+                        await FinalizeEnrichmentAsync(track, false); // success=false means "no enrichment data applied"
                     }
                     continue;
                 }
@@ -215,17 +220,29 @@ public class MetadataEnrichmentOrchestrator : IDisposable
                 // 1. Bulk Fetch Audio Features for Known Tracks
                 if (knownTracks.Any())
                 {
-                    var ids = knownTracks.Select(t => t.SpotifyTrackId!).ToList();
-                    var features = await _metadataService.GetAudioFeaturesBatchAsync(ids);
-
-                    foreach (var track in knownTracks)
+                    try
                     {
-                        if (features.TryGetValue(track.SpotifyTrackId!, out var feature) && feature != null)
+                        var ids = knownTracks.Select(t => t.SpotifyTrackId!).ToList();
+                        var features = await _metadataService.GetAudioFeaturesBatchAsync(ids);
+
+                        foreach (var track in knownTracks)
                         {
-                            ApplyFeatures(track, feature);
+                            if (features.TryGetValue(track.SpotifyTrackId!, out var feature) && feature != null)
+                            {
+                                ApplyFeatures(track, feature);
+                            }
+                            
+                            await FinalizeEnrichmentAsync(track, true);
                         }
-                        
-                        await FinalizeEnrichmentAsync(track, true);
+                    }
+                    catch (Exception ex)
+                    {
+                        // Soft fail for batch enrichment - don't stop the pipeline
+                        _logger.LogWarning("Batch enrichment failed (likely 403/Forbidden). Proceeding without audio features. Error: {Message}", ex.Message);
+                        foreach (var track in knownTracks)
+                        {
+                            await FinalizeEnrichmentAsync(track, true); // Still finalize as "success" (we have the track metadata at least)
+                        }
                     }
                 }
 

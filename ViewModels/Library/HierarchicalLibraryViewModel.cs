@@ -64,6 +64,40 @@ public class HierarchicalLibraryViewModel
                 new TextColumn<ILibraryNode, int>("🔥", x => x.Popularity),
                 new TextColumn<ILibraryNode, string>("Bitrate", x => x.Bitrate ?? string.Empty),
                 new TextColumn<ILibraryNode, string>("Genres", x => x.Genres ?? string.Empty),
+                
+                // Metadata Status
+                new TemplateColumn<ILibraryNode>(
+                    " ✨",
+                    new FuncDataTemplate<object>((item, _) => 
+                    {
+                         if (item is not PlaylistTrackViewModel track) return new Panel();
+
+                        var text = track.MetadataStatus;
+                        var color = text switch
+                        {
+                            "Enriched" => "#FFD700", // Gold
+                            "Identified" => "#1E90FF", // DodgerBlue
+                            _ => "#505050"
+                        };
+                        
+                        var symbol = text switch
+                        {
+                            "Enriched" => "✨",
+                            "Identified" => "🆔",
+                            _ => "⏳"
+                        };
+
+                        return new TextBlock { 
+                            Text = symbol,
+                            Foreground = Brush.Parse(color),
+                            VerticalAlignment = VerticalAlignment.Center,
+                            HorizontalAlignment = HorizontalAlignment.Center,
+                            FontSize = 14,
+                            [ToolTip.TipProperty] = text
+                        };
+                    }, false),
+                    width: new GridLength(40)),
+
                 // Phase 1: Enhanced Status Column with Colored Badges
                 new TemplateColumn<ILibraryNode>(
                     "Status",

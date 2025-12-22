@@ -94,6 +94,10 @@ public class SearchQuery
     public int? Popularity { get; set; }
     public int? CanonicalDuration { get; set; }
     public DateTime? ReleaseDate { get; set; }
+    
+    // Phase 1: Enrichment
+    public bool IsEnriched { get; set; } = false;
+    public string? ISRC { get; set; }
 
     /// <summary>
     /// Parses a search string into a SearchQuery.

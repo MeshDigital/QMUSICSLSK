@@ -422,11 +422,24 @@ public class LibraryViewModel : INotifyPropertyChanged
 
     private async Task ExecuteDownloadAlbumAsync(PlaylistJob? job)
     {
-        if (job == null) return;
-        _logger.LogInformation("Downloading album: {Title}", job.SourceTitle);
-        // Business logic for downloading album already exists in DownloadManager?
-        // Actually, we usually queue the whole project.
-        _eventBus.Publish(new DownloadAlbumRequestEvent(job));
+        if (job == null)
+        {
+            _logger.LogWarning("❌ ExecuteDownloadAlbumAsync called with NULL job");
+            return;
+        }
+        
+        _logger.LogInformation("🔽 DOWNLOAD BUTTON CLICKED: Album: {Title}, JobId: {Id}", job.SourceTitle, job.Id);
+        
+        try
+        {
+            // Publish event to DownloadManager  
+            _eventBus.Publish(new DownloadAlbumRequestEvent(job));
+            _logger.LogInformation("✅ DownloadAlbumRequestEvent published for {Title}", job.SourceTitle);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "❌ Failed to publish DownloadAlbumRequestEvent for {Title}", job.SourceTitle);
+        }
     }
 
     /// <summary>

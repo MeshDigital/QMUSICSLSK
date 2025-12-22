@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using SLSKDONET.Data;
 using SLSKDONET.Models;
+using SLSKDONET.Services.Models;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -149,6 +150,26 @@ public class DatabaseService
             {
                 _logger.LogWarning("Schema Patch: Adding missing column 'MissingCount' to PlaylistJobs");
                 await context.Database.ExecuteSqlRawAsync("ALTER TABLE PlaylistJobs ADD COLUMN MissingCount INTEGER DEFAULT 0");
+            }
+
+            if (!existingColumns.Contains("IsUserPaused"))
+            {
+                _logger.LogWarning("Schema Patch: Adding missing column 'IsUserPaused' to PlaylistJobs");
+                await context.Database.ExecuteSqlRawAsync("ALTER TABLE PlaylistJobs ADD COLUMN IsUserPaused INTEGER DEFAULT 0");
+            }
+
+            if (!existingColumns.Contains("DateStarted"))
+            {
+                _logger.LogWarning("Schema Patch: Adding missing column 'DateStarted' to PlaylistJobs");
+                await context.Database.ExecuteSqlRawAsync("ALTER TABLE PlaylistJobs ADD COLUMN DateStarted TEXT NULL");
+            }
+
+            if (!existingColumns.Contains("DateUpdated"))
+            {
+                _logger.LogWarning("Schema Patch: Adding missing column 'DateUpdated' to PlaylistJobs");
+                // Default to epoch or current time? Using current time for safety.
+                var now = DateTime.UtcNow.ToString("o");
+                await context.Database.ExecuteSqlRawAsync($"ALTER TABLE PlaylistJobs ADD COLUMN DateUpdated TEXT DEFAULT '{now}'");
             }
             
             _logger.LogInformation("[{Ms}ms] Database Init: Schema patches completed", sw.ElapsedMilliseconds);
@@ -297,7 +318,12 @@ public class DatabaseService
                     // Phase 0.1: Musical Intelligence & Antigravity
                     if (!libColumns.Contains("MusicalKey")) newCols.Add(("MusicalKey", "TEXT NULL"));
                     if (!libColumns.Contains("BPM")) newCols.Add(("BPM", "REAL NULL"));
+                    if (!libColumns.Contains("Energy")) newCols.Add(("Energy", "REAL NULL"));
+                    if (!libColumns.Contains("Valence")) newCols.Add(("Valence", "REAL NULL"));
+                    if (!libColumns.Contains("Danceability")) newCols.Add(("Danceability", "REAL NULL"));
+                    if (!libColumns.Contains("Danceability")) newCols.Add(("Danceability", "REAL NULL"));
                     if (!libColumns.Contains("AudioFingerprint")) newCols.Add(("AudioFingerprint", "TEXT NULL"));
+                    if (!libColumns.Contains("IsEnriched")) newCols.Add(("IsEnriched", "INTEGER DEFAULT 0"));
 
                     foreach (var (col, def) in newCols)
                     {
@@ -342,6 +368,9 @@ public class DatabaseService
                     // Phase 0.1: Musical Intelligence & ORBIT
                     if (!tracksColumns.Contains("MusicalKey")) newCols.Add(("MusicalKey", "TEXT NULL"));
                     if (!tracksColumns.Contains("BPM")) newCols.Add(("BPM", "REAL NULL"));
+                    if (!tracksColumns.Contains("Energy")) newCols.Add(("Energy", "REAL NULL"));
+                    if (!tracksColumns.Contains("Valence")) newCols.Add(("Valence", "REAL NULL"));
+                    if (!tracksColumns.Contains("Danceability")) newCols.Add(("Danceability", "REAL NULL"));
                     if (!tracksColumns.Contains("CuePointsJson")) newCols.Add(("CuePointsJson", "TEXT NULL"));
                     if (!tracksColumns.Contains("AudioFingerprint")) newCols.Add(("AudioFingerprint", "TEXT NULL"));
                     if (!tracksColumns.Contains("BitrateScore")) newCols.Add(("BitrateScore", "INTEGER NULL"));
@@ -712,6 +741,98 @@ public class DatabaseService
         context.LibraryEntries.Update(entry);
         
         await context.SaveChangesAsync();
+    }
+
+
+    public async Task<List<LibraryEntryEntity>> GetLibraryEntriesNeedingEnrichmentAsync(int limit)
+    {
+        using var context = new AppDbContext();
+        return await context.LibraryEntries
+            .Where(e => !e.IsEnriched && e.SpotifyTrackId == null)
+            .OrderByDescending(e => e.AddedAt)
+            .Take(limit)
+            .ToListAsync();
+    }
+
+    public async Task UpdateLibraryEntryEnrichmentAsync(string uniqueHash, TrackEnrichmentResult result)
+    {
+        using var context = new AppDbContext();
+        var entry = await context.LibraryEntries.FindAsync(uniqueHash);
+        if (entry != null)
+        {
+            // If we only identified the track (Stage 1), we set IsEnriched=false still, until features are fetched?
+            // User script: "Once TrackEntity.IsMetadataEnriched is true... Download... takes over"
+            // So if result has NO features (Identify only), we should set IsEnriched = false (or leave it).
+            // But we need to save the SpotifyID.
+
+            if (result.Success)
+            {
+                entry.SpotifyTrackId = result.SpotifyId;
+                if (!string.IsNullOrEmpty(result.AlbumArtUrl) && string.IsNullOrEmpty(entry.AlbumArtUrl))
+                    entry.AlbumArtUrl = result.AlbumArtUrl;
+                if (!string.IsNullOrEmpty(result.OfficialArtist)) entry.Artist = result.OfficialArtist;
+                if (!string.IsNullOrEmpty(result.OfficialTitle)) entry.Title = result.OfficialTitle;
+
+                // Did we get features? (Legacy/Single call pathway)
+                if (result.Bpm > 0 || result.Energy > 0)
+                {
+                    entry.BPM = result.Bpm;
+                    entry.Energy = result.Energy;
+                    entry.Valence = result.Valence;
+                    entry.Danceability = result.Danceability;
+                    entry.IsEnriched = true; // Complete!
+                }
+                else
+                {
+                    // Stage 1 only - Identified but no features.
+                    // Keep IsEnriched = false so Pass 2 picks it up.
+                }
+            }
+            else
+            {
+                // Identification failed.
+                // Should we mark it as "failed" to stop retrying?
+                // For now, maybe just log and leave it. Or could have an "EnrichmentFailed" flag.
+            }
+            
+            context.LibraryEntries.Update(entry);
+            await context.SaveChangesAsync();
+        }
+    }
+
+    public async Task<List<LibraryEntryEntity>> GetLibraryEntriesNeedingFeaturesAsync(int limit)
+    {
+         using var context = new AppDbContext();
+         // Pass 2 candidates: Have ID, but NO Energy (or IsEnriched is false)
+         return await context.LibraryEntries
+             .Where(e => e.SpotifyTrackId != null && !e.IsEnriched)
+             .OrderByDescending(e => e.AddedAt)
+             .Take(limit)
+             .ToListAsync();
+    }
+
+    public async Task UpdateLibraryEntriesFeaturesAsync(Dictionary<string, SpotifyAPI.Web.TrackAudioFeatures> featuresMap)
+    {
+        using var context = new AppDbContext();
+        var ids = featuresMap.Keys.ToList();
+        
+        var entries = await context.LibraryEntries
+            .Where(e => e.SpotifyTrackId != null && ids.Contains(e.SpotifyTrackId))
+            .ToListAsync();
+
+        foreach (var entry in entries)
+        {
+            if (entry.SpotifyTrackId != null && featuresMap.TryGetValue(entry.SpotifyTrackId, out var f))
+            {
+                entry.BPM = f.Tempo; // Use explicit property names from Entity
+                entry.Energy = f.Energy;
+                entry.Valence = f.Valence;
+                entry.Danceability = f.Danceability;
+                entry.IsEnriched = true;
+            }
+        }
+        
+       await context.SaveChangesAsync();
     }
 
 

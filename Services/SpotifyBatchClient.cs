@@ -43,6 +43,10 @@ public class SpotifyBatchClient
     public void SetAccessToken(string token)
     {
         _http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        if (!_http.DefaultRequestHeaders.Contains("User-Agent"))
+        {
+            _http.DefaultRequestHeaders.Add("User-Agent", "Orbit/1.2.2 (SLSKDONET)");
+        }
     }
 
     public async Task<T> GetAsync<T>(string url, CancellationToken ct = default)
@@ -72,11 +76,20 @@ public class SpotifyBatchClient
                 if (!response.IsSuccessStatusCode)
                 {
                     attempt++;
-                    if (attempt > 3 || response.StatusCode == HttpStatusCode.Unauthorized || response.StatusCode == HttpStatusCode.Forbidden)
+                     if (attempt > 3 || response.StatusCode == HttpStatusCode.Unauthorized || response.StatusCode == HttpStatusCode.Forbidden)
                     {
                          // Stop retrying on auth errors or after max attempts for other errors
                          var errorContent = await response.Content.ReadAsStringAsync(ct);
-                         _log.LogError("Spotify request failed permanently. Url: {Url}, Status: {Status}, Content: {Content}", url, response.StatusCode, errorContent);
+                         
+                         if (response.StatusCode == HttpStatusCode.Forbidden)
+                         {
+                             _log.LogWarning("Spotify request forbidden (403). Optional enrichment may be unavailable. Url: {Url}. Reason: {Content}", url, errorContent);
+                         }
+                         else
+                         {
+                             _log.LogError("Spotify request failed permanently. Url: {Url}, Status: {Status}, Content: {Content}", url, response.StatusCode, errorContent);
+                         }
+                         
                          response.EnsureSuccessStatusCode(); // Will throw HttpRequestException
                     }
 
@@ -129,9 +142,15 @@ public class SpotifyBatchClient
             }
             catch (Exception ex)
             {
-                _log.LogError(ex, "Failed to fetch batch chunk. Skipping chunk.");
-                // Continue to next chunk instead of aborting everything? 
-                // Or throw? For enrichment, best effort is usually better.
+                if (ex.Message.Contains("403") || (ex.InnerException?.Message.Contains("403") ?? false))
+                {
+                    _log.LogWarning("Skipping batch chunk due to Spotify restriction (403).");
+                }
+                else
+                {
+                    _log.LogWarning("Failed to fetch batch chunk. Skipping. Error: {Message}", ex.Message);
+                }
+                // Continue to next chunk
             }
         }
 

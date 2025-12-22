@@ -40,6 +40,9 @@ public class TrackEntity
     // Phase 0.1: Musical Intelligence & Antigravity
     public string? MusicalKey { get; set; } // e.g. "8A"
     public double? BPM { get; set; } // e.g. 128.0
+    public double? Energy { get; set; } // 0.0 - 1.0 (Spotify)
+    public double? Valence { get; set; } // 0.0 - 1.0 (Spotify)
+    public double? Danceability { get; set; } // 0.0 - 1.0 (Spotify)
     public string? CuePointsJson { get; set; } // Rekordbox/DJ cue points blob
     public string? AudioFingerprint { get; set; } // Chromaprint/SoundFingerprinting hash
     public int? BitrateScore { get; set; } // Quality score for replacement
@@ -76,11 +79,10 @@ public class PlaylistJobEntity
     public int FailedCount { get; set; }
     public int MissingCount { get; set; }
 
-    // Phase 1C: Add Soft Delete Flag
     public bool IsDeleted { get; set; } = false;
     public DateTime? DeletedAt { get; set; }
 
-    // Phase 2.5: Crash Recovery & Hydration
+    // Download Recovery & Hydration
     public bool IsUserPaused { get; set; } = false;         // User manually paused (don't auto-resume)
     public DateTime? DateStarted { get; set; }              // When first track started downloading
     public DateTime DateUpdated { get; set; } = DateTime.UtcNow;  // Last orchestrator touch
@@ -232,5 +234,10 @@ public class LibraryEntryEntity
     // Phase 0.1: Musical Intelligence & Antigravity
     public string? MusicalKey { get; set; }
     public double? BPM { get; set; }
+    public double? Energy { get; set; }
+    public double? Valence { get; set; }
+    public double? Danceability { get; set; }
     public string? AudioFingerprint { get; set; }
+    
+    public bool IsEnriched { get; set; } = false;
 }

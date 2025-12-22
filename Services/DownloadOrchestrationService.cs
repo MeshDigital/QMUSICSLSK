@@ -93,7 +93,7 @@ public class DownloadOrchestrationService
     /// <summary>
     /// Pause all active downloads.
     /// </summary>
-    public DownloadOperationResult PauseAllDownloads()
+    public async Task<DownloadOperationResult> PauseAllDownloads()
     {
         try
         {
@@ -104,7 +104,7 @@ public class DownloadOrchestrationService
             {
                 if (track.IsActive)
                 {
-                    _downloadManager.PauseTrack(track.GlobalId);
+                    await _downloadManager.PauseTrackAsync(track.GlobalId);
                     paused++;
                 }
             }

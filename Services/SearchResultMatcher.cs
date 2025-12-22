@@ -26,6 +26,84 @@ public class SearchResultMatcher
     /// Finds the best matching track from a list of candidates.
     /// Returns null if no acceptable match is found.
     /// </summary>
+    /// <summary>
+    /// Finds the best matching track using rich metadata (BPM, Duration, etc.) from PlaylistTrack.
+    /// </summary>
+    public Track? FindBestMatch(PlaylistTrack model, IEnumerable<Track> candidates)
+    {
+        if (!candidates.Any()) return null;
+
+        var expectedDuration = model.CanonicalDuration.HasValue ? model.CanonicalDuration.Value / 1000 : 0;
+        
+        // Use existing logic if we don't have rich metadata
+        if (expectedDuration == 0)
+        {
+             return FindBestMatch(model.Artist, model.Title, 0, candidates);
+        }
+
+        var lengthTolerance = _config.SearchLengthToleranceSeconds;
+        var matches = new List<(Track Track, double Score)>();
+
+        foreach (var candidate in candidates)
+        {
+            // Base score (Artist/Title/Duration)
+            var score = CalculateMatchScore(
+                model.Artist,
+                model.Title,
+                expectedDuration,
+                candidate,
+                lengthTolerance);
+
+            // BPM Bonus (Phase 2)
+            if (model.BPM.HasValue && model.BPM > 0)
+            {
+                var candidateBpm = ParseBpm(candidate.Filename);
+                if (candidateBpm.HasValue)
+                {
+                    // If BPM matches within 3%, give a nice boost
+                    if (Math.Abs(candidateBpm.Value - model.BPM.Value) < 3)
+                    {
+                        score += 0.15; // Significant boost for BPM match
+                        _logger.LogTrace("BPM Match! {CandidateBpm} vs {ModelBpm}", candidateBpm, model.BPM);
+                    }
+                }
+            }
+
+            if (score >= 0.7)
+            {
+                matches.Add((candidate, score));
+            }
+        }
+
+        if (!matches.Any())
+        {
+            _logger.LogWarning("No acceptable matches for {Artist} - {Title}", model.Artist, model.Title);
+            return null;
+        }
+
+        var best = matches.OrderByDescending(m => m.Score).First();
+        return best.Track;
+    }
+
+    /// <summary>
+    /// Simple parser to extract BPM from filename (e.g. "128bpm", "(128 BPM)").
+    /// </summary>
+    private int? ParseBpm(string? filename)
+    {
+        if (string.IsNullOrEmpty(filename)) return null;
+        try 
+        {
+            // Simple regex for "128bpm" or "128 bpm"
+            var match = System.Text.RegularExpressions.Regex.Match(filename, @"\b(\d{2,3})\s*bpm\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            if (match.Success && int.TryParse(match.Groups[1].Value, out int bpm))
+            {
+                return bpm;
+            }
+        } 
+        catch { }
+        return null;
+    }
+
     public Track? FindBestMatch(
         string expectedArtist,
         string expectedTitle,
@@ -88,7 +166,7 @@ public class SearchResultMatcher
         int lengthToleranceSeconds)
     {
         // Check duration first (hard constraint)
-        if (!IsDurationAcceptable(expectedDurationSeconds, candidate.Length ?? 0, lengthToleranceSeconds))
+        if (expectedDurationSeconds > 0 && !IsDurationAcceptable(expectedDurationSeconds, candidate.Length ?? 0, lengthToleranceSeconds))
             return 0.0;
 
         // Calculate string similarity (0-1)
@@ -99,19 +177,11 @@ public class SearchResultMatcher
         var combinedSimilarity = (titleSimilarity * 0.8) + (artistSimilarity * 0.2);
 
         // Apply bonus if duration is very close
-        var durationBonus = GetDurationBonus(expectedDurationSeconds, candidate.Length ?? 0);
+        var durationBonus = (expectedDurationSeconds > 0) ? GetDurationBonus(expectedDurationSeconds, candidate.Length ?? 0) : 0.0;
 
         var finalScore = Math.Min(1.0, combinedSimilarity + durationBonus);
         
-        _logger.LogTrace(
-            "Match score for {Candidate}: artist={ArtistScore:P}, title={TitleScore:P}, combined={Combined:P}, duration_bonus={DurationBonus:P}, final={Final:P}",
-            $"{candidate.Artist} - {candidate.Title}",
-            artistSimilarity,
-            titleSimilarity,
-            combinedSimilarity,
-            durationBonus,
-            finalScore);
-
+        // Trace log...
         return finalScore;
     }
 
