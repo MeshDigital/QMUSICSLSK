@@ -1,4 +1,3 @@
 @echo off
 "C:\Program Files\Git\cmd\git.exe" add -A
-"C:\Program Files\Git\cmd\git.exe" commit -m "feat(library): optimize column layout for better visual hierarchy" -m "- Moved Status column to position #2 (right after Album Art)" -m "- Moved Metadata Status column to position #3" -m "- Critical download information now visible without scrolling" -m "- Improved scannability of library view"
-"C:\Program Files\Git\cmd\git.exe" log -1 --oneline
+"C:\Program Files\Git\cmd\git.exe" commit -m "feat(config): add column order persistence to AppConfig" -m "- Added LibraryColumnOrder property for saving user preferences" -m "- Stores comma-separated column IDs" -m "- Empty string defaults to hardcoded layout"
