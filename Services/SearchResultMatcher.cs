@@ -169,6 +169,20 @@ public class SearchResultMatcher
         if (expectedDurationSeconds > 0 && !IsDurationAcceptable(expectedDurationSeconds, candidate.Length ?? 0, lengthToleranceSeconds))
             return 0.0;
 
+        // Strict filename matching (slsk-batchdl approach)
+        // Filename must contain title and artist with word boundaries
+        if (!StrictTitleSatisfies(candidate.Filename, expectedTitle))
+        {
+            _logger.LogTrace("Strict title check failed: {Filename} does not contain {Title}", candidate.Filename, expectedTitle);
+            return 0.0; // Hard reject if filename doesn't contain title
+        }
+
+        if (!StrictArtistSatisfies(candidate.Filename, expectedArtist))
+        {
+            _logger.LogTrace("Strict artist check failed: {Filename} does not contain {Artist}", candidate.Filename, expectedArtist);
+            return 0.0; // Hard reject if filename doesn't contain artist
+        }
+
         // Calculate string similarity (0-1)
         var artistSimilarity = CalculateSimilarity(expectedArtist, candidate.Artist ?? "");
         var titleSimilarity = CalculateSimilarity(expectedTitle, candidate.Title ?? "");
@@ -181,7 +195,6 @@ public class SearchResultMatcher
 
         var finalScore = Math.Min(1.0, combinedSimilarity + durationBonus);
         
-        // Trace log...
         return finalScore;
     }
 
@@ -293,6 +306,69 @@ public class SearchResultMatcher
         }
 
         return dp[s1.Length, s2.Length];
+    }
+
+    /// <summary>
+    /// Checks if filename contains the expected title with word boundaries.
+    /// Based on slsk-batchdl's StrictTitle logic.
+    /// </summary>
+    private bool StrictTitleSatisfies(string filename, string expectedTitle)
+    {
+        if (string.IsNullOrEmpty(expectedTitle)) return true;
+
+        // Get filename without extension and path
+        var filenameOnly = System.IO.Path.GetFileNameWithoutExtension(filename);
+        
+        // Normalize both strings
+        var normalizedFilename = NormalizeFuzzy(filenameOnly);
+        var normalizedTitle = NormalizeFuzzy(expectedTitle);
+
+        // Check if filename contains title with word boundaries
+        return ContainsWithBoundary(normalizedFilename, normalizedTitle, ignoreCase: true);
+    }
+
+    /// <summary>
+    /// Checks if filename contains the expected artist with word boundaries.
+    /// Based on slsk-batchdl's StrictArtist logic.
+    /// </summary>
+    private bool StrictArtistSatisfies(string filename, string expectedArtist)
+    {
+        if (string.IsNullOrEmpty(expectedArtist)) return true;
+
+        // Normalize both strings
+        var normalizedFilename = NormalizeFuzzy(filename);
+        var normalizedArtist = NormalizeFuzzy(expectedArtist);
+
+        // Check if filename contains artist with word boundaries
+        return ContainsWithBoundary(normalizedFilename, normalizedArtist, ignoreCase: true);
+    }
+
+    /// <summary>
+    /// Checks if haystack contains needle with word boundaries.
+    /// Prevents "love" from matching "glove".
+    /// </summary>
+    private bool ContainsWithBoundary(string haystack, string needle, bool ignoreCase = true)
+    {
+        if (string.IsNullOrEmpty(needle)) return true;
+        if (string.IsNullOrEmpty(haystack)) return false;
+
+        var comparison = ignoreCase ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        
+        // Find all occurrences
+        int index = 0;
+        while ((index = haystack.IndexOf(needle, index, comparison)) != -1)
+        {
+            // Check if this occurrence has word boundaries
+            bool leftBoundary = index == 0 || !char.IsLetterOrDigit(haystack[index - 1]);
+            bool rightBoundary = (index + needle.Length >= haystack.Length) || !char.IsLetterOrDigit(haystack[index + needle.Length]);
+
+            if (leftBoundary && rightBoundary)
+                return true;
+
+            index++;
+        }
+
+        return false;
     }
 
     /// <summary>
