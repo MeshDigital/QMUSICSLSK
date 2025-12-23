@@ -16,7 +16,7 @@ public class AppConfig
     public int SearchTimeout { get; set; } = 6000; // ms
     public string? DownloadDirectory { get; set; }
     public string? SharedFolderPath { get; set; }
-    public int MaxConcurrentDownloads { get; set; } = 2;
+    public int MaxConcurrentDownloads { get; set; } = 5; // Optimized: was 2, increased for better throughput
     public string? NameFormat { get; set; } = "{artist} - {title}";
     public bool CheckForDuplicates { get; set; } = true;
 
@@ -55,7 +55,7 @@ public class AppConfig
     public bool EnableFuzzyNormalization { get; set; } = true; // Strip special chars, normalize feat.
     public bool EnableRelaxationStrategy { get; set; } = true; // Progressive threshold widening
     public bool EnableVbrFraudDetection { get; set; } = true; // Upscale protection
-    public int RelaxationTimeoutSeconds { get; set; } = 30; // Seconds before widening search
+    public int RelaxationTimeoutSeconds { get; set; } = 10; // Optimized: was 30s, reduced for faster fallback
     
     // Window state persistence
     public double WindowWidth { get; set; } = 1400;
