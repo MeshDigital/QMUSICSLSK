@@ -1068,6 +1068,20 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
                 ctx.BytesReceived = bestMatch.Size ?? 0;  // Handle nullable size
                 await UpdateStateAsync(ctx, PlaylistTrackState.Completed);
 
+                // CRITICAL: Create LibraryEntry for global index (enables All Tracks view + cross-project deduplication)
+                var libraryEntry = new LibraryEntry
+                {
+                    UniqueHash = ctx.Model.TrackUniqueHash,
+                    Artist = ctx.Model.Artist,
+                    Title = ctx.Model.Title,
+                    Album = ctx.Model.Album ?? "Unknown",
+                    FilePath = finalPath,
+                    Format = Path.GetExtension(finalPath).TrimStart('.'),
+                    Bitrate = bestMatch.Bitrate
+                };
+                await _libraryService.SaveOrUpdateLibraryEntryAsync(libraryEntry);
+                _logger.LogInformation("📚 Added to library: {Artist} - {Title}", ctx.Model.Artist, ctx.Model.Title);
+
                 // Phase 3.1: Finalize with Metadata Service (Tagging)
                 await _enrichmentOrchestrator.FinalizeDownloadedTrackAsync(ctx.Model);
             }
