@@ -285,16 +285,33 @@ public class TrackListViewModel : ReactiveObject
 
             if (job.Id == Guid.Empty) // All Tracks
             {
-                var all = await Task.Run(() =>
+                // Load unique files from LibraryEntry table (deduplicated)
+                _logger.LogInformation("Loading all unique library entries from LibraryEntry table");
+                var entries = await _libraryService.LoadAllLibraryEntriesAsync();
+                
+                _logger.LogInformation("Loaded {Count} unique library entries", entries.Count);
+                
+                // Convert to PlaylistTrackViewModel
+                foreach (var entry in entries.OrderBy(e => e.Artist).ThenBy(e => e.Title))
                 {
-                    if (_mainViewModel == null) return new List<PlaylistTrackViewModel>();
-                    return _mainViewModel.AllGlobalTracks
-                        .OrderByDescending(t => t.IsActive)
-                        .ThenBy(t => t.Artist)
-                        .ToList();
-                });
-
-                foreach (var t in all) tracks.Add(t);
+                    var vm = new PlaylistTrackViewModel(
+                        new PlaylistTrack
+                        {
+                            Id = Guid.NewGuid(),
+                            PlaylistId = Guid.Empty,
+                            TrackUniqueHash = entry.UniqueHash,
+                            Artist = entry.Artist,
+                            Title = entry.Title,
+                            Album = entry.Album,
+                            Status = TrackStatus.Downloaded,
+                            ResolvedFilePath = entry.FilePath,
+                            Format = entry.Format
+                        },
+                        _eventBus
+                    );
+                    
+                    tracks.Add(vm);
+                }
             }
             else
             {

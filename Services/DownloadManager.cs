@@ -867,9 +867,24 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
         {
             try
             {
-                // Pre-check
+                // Pre-check: Already downloaded in this project
                 if (ctx.Model.Status == TrackStatus.Downloaded && File.Exists(ctx.Model.ResolvedFilePath))
                 {
+                    await UpdateStateAsync(ctx, PlaylistTrackState.Completed);
+                    return;
+                }
+
+                // Phase 0: Check if file already exists in global library (cross-project deduplication)
+                var existingEntry = await _libraryService.FindLibraryEntryAsync(ctx.Model.TrackUniqueHash);
+                if (existingEntry != null && File.Exists(existingEntry.FilePath))
+                {
+                    _logger.LogInformation("♻️ Track already in library: {Artist} - {Title}, reusing file: {Path}", 
+                        ctx.Model.Artist, ctx.Model.Title, existingEntry.FilePath);
+                    
+                    // Reuse existing file instead of downloading
+                    ctx.Model.ResolvedFilePath = existingEntry.FilePath;
+                    ctx.Model.Status = TrackStatus.Downloaded;
+                    await _libraryService.UpdatePlaylistTrackAsync(ctx.Model);
                     await UpdateStateAsync(ctx, PlaylistTrackState.Completed);
                     return;
                 }
