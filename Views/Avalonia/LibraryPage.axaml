@@ -85,6 +85,14 @@
                             </StackPanel>
                         </Button>
                         
+                        <Button Command="{Binding Projects.LoadAllTracksCommand}" Classes="nav-item" Margin="8,0">
+                            <StackPanel Orientation="Horizontal" Spacing="12">
+                                <Border Width="24" Height="24" CornerRadius="4" Background="#111128" VerticalAlignment="Center">
+                                    <TextBlock Text="📚" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                                <TextBlock Text="All Tracks" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
 
                         <Separator Height="1" Background="#333" Margin="12,8"/>
 
@@ -192,15 +200,15 @@
                         <!-- Chip-style Filters -->
                         <StackPanel Orientation="Horizontal" Spacing="8">
                             <ToggleButton Content="All" 
-                                         IsChecked="{Binding IsFilterAll, Mode=TwoWay}"
+                                         IsChecked="{Binding Tracks.IsFilterAll, Mode=TwoWay}"
                                          Classes="chip"
                                          Padding="16,8"/>
                             <ToggleButton Content="Downloaded" 
-                                         IsChecked="{Binding IsFilterDownloaded, Mode=TwoWay}"
+                                         IsChecked="{Binding Tracks.IsFilterDownloaded, Mode=TwoWay}"
                                          Classes="chip"
                                          Padding="16,8"/>
                             <ToggleButton Content="Pending" 
-                                         IsChecked="{Binding IsFilterPending, Mode=TwoWay}"
+                                         IsChecked="{Binding Tracks.IsFilterPending, Mode=TwoWay}"
                                          Classes="chip"
                                          Padding="16,8"/>
                         </StackPanel>
