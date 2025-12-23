@@ -378,6 +378,9 @@ public class SearchResultMatcher
     private string NormalizeFuzzy(string input)
     {
         if (string.IsNullOrEmpty(input)) return input;
+        
+        // 0. Lowercase immediately to ensure regex [a-z] works and we don't strip uppercase chars
+        input = input.ToLowerInvariant();
 
         // 1. Normalize "feat." variants
         var featNormal = System.Text.RegularExpressions.Regex.Replace(input, @"\b(feat\.?|ft\.?|featuring)\b", "feat", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
