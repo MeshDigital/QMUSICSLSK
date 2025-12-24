@@ -20,6 +20,7 @@ public class MetadataTaggerService : ITaggerService
 {
     private readonly ILogger<MetadataTaggerService> _logger;
     private readonly HttpClient _httpClient;
+    private readonly SLSKDONET.Services.IO.IFileWriteService _fileWriteService; // Phase 1A
 
     // Supported audio formats
     private static readonly HashSet<string> SupportedFormats = new(StringComparer.OrdinalIgnoreCase)
@@ -27,15 +28,19 @@ public class MetadataTaggerService : ITaggerService
         ".mp3", ".flac", ".ogg", ".m4a", ".aac", ".wma", ".wav", ".ape", ".opus"
     };
 
-    public MetadataTaggerService(ILogger<MetadataTaggerService> logger)
+    public MetadataTaggerService(
+        ILogger<MetadataTaggerService> logger,
+        SLSKDONET.Services.IO.IFileWriteService fileWriteService) // Phase 1A
     {
         _logger = logger;
         _httpClient = new HttpClient();
         _httpClient.Timeout = TimeSpan.FromSeconds(10);
+        _fileWriteService = fileWriteService; // Phase 1A
     }
 
     /// <summary>
     /// Tags a single audio file with metadata from a Track model.
+    /// Phase 1A: Refactored to use SafeWrite for atomic tag operations.
     /// </summary>
     public async Task<bool> TagFileAsync(Track track, string filePath)
     {
@@ -56,113 +61,141 @@ public class MetadataTaggerService : ITaggerService
                 return false;
             }
 
-            _logger.LogDebug("Tagging file: {FilePath}", filePath);
+            _logger.LogDebug("Tagging file with SafeWrite: {FilePath}", filePath);
 
-            using (var file = TagLib.File.Create(filePath))
+            // Phase 1A: Use SafeWrite for atomic tag operations
+            var success = await _fileWriteService.WriteAtomicAsync(
+                filePath,
+                async (tempPath) =>
+                {
+                    // STEP 1: Copy original file to temp location
+                    File.Copy(filePath, tempPath, overwrite: true);
+
+                    // STEP 2: Write tags to temp file
+                    await Task.Run(() =>
+                    {
+                        using var file = TagLib.File.Create(tempPath);
+                        
+                        if (file == null)
+                        {
+                            throw new InvalidOperationException($"Failed to open temp file for tagging: {tempPath}");
+                        }
+
+                        // Write basic metadata tags
+                        if (!string.IsNullOrWhiteSpace(track.Title))
+                            file.Tag.Title = track.Title;
+
+                        if (!string.IsNullOrWhiteSpace(track.Artist))
+                        {
+                            file.Tag.Performers = new[] { track.Artist };
+                        }
+
+                        if (!string.IsNullOrWhiteSpace(track.Album))
+                            file.Tag.Album = track.Album;
+
+                        // Write track number if available
+                        if (track.Metadata != null && track.Metadata.TryGetValue("TrackNumber", out var trackNumObj))
+                        {
+                            if (uint.TryParse(trackNumObj.ToString(), out var trackNum))
+                                file.Tag.Track = trackNum;
+                        }
+
+                        // Write year if available
+                        if (track.Metadata != null && track.Metadata.TryGetValue("ReleaseDate", out var releaseObj))
+                        {
+                            if (DateTime.TryParse(releaseObj.ToString(), out var releaseDate))
+                                file.Tag.Year = (uint)releaseDate.Year;
+                        }
+                        else if (track.Metadata != null && track.Metadata.TryGetValue("Year", out var yearObj))
+                        {
+                            if (uint.TryParse(yearObj.ToString(), out var year))
+                                file.Tag.Year = year;
+                        }
+
+                        // Add genre if available
+                        if (track.Metadata != null && track.Metadata.TryGetValue("Genre", out var genreObj))
+                        {
+                            if (genreObj is string genreStr && !string.IsNullOrWhiteSpace(genreStr))
+                            {
+                                file.Tag.Genres = new[] { genreStr };
+                            }
+                        }
+
+                        // Write standard DJ tags
+                        if (track.Metadata != null)
+                        {
+                            // 1. Initial Key (TKEY)
+                            if (track.Metadata.TryGetValue("MusicalKey", out var keyObj) && keyObj is string keyStr && !string.IsNullOrWhiteSpace(keyStr))
+                            {
+                                file.Tag.InitialKey = keyStr;
+                            }
+
+                            // 2. BPM (TBPM)
+                            if (track.Metadata.TryGetValue("BPM", out var bpmObj))
+                            {
+                                if (bpmObj is double bpmDouble)
+                                    file.Tag.BeatsPerMinute = (uint)Math.Round(bpmDouble);
+                                else if (bpmObj is int bpmInt)
+                                    file.Tag.BeatsPerMinute = (uint)bpmInt;
+                            }
+
+                            // 3. Custom Tags via TXXX (Spotify Anchors)
+                            var customTags = (TagLib.Id3v2.Tag)file.GetTag(TagLib.TagTypes.Id3v2);
+                            if (customTags != null)
+                            {
+                                if (track.Metadata.TryGetValue("SpotifyTrackId", out var tid) && tid is string tidStr)
+                                {
+                                    var frame = TagLib.Id3v2.UserTextInformationFrame.Get(customTags, "SPOTIFY_TRACK_ID", true);
+                                    frame.Text = new[] { tidStr };
+                                }
+                                
+                                if (track.Metadata.TryGetValue("SpotifyAlbumId", out var aid) && aid is string aidStr)
+                                {
+                                    var frame = TagLib.Id3v2.UserTextInformationFrame.Get(customTags, "SPOTIFY_ALBUM_ID", true);
+                                    frame.Text = new[] { aidStr };
+                                }
+                                
+                                if (track.Metadata.TryGetValue("SpotifyArtistId", out var arid) && arid is string aridStr)
+                                {
+                                    var frame = TagLib.Id3v2.UserTextInformationFrame.Get(customTags, "SPOTIFY_ARTIST_ID", true);
+                                    frame.Text = new[] { aridStr };
+                                }
+                            }
+                        }
+
+                        // Embed album art if available (run synchronously in temp file context)
+                        if (track.Metadata != null && track.Metadata.TryGetValue("AlbumArtUrl", out var artUrlObj) && artUrlObj is string artUrl)
+                        {
+                            TryAddAlbumArtAsync(file, artUrl).GetAwaiter().GetResult();
+                        }
+
+                        // Save tags to temp file
+                        file.Save();
+                    });
+                },
+                async (tempPath) =>
+                {
+                    // STEP 3: Verify tagged file is still valid
+                    var isValid = await SLSKDONET.Services.IO.FileVerificationHelper.VerifyAudioFormatAsync(tempPath);
+                    if (!isValid)
+                    {
+                        _logger.LogWarning("Tagging verification failed: {TempPath}", tempPath);
+                        return false;
+                    }
+                    return true;
+                }
+            );
+
+            if (success)
             {
-                if (file == null)
-                {
-                    _logger.LogWarning("Failed to open file for tagging: {FilePath}", filePath);
-                    return false;
-                }
-
-                // Write basic metadata tags
-                if (!string.IsNullOrWhiteSpace(track.Title))
-                    file.Tag.Title = track.Title;
-
-                if (!string.IsNullOrWhiteSpace(track.Artist))
-                {
-                    file.Tag.Performers = new[] { track.Artist };
-                }
-
-                if (!string.IsNullOrWhiteSpace(track.Album))
-                    file.Tag.Album = track.Album;
-
-                // Write track number if available
-                if (track.Metadata != null && track.Metadata.TryGetValue("TrackNumber", out var trackNumObj))
-                {
-                    if (uint.TryParse(trackNumObj.ToString(), out var trackNum))
-                        file.Tag.Track = trackNum;
-                }
-
-                // Write year if available
-                if (track.Metadata != null && track.Metadata.TryGetValue("ReleaseDate", out var releaseObj))
-                {
-                    if (DateTime.TryParse(releaseObj.ToString(), out var releaseDate))
-                        file.Tag.Year = (uint)releaseDate.Year;
-                }
-                else if (track.Metadata != null && track.Metadata.TryGetValue("Year", out var yearObj))
-                {
-                    if (uint.TryParse(yearObj.ToString(), out var year))
-                        file.Tag.Year = year;
-                }
-
-                // Add genre if available
-                if (track.Metadata != null && track.Metadata.TryGetValue("Genre", out var genreObj))
-                {
-                    if (genreObj is string genreStr && !string.IsNullOrWhiteSpace(genreStr))
-                    {
-                        file.Tag.Genres = new[] { genreStr };
-                    }
-                }
-
-                // Write standard DJ tags
-                if (track.Metadata != null)
-                {
-                    // 1. Initial Key (TKEY)
-                    // DJs often use Camelot keys (8A, 1B). TagLib maps InitialKey to TKEY.
-                    if (track.Metadata.TryGetValue("MusicalKey", out var keyObj) && keyObj is string keyStr && !string.IsNullOrWhiteSpace(keyStr))
-                    {
-                         file.Tag.InitialKey = keyStr;
-                    }
-
-                    // 2. BPM (TBPM)
-                    // Standard is integer, but precision is good. TagLib handles uint.
-                    if (track.Metadata.TryGetValue("BPM", out var bpmObj))
-                    {
-                        if (bpmObj is double bpmDouble)
-                             file.Tag.BeatsPerMinute = (uint)Math.Round(bpmDouble);
-                        else if (bpmObj is int bpmInt)
-                             file.Tag.BeatsPerMinute = (uint)bpmInt;
-                    }
-
-                    // 3. Custom Tags via TXXX (Spotify Anchors)
-                    // This allows "Self-Healing" later.
-                    var customTags = (TagLib.Id3v2.Tag)file.GetTag(TagLib.TagTypes.Id3v2);
-                    if (customTags != null)
-                    {
-                         if (track.Metadata.TryGetValue("SpotifyTrackId", out var tid) && tid is string tidStr)
-                         {
-                             var frame = TagLib.Id3v2.UserTextInformationFrame.Get(customTags, "SPOTIFY_TRACK_ID", true);
-                             frame.Text = new[] { tidStr };
-                         }
-                         
-                         if (track.Metadata.TryGetValue("SpotifyAlbumId", out var aid) && aid is string aidStr)
-                         {
-                             var frame = TagLib.Id3v2.UserTextInformationFrame.Get(customTags, "SPOTIFY_ALBUM_ID", true);
-                             frame.Text = new[] { aidStr };
-                         }
-                         
-                         if (track.Metadata.TryGetValue("SpotifyArtistId", out var arid) && arid is string aridStr)
-                         {
-                             var frame = TagLib.Id3v2.UserTextInformationFrame.Get(customTags, "SPOTIFY_ARTIST_ID", true);
-                             frame.Text = new[] { aridStr };
-                         }
-                    }
-                }
-
-                // Embed album art if available
-                if (track.Metadata != null && track.Metadata.TryGetValue("AlbumArtUrl", out var artUrlObj) && artUrlObj is string artUrl)
-                {
-                    await TryAddAlbumArtAsync(file, artUrl);
-                }
-
-                // Save the file
-                file.Save();
-                _logger.LogInformation("Successfully tagged file: {FilePath} ({Artist} - {Title})",
+                _logger.LogInformation("✅ Successfully tagged file (atomic): {FilePath} ({Artist} - {Title})",
                     filePath, track.Artist ?? "Unknown", track.Title ?? "Unknown");
-
                 return true;
+            }
+            else
+            {
+                _logger.LogWarning("Failed to tag file (SafeWrite failed): {FilePath}", filePath);
+                return false;
             }
         }
         catch (Exception ex)

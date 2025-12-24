@@ -41,6 +41,7 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
     private readonly DownloadDiscoveryService _discoveryService;
     private readonly MetadataEnrichmentOrchestrator _enrichmentOrchestrator;
     private readonly PathProviderService _pathProvider;
+    private readonly SLSKDONET.Services.IO.IFileWriteService _fileWriteService; // Phase 1A
 
     // Phase 2.5: Concurrency control with SemaphoreSlim throttling
     private readonly CancellationTokenSource _globalCts = new();
@@ -70,7 +71,8 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
         IEventBus eventBus,
         DownloadDiscoveryService discoveryService,
         MetadataEnrichmentOrchestrator enrichmentOrchestrator,
-        PathProviderService pathProvider)
+        PathProviderService pathProvider,
+        SLSKDONET.Services.IO.IFileWriteService fileWriteService) // Phase 1A
     {
         _logger = logger;
         _config = config;
@@ -82,6 +84,7 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
         _discoveryService = discoveryService;
         _enrichmentOrchestrator = enrichmentOrchestrator;
         _pathProvider = pathProvider;
+        _fileWriteService = fileWriteService; // Phase 1A
 
         // Initialize from config, but allow runtime changes
         MaxActiveDownloads = _config.MaxConcurrentDownloads > 0 ? _config.MaxConcurrentDownloads : 3;
@@ -1075,6 +1078,56 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
                 
                 _logger.LogInformation("Atomic rename complete: {Part} → {Final}", 
                     Path.GetFileName(partPath), Path.GetFileName(finalPath));
+
+                // Phase 1A: POST-DOWNLOAD VERIFICATION
+                // Verify the downloaded file is valid before adding to library
+                try
+                {
+                    _logger.LogDebug("Verifying downloaded file: {Path}", finalPath);
+                    
+                    // STEP 1: Verify audio format (ensures file can be opened and has valid properties)
+                    var isValidAudio = await SLSKDONET.Services.IO.FileVerificationHelper.VerifyAudioFormatAsync(finalPath);
+                    if (!isValidAudio)
+                    {
+                        _logger.LogWarning("Downloaded file failed audio format verification: {Path}", finalPath);
+                        
+                        // Delete corrupt file
+                        File.Delete(finalPath);
+                        
+                        // Mark as failed with specific error
+                        await UpdateStateAsync(ctx, PlaylistTrackState.Failed, 
+                            "File verification failed: Invalid audio format or corrupted file");
+                        return;
+                    }
+                    
+                    // STEP 2: Verify minimum file size (prevents 0-byte or tiny corrupt files)
+                    var isValidSize = await SLSKDONET.Services.IO.FileVerificationHelper.VerifyFileSizeAsync(finalPath, 10 * 1024); // 10KB minimum
+                    if (!isValidSize)
+                    {
+                        _logger.LogWarning("Downloaded file too small (< 10KB): {Path}", finalPath);
+                        
+                        // Delete invalid file
+                        File.Delete(finalPath);
+                        
+                        // Mark as failed
+                        await UpdateStateAsync(ctx, PlaylistTrackState.Failed, 
+                            "File verification failed: File too small or empty");
+                        return;
+                    }
+                    
+                    _logger.LogInformation("✅ File verification passed: {Path}", finalPath);
+                }
+                catch (Exception verifyEx)
+                {
+                    _logger.LogError(verifyEx, "File verification error for {Path}", finalPath);
+                    
+                    // If verification crashes, treat as corrupt and clean up
+                    try { File.Delete(finalPath); } catch { }
+                    
+                    await UpdateStateAsync(ctx, PlaylistTrackState.Failed, 
+                        $"File verification error: {verifyEx.Message}");
+                    return;
+                }
 
                 ctx.Model.ResolvedFilePath = finalPath;
                 ctx.Progress = 100;
