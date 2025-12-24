@@ -309,6 +309,10 @@ public partial class App : Application
         // Phase 1A: SafeWrite Service - Atomic file operations (ORBIT v1.0)
         services.AddSingleton<SLSKDONET.Services.IO.IFileWriteService, SLSKDONET.Services.IO.SafeWriteService>();
         
+        // Phase 2A: Crash Recovery - Journal & Recovery Services (ORBIT v1.0)
+        services.AddSingleton<CrashRecoveryJournal>();
+        services.AddSingleton<CrashRecoveryService>();
+        
         //Session 1: Performance Optimization - Smart caching layer
         services.AddSingleton<LibraryCacheService>();
         

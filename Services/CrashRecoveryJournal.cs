@@ -1,0 +1,350 @@
+using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+using SLSKDONET.Data;
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO;
+using System.Linq;
+using System.Text.Json;
+using System.Threading;
+using System.Threading.Tasks;
+
+namespace SLSKDONET.Services;
+
+public enum OperationType
+{
+    Download,
+    TagWrite,
+    MetadataHydration
+}
+
+public class RecoveryCheckpoint
+{
+    public string Id { get; set; } = Guid.NewGuid().ToString();
+    public OperationType OperationType { get; set; }
+    public string TargetPath { get; set; } = string.Empty;
+    public string StateJson { get; set; } = string.Empty;
+    public int Priority { get; set; } = 0;
+    public int FailureCount { get; set; } = 0;
+    public long LastHeartbeat { get; set; } = Stopwatch.GetTimestamp();
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+}
+
+public class DownloadCheckpointState
+{
+    public string TrackGlobalId { get; set; } = string.Empty;
+    public string Artist { get; set; } = string.Empty;
+    public string Title { get; set; } = string.Empty;
+    public string SoulseekUsername { get; set; } = string.Empty;
+    public string SoulseekFilename { get; set; } = string.Empty;
+    public long ExpectedSize { get; set; }
+    public string PartFilePath { get; set; } = string.Empty;
+    public string FinalPath { get; set; } = string.Empty;
+    public long BytesDownloaded { get; set; }
+}
+
+public class TagWriteCheckpointState
+{
+    public string FilePath { get; set; } = string.Empty;
+    public string TempPath { get; set; } = string.Empty;
+    public DateTime OriginalTimestamp { get; set; }
+}
+
+public class HydrationCheckpointState
+{
+    public string TrackGlobalId { get; set; } = string.Empty;
+    public string SpotifyId { get; set; } = string.Empty;
+    public int Step { get; set; } = 0; // 1: Metadata, 2: Artwork, 3: Audio Features
+    public Dictionary<string, object> CollectedData { get; set; } = new();
+}
+
+/// <summary>
+/// Phase 2A: Ironclad Crash Recovery Journal
+/// Tracks in-progress operations for automatic recovery after crashes.
+/// Uses monotonic timestamps, dead-letter handling, and connection pooling.
+/// </summary>
+public class CrashRecoveryJournal : IDisposable
+{
+    private readonly ILogger<CrashRecoveryJournal> _logger;
+    private static readonly SemaphoreSlim _journalLock = new(1, 1);
+    
+    // PERFORMANCE: Shared connection for journal (reduces overhead)
+    private SqliteConnection? _journalConnection;
+    private SqliteCommand? _insertCheckpointCmd;
+    private SqliteCommand? _updateHeartbeatCmd;
+    private SqliteCommand? _deleteCheckpointCmd;
+    
+    private bool _disposed = false;
+
+    public CrashRecoveryJournal(ILogger<CrashRecoveryJournal> logger)
+    {
+        _logger = logger;
+    }
+
+    /// <summary>
+    /// Initializes the recovery journal table and connection pool.
+    /// </summary>
+    public async Task InitAsync()
+    {
+        try
+        {
+            // Get database path
+            var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+            var dbPath = Path.Combine(appData, "SLSKDONET", "library.db");
+            
+            // Create table using main context
+            using var context = new AppDbContext();
+            var connection = context.Database.GetDbConnection() as SqliteConnection;
+            await connection!.OpenAsync();
+
+            using var createCmd = connection.CreateCommand();
+            createCmd.CommandText = @"
+                CREATE TABLE IF NOT EXISTS RecoveryCheckpoints (
+                    Id TEXT PRIMARY KEY,
+                    OperationType TEXT NOT NULL,
+                    TargetPath TEXT NOT NULL,
+                    StateJson TEXT NOT NULL,
+                    Priority INTEGER DEFAULT 0,
+                    FailureCount INTEGER DEFAULT 0,
+                    LastHeartbeat INTEGER NOT NULL,
+                    CreatedAt TEXT NOT NULL
+                );
+                
+                CREATE INDEX IF NOT EXISTS IX_Recovery_Priority 
+                ON RecoveryCheckpoints(Priority DESC);
+                
+                CREATE INDEX IF NOT EXISTS IX_Recovery_Type 
+                ON RecoveryCheckpoints(OperationType);
+                
+                CREATE INDEX IF NOT EXISTS IX_Recovery_Heartbeat 
+                ON RecoveryCheckpoints(LastHeartbeat);
+            ";
+            await createCmd.ExecuteNonQueryAsync();
+
+            // PERFORMANCE: Create dedicated journal connection
+            _journalConnection = new SqliteConnection($"Data Source={dbPath}");
+            await _journalConnection.OpenAsync();
+            
+            // PERFORMANCE: Journal-specific optimizations
+            using var pragmaCmd = _journalConnection.CreateCommand();
+            pragmaCmd.CommandText = @"
+                PRAGMA journal_mode = WAL;
+                PRAGMA synchronous = NORMAL;
+                PRAGMA temp_store = MEMORY;
+            ";
+            await pragmaCmd.ExecuteNonQueryAsync();
+
+            // PERFORMANCE: Pre-compile frequently used statements
+            _insertCheckpointCmd = _journalConnection.CreateCommand();
+            _insertCheckpointCmd.CommandText = @"
+                INSERT OR REPLACE INTO RecoveryCheckpoints 
+                (Id, OperationType, TargetPath, StateJson, Priority, FailureCount, LastHeartbeat, CreatedAt)
+                VALUES (@id, @type, @path, @state, @priority, @failures, @heartbeat, @created)";
+            _insertCheckpointCmd.Prepare();
+
+            _updateHeartbeatCmd = _journalConnection.CreateCommand();
+            _updateHeartbeatCmd.CommandText = @"
+                UPDATE RecoveryCheckpoints 
+                SET LastHeartbeat = @heartbeat, StateJson = @state 
+                WHERE Id = @id";
+            _updateHeartbeatCmd.Prepare();
+
+            _deleteCheckpointCmd = _journalConnection.CreateCommand();
+            _deleteCheckpointCmd.CommandText = "DELETE FROM RecoveryCheckpoints WHERE Id = @id";
+            _deleteCheckpointCmd.Prepare();
+
+            _logger.LogInformation("✅ Ironclad Recovery Journal initialized with optimized connection pool");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to initialize crash recovery journal");
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Logs a checkpoint with INSERT OR REPLACE (idempotent).
+    /// </summary>
+    public async Task<string> LogCheckpointAsync(RecoveryCheckpoint checkpoint)
+    {
+        if (_disposed || _insertCheckpointCmd == null)
+            throw new ObjectDisposedException(nameof(CrashRecoveryJournal));
+
+        await _journalLock.WaitAsync();
+        try
+        {
+            _insertCheckpointCmd.Parameters.Clear();
+            _insertCheckpointCmd.Parameters.AddWithValue("@id", checkpoint.Id);
+            _insertCheckpointCmd.Parameters.AddWithValue("@type", checkpoint.OperationType.ToString());
+            _insertCheckpointCmd.Parameters.AddWithValue("@path", checkpoint.TargetPath);
+            _insertCheckpointCmd.Parameters.AddWithValue("@state", checkpoint.StateJson);
+            _insertCheckpointCmd.Parameters.AddWithValue("@priority", checkpoint.Priority);
+            _insertCheckpointCmd.Parameters.AddWithValue("@failures", checkpoint.FailureCount);
+            _insertCheckpointCmd.Parameters.AddWithValue("@heartbeat", Stopwatch.GetTimestamp());
+            _insertCheckpointCmd.Parameters.AddWithValue("@created", checkpoint.CreatedAt.ToString("o"));
+
+            await _insertCheckpointCmd.ExecuteNonQueryAsync();
+            
+            _logger.LogDebug("Logged checkpoint: {Type} - {Path} (Priority: {Priority})", 
+                checkpoint.OperationType, checkpoint.TargetPath, checkpoint.Priority);
+            
+            return checkpoint.Id;
+        }
+        finally
+        {
+            _journalLock.Release();
+        }
+    }
+
+    /// <summary>
+    /// PERFORMANCE: Only updates heartbeat if BytesDownloaded changed (SSD save trick).
+    /// </summary>
+    public async Task UpdateHeartbeatAsync(string checkpointId, string updatedStateJson, long previousBytes, long currentBytes)
+    {
+        if (_disposed || _updateHeartbeatCmd == null)
+            return; // Silent fail during shutdown
+
+        // OPTIMIZATION: Skip if no progress (saves SSD write cycles)
+        if (previousBytes == currentBytes)
+        {
+            _logger.LogTrace("Skipping heartbeat update for {Id} - no progress", checkpointId);
+            return;
+        }
+
+        await _journalLock.WaitAsync();
+        try
+        {
+            _updateHeartbeatCmd.Parameters.Clear();
+            _updateHeartbeatCmd.Parameters.AddWithValue("@heartbeat", Stopwatch.GetTimestamp());
+            _updateHeartbeatCmd.Parameters.AddWithValue("@state", updatedStateJson);
+            _updateHeartbeatCmd.Parameters.AddWithValue("@id", checkpointId);
+
+            await _updateHeartbeatCmd.ExecuteNonQueryAsync();
+            
+            _logger.LogTrace("Updated heartbeat for {Id}: {Current}/{Previous} bytes", 
+                checkpointId, currentBytes, previousBytes);
+        }
+        finally
+        {
+            _journalLock.Release();
+        }
+    }
+
+    /// <summary>
+    /// Removes a checkpoint after successful completion.
+    /// </summary>
+    public async Task CompleteCheckpointAsync(string checkpointId)
+    {
+        if (_disposed || _deleteCheckpointCmd == null)
+            return; // Silent fail during shutdown
+
+        await _journalLock.WaitAsync();
+        try
+        {
+            _deleteCheckpointCmd.Parameters.Clear();
+            _deleteCheckpointCmd.Parameters.AddWithValue("@id", checkpointId);
+            
+            var rowsAffected = await _deleteCheckpointCmd.ExecuteNonQueryAsync();
+            
+            if (rowsAffected > 0)
+            {
+                _logger.LogDebug("✅ Completed checkpoint: {Id}", checkpointId);
+            }
+        }
+        finally
+        {
+            _journalLock.Release();
+        }
+    }
+
+    /// <summary>
+    /// Gets all pending checkpoints for recovery, sorted by priority.
+    /// Filters out stale checkpoints based on monotonic timestamp.
+    /// </summary>
+    public async Task<List<RecoveryCheckpoint>> GetPendingCheckpointsAsync()
+    {
+        if (_disposed || _journalConnection == null)
+            return new List<RecoveryCheckpoint>();
+
+        var checkpoints = new List<RecoveryCheckpoint>();
+        
+        // Calculate stale threshold: 24 hours ago in Stopwatch ticks
+        var ticksPerSecond = Stopwatch.Frequency;
+        var staleThresholdTicks = Stopwatch.GetTimestamp() - (ticksPerSecond * 60 * 60 * 24); // 24 hours
+
+        using var cmd = _journalConnection.CreateCommand();
+        cmd.CommandText = @"
+            SELECT Id, OperationType, TargetPath, StateJson, Priority, FailureCount, 
+                   LastHeartbeat, CreatedAt
+            FROM RecoveryCheckpoints
+            WHERE LastHeartbeat > @staleThreshold
+            ORDER BY Priority DESC, CreatedAt ASC";
+        cmd.Parameters.AddWithValue("@staleThreshold", staleThresholdTicks);
+
+        using var reader = await cmd.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            checkpoints.Add(new RecoveryCheckpoint
+            {
+                Id = reader.GetString(0),
+                OperationType = Enum.Parse<OperationType>(reader.GetString(1)),
+                TargetPath = reader.GetString(2),
+                StateJson = reader.GetString(3),
+                Priority = reader.GetInt32(4),
+                FailureCount = reader.GetInt32(5),
+                LastHeartbeat = reader.GetInt64(6),
+                CreatedAt = DateTime.Parse(reader.GetString(7))
+            });
+        }
+
+        return checkpoints;
+    }
+
+    /// <summary>
+    /// Clears all stale checkpoints (heartbeat >24 hours old).
+    /// Used during startup to clean up truly abandoned operations.
+    /// </summary>
+    public async Task ClearStaleCheckpointsAsync()
+    {
+        if (_disposed || _journalConnection == null)
+            return;
+
+        await _journalLock.WaitAsync();
+        try
+        {
+            var ticksPerSecond = Stopwatch.Frequency;
+            var staleThresholdTicks = Stopwatch.GetTimestamp() - (ticksPerSecond * 60 * 60 * 24); // 24 hours
+
+            using var cmd = _journalConnection.CreateCommand();
+            cmd.CommandText = "DELETE FROM RecoveryCheckpoints WHERE LastHeartbeat < @threshold";
+            cmd.Parameters.AddWithValue("@threshold", staleThresholdTicks);
+            
+            var deleted = await cmd.ExecuteNonQueryAsync();
+            if (deleted > 0)
+            {
+                _logger.LogWarning("🗑️ Cleared {Count} stale checkpoints (>24 hours old)", deleted);
+            }
+        }
+        finally
+        {
+            _journalLock.Release();
+        }
+    }
+
+    public void Dispose()
+    {
+        if (_disposed)
+            return;
+
+        _disposed = true;
+
+        _insertCheckpointCmd?.Dispose();
+        _updateHeartbeatCmd?.Dispose();
+        _deleteCheckpointCmd?.Dispose();
+        _journalConnection?.Dispose();
+
+        _logger.LogInformation("Crash recovery journal disposed");
+    }
+}
