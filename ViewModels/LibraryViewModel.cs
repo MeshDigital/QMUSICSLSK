@@ -23,6 +23,9 @@ public class LibraryViewModel : INotifyPropertyChanged
     private readonly ImportHistoryViewModel _importHistoryViewModel;
     private readonly ILibraryService _libraryService; // Session 1: Critical bug fixes
     private readonly IEventBus _eventBus;
+    private readonly Services.Export.RekordboxService _rekordboxService;
+    private readonly IDialogService _dialogService;
+    private readonly INotificationService _notificationService;
     private Views.MainViewModel? _mainViewModel; // Reference to parent
     public Views.MainViewModel? MainViewModel
     {
@@ -101,6 +104,7 @@ public class LibraryViewModel : INotifyPropertyChanged
     public System.Windows.Input.ICommand DeleteProjectCommand { get; }
     public System.Windows.Input.ICommand PlayAlbumCommand { get; }
     public System.Windows.Input.ICommand DownloadAlbumCommand { get; }
+    public System.Windows.Input.ICommand ExportMonthlyDropCommand { get; }
 
     public LibraryViewModel(
         ILogger<LibraryViewModel> logger,
@@ -114,13 +118,19 @@ public class LibraryViewModel : INotifyPropertyChanged
         IEventBus eventBus,
         PlayerViewModel playerViewModel,
         UpgradeScoutViewModel upgradeScout,
-        TrackInspectorViewModel trackInspector) // Refactor: Inject Singleton Inspector
+        TrackInspectorViewModel trackInspector,
+        Services.Export.RekordboxService rekordboxService,
+        IDialogService dialogService,
+        INotificationService notificationService) // Refactor: Inject Singleton Inspector
     {
         _logger = logger;
         _navigationService = navigationService;
         _importHistoryViewModel = importHistoryViewModel;
         _libraryService = libraryService;
         _eventBus = eventBus;
+        _rekordboxService = rekordboxService;
+        _dialogService = dialogService;
+        _notificationService = notificationService;
         
         // Assign child ViewModels
         Projects = projects;
@@ -140,6 +150,7 @@ public class LibraryViewModel : INotifyPropertyChanged
         DeleteProjectCommand = new AsyncRelayCommand<PlaylistJob>(ExecuteDeleteProjectAsync);
         PlayAlbumCommand = new AsyncRelayCommand<PlaylistJob>(ExecutePlayAlbumAsync);
         DownloadAlbumCommand = new AsyncRelayCommand<PlaylistJob>(ExecuteDownloadAlbumAsync);
+        ExportMonthlyDropCommand = new AsyncRelayCommand(ExecuteExportMonthlyDropAsync);
         
         PlayerViewModel = playerViewModel;
         UpgradeScout = upgradeScout;
@@ -479,6 +490,45 @@ public class LibraryViewModel : INotifyPropertyChanged
             _logger.LogError(ex, "Failed to update track project association");
             if (_mainViewModel != null)
                 _mainViewModel.StatusText = "Error: Failed to move track.";
+        }
+    }
+
+    private async Task ExecuteExportMonthlyDropAsync()
+    {
+        try
+        {
+            // Prompt user for save location
+            var defaultName = $"Orbit Drop {DateTime.Now:MMM yyyy}.xml";
+            var savePath = await _dialogService.SaveFileAsync("Export Monthly Drop", defaultName, "xml");
+            
+            if (string.IsNullOrEmpty(savePath)) return; // User cancelled
+
+            _logger.LogInformation("Exporting Monthly Drop to {Path}", savePath);
+            
+            var exportedCount = await _rekordboxService.ExportMonthlyDropAsync(30, savePath);
+            
+            if (exportedCount > 0)
+            {
+                _notificationService.Show(
+                    "Export Successful", 
+                    $"Exported {exportedCount} new tracks from the last 30 days",
+                    NotificationType.Success);
+            }
+            else
+            {
+                _notificationService.Show(
+                    "No New Tracks", 
+                    "No tracks added in the last 30 days",
+                    NotificationType.Warning);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to export Monthly Drop");
+            _notificationService.Show(
+                "Export Failed", 
+                $"Error: {ex.Message}",
+                NotificationType.Error);
         }
     }
 

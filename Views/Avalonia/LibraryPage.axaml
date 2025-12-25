@@ -44,6 +44,10 @@
                                  <MenuItem Header="Retry Offline Tracks" Command="{Binding Operations.RetryOfflineTracksCommand}">
                                      <MenuItem.Icon>🔄</MenuItem.Icon>
                                  </MenuItem>
+                                 <Separator/>
+                                 <MenuItem Header="Export Monthly Drop" Command="{Binding ExportMonthlyDropCommand}">
+                                     <MenuItem.Icon>📀</MenuItem.Icon>
+                                 </MenuItem>
                              </MenuFlyout>
                          </DropDownButton.Flyout>
                      </DropDownButton>
