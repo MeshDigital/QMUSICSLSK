@@ -59,4 +59,29 @@ public class DialogService : IDialogService
              }
         });
     }
+
+    public async Task<string?> SaveFileAsync(string title, string defaultFileName, string extension = "xml")
+    {
+        return await Dispatcher.UIThread.InvokeAsync(async () =>
+        {
+            var owner = GetOwnerWindow();
+            if (owner?.StorageProvider == null) return null;
+            
+            var file = await owner.StorageProvider.SaveFilePickerAsync(new Avalonia.Platform.Storage.FilePickerSaveOptions
+            {
+                Title = title,
+                SuggestedFileName = defaultFileName,
+                DefaultExtension = extension,
+                FileTypeChoices = new[]
+                {
+                    new Avalonia.Platform.Storage.FilePickerFileType($"{extension.ToUpper()} File")
+                    {
+                        Patterns = new[] { $"*.{extension}" }
+                    }
+                }
+            });
+
+            return file?.Path.LocalPath;
+        });
+    }
 }

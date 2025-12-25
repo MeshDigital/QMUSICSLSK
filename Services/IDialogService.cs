@@ -14,4 +14,10 @@ public interface IDialogService
     /// Shows a simple alert dialog.
     /// </summary>
     Task ShowAlertAsync(string title, string message);
+    
+    /// <summary>
+    /// Shows a Save File dialog.
+    /// </summary>
+    /// <returns>Selected file path or null if cancelled.</returns>
+    Task<string?> SaveFileAsync(string title, string defaultFileName, string extension = "xml");
 }

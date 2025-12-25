@@ -476,6 +476,7 @@ public partial class App : Application
         services.AddSingleton<SonicIntegrityService>(); // Phase 8: Sonic Integrity
         services.AddSingleton<LibraryUpgradeScout>(); // Phase 8: Self-Healing Library
         services.AddSingleton<UpgradeScoutViewModel>();
+        services.AddSingleton<Services.Export.RekordboxService>(); // Phase 4: DJ Export
         
         // Phase 0: ViewModel Refactoring - Library child ViewModels
         services.AddTransient<ViewModels.Library.ProjectListViewModel>();

@@ -115,9 +115,9 @@ public class RekordboxService
             exportTracks.Add(new RekordboxTrack
             {
                 TrackID = idCounter++,
-                Name = t.Title ?? "Unknown",
-                Artist = t.Artist ?? "Unknown",
-                Album = t.Album ?? "Unknown",
+                Name = XmlSanitizer.Sanitize(t.Title) ?? "Unknown",
+                Artist = XmlSanitizer.Sanitize(t.Artist) ?? "Unknown",
+                Album = XmlSanitizer.Sanitize(t.Album) ?? "Unknown",
                 Genre = "SLSK", // Could use t.Genres if parsed
                 TotalTime = 0, // We need Duration. PlaylistTrack doesn't have it explicitly mapped always? 
                                // Actually it does not. We might need to hydrate from LibraryEntity if missing.
@@ -152,9 +152,9 @@ public class RekordboxService
             exportTracks.Add(new RekordboxTrack
             {
                 TrackID = idCounter++,
-                Name = e.Title,
-                Artist = e.Artist,
-                Album = e.Album,
+                Name = XmlSanitizer.Sanitize(e.Title),
+                Artist = XmlSanitizer.Sanitize(e.Artist),
+                Album = XmlSanitizer.Sanitize(e.Album),
                 Genre = "SLSK",
                 TotalTime = e.DurationSeconds ?? 0,
                 Size = fileInfo.Length,

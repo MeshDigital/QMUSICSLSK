@@ -21,6 +21,8 @@ public class ProjectListViewModel : INotifyPropertyChanged
     private readonly ILogger<ProjectListViewModel> _logger;
     private readonly ILibraryService _libraryService;
     private readonly DownloadManager _downloadManager;
+    private readonly Services.Export.RekordboxService _rekordboxService;
+    private readonly INotificationService _notificationService;
 
     // Master List: All import jobs/projects
     private ObservableCollection<PlaylistJob> _allProjects = new();
@@ -112,13 +114,13 @@ public class ProjectListViewModel : INotifyPropertyChanged
     public event PropertyChangedEventHandler? PropertyChanged;
 
     // Commands
-    // Commands
     public System.Windows.Input.ICommand OpenProjectCommand { get; }
     public System.Windows.Input.ICommand DeleteProjectCommand { get; }
     public System.Windows.Input.ICommand AddPlaylistCommand { get; }
     public System.Windows.Input.ICommand RefreshLibraryCommand { get; }
     public System.Windows.Input.ICommand LoadAllTracksCommand { get; }
     public System.Windows.Input.ICommand ImportLikedSongsCommand { get; }
+    public System.Windows.Input.ICommand ExportProjectCommand { get; }
 
     // Services
     private readonly ImportOrchestrator _importOrchestrator;
@@ -148,7 +150,9 @@ public class ProjectListViewModel : INotifyPropertyChanged
         Services.ImportProviders.SpotifyLikedSongsImportProvider spotifyLikedSongsProvider,
         SpotifyAuthService spotifyAuthService,
         IEventBus eventBus,
-        IDialogService dialogService)
+        IDialogService dialogService,
+        Services.Export.RekordboxService rekordboxService,
+        INotificationService notificationService)
     {
         _logger = logger;
         _libraryService = libraryService;
@@ -157,6 +161,8 @@ public class ProjectListViewModel : INotifyPropertyChanged
         _spotifyLikedSongsProvider = spotifyLikedSongsProvider;
         _spotifyAuthService = spotifyAuthService;
         _dialogService = dialogService;
+        _rekordboxService = rekordboxService;
+        _notificationService = notificationService;
 
         // Initialize commands
         OpenProjectCommand = new RelayCommand<PlaylistJob>(project => SelectedProject = project);
@@ -165,6 +171,7 @@ public class ProjectListViewModel : INotifyPropertyChanged
         RefreshLibraryCommand = new AsyncRelayCommand(ExecuteRefreshAsync);
         LoadAllTracksCommand = new RelayCommand(() => SelectedProject = _allTracksJob);
         ImportLikedSongsCommand = new AsyncRelayCommand(ExecuteImportLikedSongsAsync, () => IsSpotifyAuthenticated);
+        ExportProjectCommand = new AsyncRelayCommand<PlaylistJob>(ExecuteExportProjectAsync);
 
         // Subscribe to auth changes
         _spotifyAuthService.AuthenticationChanged += (s, authenticated) => 
@@ -439,6 +446,47 @@ public class ProjectListViewModel : INotifyPropertyChanged
                 }
             }
         });
+    }
+
+    private async Task ExecuteExportProjectAsync(PlaylistJob? job)
+    {
+        if (job == null) return;
+
+        try
+        {
+            // Prompt user for save location
+            var defaultName = $"{job.SourceTitle}.xml".Replace("/", "-").Replace("\\", "-");
+            var savePath = await _dialogService.SaveFileAsync("Export to Rekordbox", defaultName, "xml");
+            
+            if (string.IsNullOrEmpty(savePath)) return; // User cancelled
+
+            _logger.LogInformation("Exporting playlist '{Title}' to {Path}", job.SourceTitle, savePath);
+            
+            var exportedCount = await _rekordboxService.ExportPlaylistAsync(job, savePath);
+            
+            if (exportedCount > 0)
+            {
+                _notificationService.Show(
+                    "Export Successful", 
+                    $"Exported {exportedCount} tracks to Rekordbox XML",
+                    NotificationType.Success);
+            }
+            else
+            {
+                _notificationService.Show(
+                    "Export Empty", 
+                    "No valid tracks found to export",
+                    NotificationType.Warning);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to export playlist to Rekordbox");
+            _notificationService.Show(
+                "Export Failed", 
+                $"Error: {ex.Message}",
+                NotificationType.Error);
+        }
     }
 
     protected void OnPropertyChanged([CallerMemberName] string? propertyName = null)
