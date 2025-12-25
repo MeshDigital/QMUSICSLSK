@@ -75,6 +75,12 @@ public class Track
     public double CurrentRank { get; set; } = 0.0;
 
     /// <summary>
+    /// Phase 1.3: Detailed explanation of the ranking score.
+    /// Used for transparency tooltips in search results.
+    /// </summary>
+    public string? ScoreBreakdown { get; set; }
+
+    /// <summary>
     /// Indicates whether this track already exists in the user's library.
     /// Used by ImportPreview to show duplicate status.
     /// </summary>

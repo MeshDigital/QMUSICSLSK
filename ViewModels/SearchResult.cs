@@ -28,6 +28,7 @@ public class SearchResult : INotifyPropertyChanged
     
     // Rank is updated on the Model by ResultSorter, we just expose it
     public double CurrentRank => Model.CurrentRank;
+    public string ScoreBreakdown => Model.ScoreBreakdown ?? $"Rank: {CurrentRank:F1}";
 
     private bool _isSelected;
     public bool IsSelected

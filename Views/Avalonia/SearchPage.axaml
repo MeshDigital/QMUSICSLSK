@@ -280,7 +280,17 @@
                             <DataGrid.Columns>
                                 <!-- Status Column -->
                                 <DataGridTextColumn Header="Status" Binding="{Binding StatusIcon}" Width="60"/>
-                                <DataGridTextColumn Header="Rank" Binding="{Binding CurrentRank, StringFormat='{}{0:F1}'}" Width="60"/>
+                                <DataGridTemplateColumn Header="Rank" Width="60">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding CurrentRank, StringFormat='{}{0:F1}'}" 
+                                                       HorizontalAlignment="Center" 
+                                                       VerticalAlignment="Center"
+                                                       ToolTip.Tip="{Binding ScoreBreakdown}"
+                                                       Background="Transparent"/>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
                                 <DataGridTextColumn Header="Artist" Binding="{Binding Artist}" Width="2*"/>
                                 <DataGridTextColumn Header="Title" Binding="{Binding Title}" Width="3*"/>
                                 <DataGridTextColumn Header="Album" Binding="{Binding Album}" Width="2*"/>

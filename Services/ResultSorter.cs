@@ -15,6 +15,35 @@ namespace SLSKDONET.Services;
 /// </summary>
 public static class ResultSorter
 {
+    /// <summary>
+    /// Generates a human-readable breakdown of the scoring criteria.
+    /// </summary>
+    public static string GenerateBreakdown(SortingCriteria c)
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine($"Total Score: {c.OverallScore:F1}");
+        sb.AppendLine("------------------");
+        
+        // Quality
+        sb.AppendLine($"Bitrate: {c.BitRateValue*80}kbps {(c.BitrateMatch ? " (Match)" : "")}");
+        if (c.HasValidLength) sb.AppendLine($"Length Match: {c.LengthMatch:P0}");
+        
+        // Intelligence
+        if (c.BpmProximity > 0.1) sb.AppendLine($"BPM Match: {c.BpmProximity:P0}");
+        if (c.HasFreeUploadSlot) sb.AppendLine("🚀 Free Slot Available");
+        if (c.QueueLength > 0) sb.AppendLine($"Queue: {c.QueueLength} items");
+        
+        // Similarity
+        sb.Append($"Text Match: T={c.TitleSimilarity:P0}");
+        if (c.ArtistSimilarity < 0.9) sb.Append($" A={c.ArtistSimilarity:P0}");
+        sb.AppendLine();
+
+        // Technical
+        if (c.IsSuspicious) sb.AppendLine("⚠️ SUSPICIOUS FILE (VBR/Size Mismatch)");
+
+        return sb.ToString().TrimEnd();
+    }
+
     // Phase 2.4: Strategy Pattern for user-configurable ranking
     private static ISortingStrategy _currentStrategy = new BalancedStrategy();
     private static ScoringWeights _currentWeights = ScoringWeights.Balanced;
@@ -86,6 +115,7 @@ public static class ResultSorter
         var random = new Random(); // Note: creating random per call might loose determinism if seeded, but for streaming it's acceptable tie-breaking
         var criteria = GetSortingCriteria(result, searchTrack, context, evaluator, random);
         result.CurrentRank = criteria.OverallScore;
+        result.ScoreBreakdown = GenerateBreakdown(criteria);
     }
 
     /// <summary>
@@ -138,6 +168,7 @@ public static class ResultSorter
             .Select(x =>
             {
                 x.track.CurrentRank = x.criteria.OverallScore;
+                x.track.ScoreBreakdown = GenerateBreakdown(x.criteria);
                 return x.track;
             })
             .ToList();

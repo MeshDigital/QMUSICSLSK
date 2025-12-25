@@ -174,6 +174,12 @@
   - [ ] **Advanced Search Features**:
     - [ ] BPM/Energy/Mood tagging support.
     - [ ] Genre Galaxy visualization.
+  - [x] **Phase 1: Playback Polish & Queue** <!-- id: 9 -->
+    - [x] Implement Queue Persistence (`QueueItemEntity`) <!-- id: 10 -->
+    - [/] Implement `NowPlayingPage.axaml` (High-Fi UI - Waveform deferred) <!-- id: 11 -->
+
+- [x] **Phase 2: Search Transparency** <!-- id: 12 -->
+    - [x] Implement Score Breakdown Tooltips in Search <!-- id: 13 -->
   - [ ] **Tactile Interactions**:
     - [ ] Advanced cursor feedback for VIP actions.
     - [ ] Kinetic typography for live status.
