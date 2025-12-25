@@ -43,8 +43,9 @@ public class DownloadDiscoveryService
     /// Searches for a track and returns the single best match based on user preferences.
     /// Phase T.1: Refactored to accept PlaylistTrack model (decoupled from UI).
     /// Phase 12: Updated to use streaming search logic.
+    /// Phase 3B: Added support for peer blacklisting (Health Monitor).
     /// </summary>
-    public async Task<Track?> FindBestMatchAsync(PlaylistTrack track, CancellationToken ct)
+    public async Task<Track?> FindBestMatchAsync(PlaylistTrack track, CancellationToken ct, HashSet<string>? blacklistedUsers = null)
     {
         var query = $"{track.Artist} {track.Title}";
         _logger.LogInformation("Discovery started for: {Query} (GlobalId: {Id})", query, track.TrackUniqueHash);
@@ -80,6 +81,14 @@ public class DownloadDiscoveryService
                 isAlbumSearch: false,
                 cancellationToken: ct))
             {
+                // Phase 3B: Peer Blacklisting
+                if (blacklistedUsers != null && 
+                    !string.IsNullOrEmpty(searchTrack.Username) && 
+                    blacklistedUsers.Contains(searchTrack.Username))
+                {
+                    continue;
+                }
+
                 allTracks.Add(searchTrack);
             }
 
@@ -160,10 +169,10 @@ public class DownloadDiscoveryService
     /// <summary>
     /// Performs discovery and automatically handles queueing or upgrade evaluation.
     /// </summary>
-    public async Task DiscoverAndQueueTrackAsync(PlaylistTrack track, CancellationToken ct = default)
+    public async Task DiscoverAndQueueTrackAsync(PlaylistTrack track, CancellationToken ct = default, HashSet<string>? blacklistedUsers = null)
     {
         // Step T.1: Pass model directly
-        var bestMatch = await FindBestMatchAsync(track, ct);
+        var bestMatch = await FindBestMatchAsync(track, ct, blacklistedUsers);
         if (bestMatch == null) return;
 
         // Determine if this is an upgrade search based on whether the track already has a file

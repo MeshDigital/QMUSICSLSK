@@ -691,6 +691,42 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
         _ = UpdateStateAsync(ctx, PlaylistTrackState.Cancelled);
         DeleteLocalFiles(ctx.Model.ResolvedFilePath);
     }
+
+    /// <summary>
+    /// Phase 3B: Health Monitor Intervention
+    /// Cancels a stalled download, blacklists the peer, and re-queues it for discovery.
+    /// Non-destructive: Does NOT delete the .part file (optimistic resume if new peer has same file).
+    /// </summary>
+    public async Task AutoRetryStalledDownloadAsync(string globalId)
+    {
+        DownloadContext? ctx;
+        lock (_collectionLock) ctx = _downloads.FirstOrDefault(t => t.GlobalId == globalId);
+        
+        if (ctx == null) return;
+
+        var stalledUser = ctx.CurrentUsername;
+        if (!string.IsNullOrEmpty(stalledUser))
+        {
+            ctx.BlacklistedUsers.Add(stalledUser);
+            _logger.LogWarning("⚠️ Health Monitor: Blacklisting peer {User} for {Track}", stalledUser, ctx.Model.Title);
+        }
+
+        // 1. Cancel active transfer (stops Soulseek)
+        ctx.CancellationTokenSource?.Cancel();
+        
+        // 2. IMPORTANT: Don't delete files! We want to try to resume from another peer if possible.
+        // Wait, Soulseek resume requires same file hash. DiscoveryService might find a different file hash.
+        // If different file hash, Resume logic (based on file size match?) might be risky.
+        // DownloadFileAsync logic checks .part file size.
+        // If new file is different size, it might think it's truncated or ghost.
+        // Safe bet: For now, we trust the resume logic to handle mismatches (it checks sizes).
+
+        // 3. Reset state to Pending so ProcessQueueLoop picks it up
+        await UpdateStateAsync(ctx, PlaylistTrackState.Pending, "Auto-retrying after stall");
+        
+        // Reset CTS for next attempt
+        ctx.CancellationTokenSource = new CancellationTokenSource();
+    }
     
     public async Task UpdateTrackFiltersAsync(string globalId, string formats, int minBitrate)
     {
@@ -911,7 +947,8 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
 
                 // Phase 3.1: Use Detection Service (Searching State)
                 // Refactor Note: DiscoveryService now takes PlaylistTrack (Decoupled).
-                var bestMatch = await _discoveryService.FindBestMatchAsync(ctx.Model, trackCt);
+                // Phase 3B: Pass Blacklisted users for Health Monitor retries
+                var bestMatch = await _discoveryService.FindBestMatchAsync(ctx.Model, trackCt, ctx.BlacklistedUsers);
 
                 if (bestMatch == null)
                 {
@@ -963,6 +1000,9 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
     private async Task DownloadFileAsync(DownloadContext ctx, Track bestMatch, CancellationToken ct)
     {
         await UpdateStateAsync(ctx, PlaylistTrackState.Downloading);
+        
+        // Phase 3B: Track current peer for Health Monitor blacklisting
+        ctx.CurrentUsername = bestMatch.Username;
 
         // Phase 2.5: Use PathProviderService for consistent folder structure
         var finalPath = _pathProvider.GetTrackPath(

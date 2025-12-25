@@ -19,6 +19,10 @@ public class DownloadContext
     public string GlobalId => Model.TrackUniqueHash;
     public string? ErrorMessage { get; set; }
 
+    // Phase 3B: Peer Blacklisting for Health Monitor
+    public HashSet<string> BlacklistedUsers { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+    public string? CurrentUsername { get; set; } // Track active peer for Health Monitor
+
     // Phase 2.5: Resumable Download Tracking
     public long TotalBytes { get; set; }        // Remote file size
     

@@ -27,6 +27,7 @@ public class HomeViewModel : INotifyPropertyChanged
     private readonly SpotifyEnrichmentService _spotifyEnrichment;
     private readonly DownloadManager _downloadManager;
     private readonly CrashRecoveryJournal _crashJournal; // Phase 3A: Transparency
+    private readonly INotificationService _notificationService; // Phase 3B: UI Feedback
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
@@ -70,6 +71,7 @@ public class HomeViewModel : INotifyPropertyChanged
     public ICommand RefreshDashboardCommand { get; }
     public ICommand NavigateToSearchCommand { get; }
     public ICommand QuickSearchCommand { get; }
+    public ICommand ClearDeadLettersCommand { get; } // Phase 3B
 
     public HomeViewModel(
         ILogger<HomeViewModel> logger,
@@ -80,7 +82,8 @@ public class HomeViewModel : INotifyPropertyChanged
         SpotifyAuthService spotifyAuth,
         SpotifyEnrichmentService spotifyEnrichment,
         DownloadManager downloadManager,
-        CrashRecoveryJournal crashJournal)
+        CrashRecoveryJournal crashJournal,
+        INotificationService notificationService)
     {
         _logger = logger;
         _dashboardService = dashboardService;
@@ -91,10 +94,12 @@ public class HomeViewModel : INotifyPropertyChanged
         _spotifyEnrichment = spotifyEnrichment;
         _downloadManager = downloadManager;
         _crashJournal = crashJournal;
+        _notificationService = notificationService;
 
         RefreshDashboardCommand = new AsyncRelayCommand(RefreshDashboardAsync);
         NavigateToSearchCommand = new RelayCommand(() => _navigationService.NavigateTo("Search"));
         QuickSearchCommand = new AsyncRelayCommand<SpotifyTrackViewModel>(ExecuteQuickSearchAsync);
+        ClearDeadLettersCommand = new AsyncRelayCommand(ClearDeadLettersAsync);
 
         _connectionViewModel.PropertyChanged += (s, e) =>
         {
@@ -162,6 +167,28 @@ public class HomeViewModel : INotifyPropertyChanged
         finally
         {
             IsLoadingHealth = false;
+        }
+    }
+
+    private async Task ClearDeadLettersAsync()
+    {
+        try
+        {
+            int count = await _crashJournal.ResetDeadLettersAsync();
+            if (count > 0)
+            {
+                _notificationService.Show("Recovery Started", $"Queued {count} stalled items for retry via Health Monitor.");
+                await RefreshDashboardAsync();
+            }
+            else
+            {
+                _notificationService.Show("No Items", "No dead-lettered items found to retry.");
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to clear dead letters");
+            _notificationService.Show("Error", "Failed to reset dead letters. Check logs.");
         }
     }
 

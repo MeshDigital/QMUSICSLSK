@@ -56,6 +56,7 @@ public class TrackEntity
     public string? ManualKey { get; set; }
 
     // Phase 8: Sonic Integrity & Spectral Analysis
+    public IntegrityLevel Integrity { get; set; } = IntegrityLevel.None; // Phase 3B: Dual-Truth Verification
     public string? SpectralHash { get; set; } // Headless frequency histogram hash
     public double? QualityConfidence { get; set; } // 0.0 - 1.0 confidence score
     public int? FrequencyCutoff { get; set; } // Detected frequency limit in Hz
@@ -204,6 +205,7 @@ public class PlaylistTrackEntity
     public string? ManualKey { get; set; }
 
     // Phase 8: Sonic Integrity & Spectral Analysis
+    public IntegrityLevel Integrity { get; set; } = IntegrityLevel.None; // Phase 3B: Dual-Truth Verification
     public string? SpectralHash { get; set; }
     public double? QualityConfidence { get; set; }
     public int? FrequencyCutoff { get; set; }
@@ -271,6 +273,9 @@ public class LibraryEntryEntity
     public double? Valence { get; set; }
     public double? Danceability { get; set; }
     public string? AudioFingerprint { get; set; }
+    
+    // Phase 3B: Dual-Truth Verification
+    public IntegrityLevel Integrity { get; set; } = IntegrityLevel.None;
     
     public bool IsEnriched { get; set; } = false;
 }

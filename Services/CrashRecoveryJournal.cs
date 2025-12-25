@@ -482,6 +482,50 @@ public class CrashRecoveryJournal : IDisposable, IAsyncDisposable
     }
 
     /// <summary>
+    /// Phase 3B: User Action to Retry Dead-Lettered tracks.
+    /// Resets 'DeadLetter' (Status=3) entries back to 'Prepared' (Status=0).
+    /// </summary>
+    public async Task<int> ResetDeadLettersAsync(int batchSize = 50)
+    {
+        if (_disposed || _journalConnection == null)
+            return 0;
+
+        await _journalLock.WaitAsync();
+        try
+        {
+            // Safer LIMIT subquery for SQLite update
+            using var cmd = _journalConnection.CreateCommand();
+            cmd.CommandText = @"
+                UPDATE RecoveryCheckpoints
+                SET Status = 0, LastHeartbeat = @now, FailureCount = 0
+                WHERE Id IN (
+                    SELECT Id FROM RecoveryCheckpoints 
+                    WHERE Status = 3
+                    LIMIT @limit
+                )";
+             
+             cmd.Parameters.AddWithValue("@now", Stopwatch.GetTimestamp());
+             cmd.Parameters.AddWithValue("@limit", batchSize);
+
+             int count = await cmd.ExecuteNonQueryAsync();
+             if (count > 0)
+             {
+                 _logger.LogInformation("🔄 Reset {Count} dead-lettered checkpoints for retry", count);
+             }
+             return count;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to reset dead letters");
+            return 0;
+        }
+        finally
+        {
+            _journalLock.Release();
+        }
+    }
+
+    /// <summary>
     /// Clears all stale checkpoints (heartbeat >24 hours old).
     /// Used during startup to clean up truly abandoned operations.
     /// </summary>

@@ -93,6 +93,13 @@ public partial class App : Application
                             Serilog.Log.Information("Closing crash recovery journal...");
                             await crashJournal.DisposeAsync();
                         }
+                        
+                        // Phase 3B: Stop Health Monitor
+                        var healthMonitor = Services?.GetService<DownloadHealthMonitor>();
+                        if (healthMonitor != null)
+                        {
+                            healthMonitor.Dispose();
+                        }
                     }
                     catch (Exception ex)
                     {
@@ -236,6 +243,10 @@ public partial class App : Application
                         var downloadManager = Services.GetRequiredService<DownloadManager>();
                         await downloadManager.InitAsync();
                         _ = downloadManager.StartAsync();
+
+                        // Phase 3B: Start Health Monitor
+                        var healthMonitor = Services.GetRequiredService<DownloadHealthMonitor>();
+                        healthMonitor.StartMonitoring();
 
                         // Start Library Enrichment Worker (Phase 1)
                         var enrichmentWorker = Services.GetRequiredService<LibraryEnrichmentWorker>();
@@ -431,6 +442,7 @@ public partial class App : Application
 
         // Download manager
         services.AddSingleton<DownloadManager>();
+        services.AddSingleton<DownloadHealthMonitor>(); // Phase 3B: Active Health Monitor
         
         // Phase 2.5: Download Center ViewModel (singleton observer)
         services.AddSingleton<ViewModels.Downloads.DownloadCenterViewModel>();
