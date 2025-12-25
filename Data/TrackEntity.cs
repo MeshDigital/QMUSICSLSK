@@ -70,6 +70,7 @@ public class TrackEntity
     // Phase 5: Self-Healing Library - Upgrade Tracking
     public DateTime? LastUpgradeScanAt { get; set; }
     public DateTime? LastUpgradeAt { get; set; }
+    public DateTime? NextRetryTime { get; set; } // Phase 5: Ghost File Deferral
     public string? UpgradeSource { get; set; } // "Auto" or "Manual"
     public string? PreviousBitrate { get; set; } // e.g., "128kbps MP3" before upgrade
 

@@ -26,6 +26,7 @@ public class LibraryViewModel : INotifyPropertyChanged
     private readonly Services.Export.RekordboxService _rekordboxService;
     private readonly IDialogService _dialogService;
     private readonly INotificationService _notificationService;
+    private readonly SpotifyEnrichmentService _spotifyEnrichmentService; // Phase 5: Cache-First
     private Views.MainViewModel? _mainViewModel; // Reference to parent
     public Views.MainViewModel? MainViewModel
     {
@@ -121,7 +122,8 @@ public class LibraryViewModel : INotifyPropertyChanged
         TrackInspectorViewModel trackInspector,
         Services.Export.RekordboxService rekordboxService,
         IDialogService dialogService,
-        INotificationService notificationService) // Refactor: Inject Singleton Inspector
+        INotificationService notificationService,
+        SpotifyEnrichmentService spotifyEnrichmentService) // Refactor: Inject Singleton Inspector
     {
         _logger = logger;
         _navigationService = navigationService;
@@ -131,6 +133,7 @@ public class LibraryViewModel : INotifyPropertyChanged
         _rekordboxService = rekordboxService;
         _dialogService = dialogService;
         _notificationService = notificationService;
+        _spotifyEnrichmentService = spotifyEnrichmentService;
         
         // Assign child ViewModels
         Projects = projects;
@@ -222,13 +225,40 @@ public class LibraryViewModel : INotifyPropertyChanged
         }
     }
 
-    private void OnTrackSelectionChanged(object? sender, EventArgs e)
+    private async void OnTrackSelectionChanged(object? sender, EventArgs e)
     {
         var selection = Tracks.Hierarchical.Source.Selection as ITreeDataGridRowSelectionModel<PlaylistTrackViewModel>;
         var selectedItem = selection?.SelectedItem;
         if (selectedItem is PlaylistTrackViewModel trackVm)
         {
             TrackInspector.Track = trackVm.Model;
+            
+            // Phase 5 Hardening: Cache-First Enrichment Proxy
+            // Attempt to hydrate from local cache immediately (Optimistic UI)
+            if (!trackVm.Model.IsEnriched)
+            {
+                var cached = await _spotifyEnrichmentService.GetCachedMetadataAsync(trackVm.Artist, trackVm.Title);
+                if (cached != null)
+                {
+                     _logger.LogDebug("Cache-Hit: Instant hydration for {Title}", trackVm.Title);
+                     trackVm.Model.BPM = cached.Bpm;
+                     trackVm.Model.Energy = cached.Energy;
+                     trackVm.Model.Valence = cached.Valence;
+                     trackVm.Model.Danceability = cached.Danceability;
+                     trackVm.Model.IsEnriched = true;
+                     
+                     // Force property refresh on Inspector
+                     TrackInspector.Track = null;
+                     TrackInspector.Track = trackVm.Model;
+                }
+                else
+                {
+                    // Cache Miss: Do NOT call API directly.
+                    // Let the Background Worker pick it up to preserve quota.
+                    // Just show placeholder in UI (handled by TrackInspector properties).
+                    _logger.LogDebug("Cache-Miss: Queued for background worker: {Title}", trackVm.Title);
+                }
+            }
         }
     }
 

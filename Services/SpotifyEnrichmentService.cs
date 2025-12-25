@@ -15,11 +15,49 @@ public class SpotifyEnrichmentService
 {
     private readonly SpotifyAuthService _authService;
     private readonly ILogger<SpotifyEnrichmentService> _logger;
+    private readonly DatabaseService _databaseService; // Phase 5: Cache-First
 
-    public SpotifyEnrichmentService(SpotifyAuthService authService, ILogger<SpotifyEnrichmentService> logger)
+    // Phase 5: Circuit Breaker
+    private static bool _isServiceDegraded = false;
+    private static DateTime _retryAfter = DateTime.MinValue;
+
+    public SpotifyEnrichmentService(
+        SpotifyAuthService authService, 
+        ILogger<SpotifyEnrichmentService> logger,
+        DatabaseService databaseService)
     {
         _authService = authService;
         _logger = logger;
+        _databaseService = databaseService;
+    }
+
+    /// <summary>
+    /// Phase 5: Cache-First Proxy. Returns cached metadata if available. 
+    /// Returns NULL if missing (does not hit API).
+    /// </summary>
+    public async Task<TrackEnrichmentResult?> GetCachedMetadataAsync(string artist, string title)
+    {
+        // Try exact match first
+        // Note: Ideally we use a dedicated cache table or query PlaylistTracks/LibraryEntries
+        // For now, checks LibraryEntries which acts as the 'Gravity Well' cache
+        var cached = await _databaseService.FindEnrichedTrackAsync(artist, title);
+        if (cached != null)
+        {
+             return new TrackEnrichmentResult
+             {
+                 Success = true,
+                 SpotifyId = cached.SpotifyTrackId,
+                 OfficialArtist = cached.Artist,
+                 OfficialTitle = cached.Title,
+                 Bpm = cached.SpotifyBPM ?? cached.BPM,
+                 Energy = cached.Energy,
+                 Valence = cached.Valence,
+                 Danceability = cached.Danceability,
+                 AlbumArtUrl = cached.AlbumArtUrl,
+                 ISRC = cached.ISRC
+             };
+        }
+        return null;
     }
 
     /// <summary>
@@ -30,6 +68,17 @@ public class SpotifyEnrichmentService
     /// </summary>
     public async Task<TrackEnrichmentResult> IdentifyTrackAsync(string artist, string trackName)
     {
+        // Circuit Breaker Check
+        if (_isServiceDegraded)
+        {
+            if (DateTime.UtcNow < _retryAfter)
+            {
+               _logger.LogWarning("Spotify API Circuit Breaker Active. Skipping request.");
+               return new TrackEnrichmentResult { Success = false, Error = "Service Degraded (Rate Limit)" };
+            }
+            _isServiceDegraded = false; // Reset if cooldown passed
+        }
+
         try 
         {
             var client = await _authService.GetAuthenticatedClientAsync();
@@ -64,6 +113,13 @@ public class SpotifyEnrichmentService
                 ISRC = track.ExternalIds != null && track.ExternalIds.ContainsKey("isrc") ? track.ExternalIds["isrc"] : null,
                 // Feature fields remain null here
             };
+        }
+        catch (APITooManyRequestsException ex)
+        {
+            _logger.LogError("Spotify 429 Rate Limit hit. Backing off for {Seconds}s.", ex.RetryAfter.TotalSeconds);
+            _isServiceDegraded = true;
+            _retryAfter = DateTime.UtcNow.Add(ex.RetryAfter).AddSeconds(1); // Buffer
+            return new TrackEnrichmentResult { Success = false, Error = "Rate Limit Hit" };
         }
         catch (Exception ex)
         {
@@ -103,6 +159,13 @@ public class SpotifyEnrichmentService
                     }
                 }
             }
+        }
+        }
+        catch (APITooManyRequestsException ex)
+        {
+            _logger.LogError("Spotify 429 Rate Limit hit (Batch). Backing off for {Seconds}s.", ex.RetryAfter.TotalSeconds);
+            _isServiceDegraded = true;
+            _retryAfter = DateTime.UtcNow.Add(ex.RetryAfter).AddSeconds(1);
         }
         catch (Exception ex)
         {

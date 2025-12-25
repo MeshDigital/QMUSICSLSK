@@ -262,6 +262,11 @@ public class DatabaseService
                 _logger.LogWarning("Schema Patch: Adding missing column 'Integrity' to Tracks");
                 await context.Database.ExecuteSqlRawAsync("ALTER TABLE Tracks ADD COLUMN Integrity INTEGER DEFAULT 0");
             }
+            if (!existingColumns.Contains("NextRetryTime"))
+            {
+                _logger.LogWarning("Schema Patch: Adding missing column 'NextRetryTime' to Tracks");
+                await context.Database.ExecuteSqlRawAsync("ALTER TABLE Tracks ADD COLUMN NextRetryTime TEXT NULL");
+            }
 
             // Check LibraryHealth table
             cmd.CommandText = "PRAGMA table_info(LibraryHealth)";

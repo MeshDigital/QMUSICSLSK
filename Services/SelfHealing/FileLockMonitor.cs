@@ -26,11 +26,17 @@ public class FileLockMonitor
     /// Layer 1: Checks if ORBIT's player is currently playing this track.
     /// Layer 2: Attempts exclusive OS-level lock to detect external apps (Rekordbox, Serato).
     /// </summary>
+    /// <summary>
+    /// Checks if a file is safe to replace.
+    /// Layer 1: Checks if ORBIT's player is currently playing this track.
+    /// Layer 2: Attempts exclusive OS-level lock to detect external apps (Rekordbox, Serato).
+    /// Includes "Pre-Flight Spin-Wait" (3 retries) to handle transient locks (Anti-Virus, Explorer).
+    /// </summary>
     public async Task<FileLockStatus> IsFileSafeToReplaceAsync(string filePath, string? trackId = null)
     {
-        _logger.LogDebug("Checking file lock status: {Path}", filePath);
+        _logger.LogDebug("Checking file lock status with pre-flight spin-wait: {Path}", filePath);
         
-        // Layer 1: Internal ORBIT player check
+        // Layer 1: Internal ORBIT player check (Instant fail, no need to retry)
         if (_playerViewModel != null && IsPlayingInOrbit(filePath, trackId))
         {
             _logger.LogInformation("File is currently playing in ORBIT: {Path}", filePath);
@@ -42,15 +48,31 @@ public class FileLockMonitor
             };
         }
         
-        // Layer 2: OS-level exclusive lock check
-        var osLockStatus = await IsLockedByExternalProcessAsync(filePath);
-        if (!osLockStatus.IsSafe)
+        // Layer 2: OS-level exclusive lock check with Spin-Wait
+        // Try 3 times over 3 seconds (Pre-Flight Check)
+        for (int i = 0; i < 3; i++)
         {
-            return osLockStatus;
+            var osLockStatus = await IsLockedByExternalProcessAsync(filePath);
+            if (osLockStatus.IsSafe)
+            {
+                _logger.LogDebug("✅ File is safe to replace (Attempt {Attempt}): {Path}", i + 1, filePath);
+                return new FileLockStatus { IsSafe = true };
+            }
+            
+            if (i < 2) // Don't wait after the last attempt
+            {
+                _logger.LogWarning("File locked (Attempt {Attempt}/3), waiting 1s... {Path}", i + 1, filePath);
+                await Task.Delay(1000);
+            }
+            else
+            {
+                 // Final failure
+                 return osLockStatus;
+            }
         }
         
-        _logger.LogDebug("✅ File is safe to replace: {Path}", filePath);
-        return new FileLockStatus { IsSafe = true };
+        // Should be unreachable due to loop logic, but safe fallback
+        return new FileLockStatus { IsSafe = false, Reason = FileLockReason.LockedByExternalApp, Message = "File locked after retries" };
     }
     
     /// <summary>

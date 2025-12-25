@@ -75,7 +75,13 @@ public class UpgradeOrchestrator
             var lockStatus = await _fileLockMonitor.IsFileSafeToReplaceAsync(originalPath, candidate.TrackId);
             if (!lockStatus.IsSafe)
             {
-                _logger.LogWarning("File is locked: {Reason}", lockStatus.Reason);
+                _logger.LogWarning("File is locked: {Reason}. Deferring upgrade for 5 minutes.", lockStatus.Reason);
+                
+                // Phase 5 Hardening: Persist Deferral
+                track.State = "Deferred";
+                track.NextRetryTime = DateTime.UtcNow.AddMinutes(5);
+                await _databaseService.SaveTrackAsync(track); // Assuming SaveTrackAsync updates Global Tracks table
+                
                 return UpgradeResult.CreateDeferred(lockStatus.Message);
             }
             
@@ -127,7 +133,18 @@ public class UpgradeOrchestrator
             EnsureDirectoryExists(Path.GetDirectoryName(backupPath)!);
             
             state = UpgradeState.BackingUp;
-            File.Move(originalPath, backupPath);
+            
+            // Phase 5 Hardening: Cross-Volume Backup Check
+            if (Path.GetPathRoot(originalPath) == Path.GetPathRoot(backupPath))
+            {
+                File.Move(originalPath, backupPath);
+            }
+            else
+            {
+                // Cross-volume move
+                File.Copy(originalPath, backupPath, overwrite: true);
+                File.Delete(originalPath);
+            }
             
             // Step 7: The Surgical Swap (atomic move)
             _logger.LogInformation("Step 7/8: Performing atomic swap...");
@@ -245,11 +262,24 @@ public class UpgradeOrchestrator
             File.Move(sourcePath, targetPath);
         }
         else
+        else
         {
             // Cross-volume - use SafeWriteService for validated copy+delete
             _logger.LogDebug("Cross-volume move (verified copy+delete)");
-            // TODO: Integrate SafeWriteService.AtomicReplace
+            
+            // Copy (overwrite)
             File.Copy(sourcePath, targetPath, overwrite: true);
+            
+            // Verify size match (basic integrity check)
+            var sourceInfo = new FileInfo(sourcePath);
+            var targetInfo = new FileInfo(targetPath);
+            
+            if (sourceInfo.Length != targetInfo.Length)
+            {
+                 throw new IOException($"Copy verification failed. Source size: {sourceInfo.Length}, Target size: {targetInfo.Length}");
+            }
+            
+            // Delete source
             File.Delete(sourcePath);
         }
         
