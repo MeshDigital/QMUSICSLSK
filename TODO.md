@@ -165,6 +165,16 @@
   - [x] **Active Missions Widget**: Live visuals for Express/Standard/Background lanes.
   - [x] **System Health Widget**: "Dead Letter" monitoring with Auto-Recover button.
   - [x] **Library Purity**: Gold/Silver/Bronze stats overview.
+- [x] **Phase 6: UX Enhancements (2025/2026 Trends)**
+  - [x] **Vibe Search**: Natural language parsing (e.g., "flac >320").
+  - [x] **Skeleton Screens**: Shimmer-animated placeholders for perceived performance.
+  - [x] **DataTemplateSelector**: Intelligent switching between skeleton/hydrated states.
+  - [ ] **Advanced Search Features**:
+    - [ ] BPM/Energy/Mood tagging support.
+    - [ ] Genre Galaxy visualization.
+  - [ ] **Tactile Interactions**:
+    - [ ] Advanced cursor feedback for VIP actions.
+    - [ ] Kinetic typography for live status.
 - [x] **Hardening**: Lazy Hydration (Waiting Room Pattern for 2k+ queues)`Services/DownloadHealthMonitor.cs`
 - [ ] Track health metrics per download:
   - Stall count

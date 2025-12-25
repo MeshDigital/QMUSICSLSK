@@ -230,6 +230,43 @@ public partial class SearchViewModel : ReactiveObject
     {
         if (string.IsNullOrWhiteSpace(SearchQuery)) return;
 
+        // --- VIBE SEARCH: Natural Language Parsing ---
+        // Parse tokens like "flac", "wav", ">320", "kbps:320"
+        var tokens = SearchQuery.Split(' ', StringSplitOptions.RemoveEmptyEntries).ToList();
+        var processedQuery = new List<string>();
+        bool filtersModified = false;
+
+        foreach (var token in tokens)
+        {
+            var lower = token.ToLowerInvariant();
+            
+            // Format Tokens
+            if (lower == "flac") { FilterFlac = true; FilterMp3 = false; FilterWav = false; filtersModified = true; continue; }
+            if (lower == "wav") { FilterWav = true; FilterMp3 = false; FilterFlac = false; filtersModified = true; continue; }
+            if (lower == "mp3") { FilterMp3 = true; FilterFlac = false; FilterWav = false; filtersModified = true; continue; }
+            
+            // Quality Tokens (>320 or 320+)
+            if (lower.StartsWith(">") && int.TryParse(lower.TrimStart('>'), out int minQ))
+            {
+                FilterMinBitrate = minQ; 
+                filtersModified = true;
+                continue;
+            }
+            if (lower.EndsWith("+") && int.TryParse(lower.TrimEnd('+'), out int minQ2))
+            {
+                FilterMinBitrate = minQ2;
+                filtersModified = true;
+                continue;
+            }
+
+            // Normal keyword
+            processedQuery.Add(token);
+        }
+
+        // Use parsed query if we extracted tokens, otherwise original
+        string effectiveQuery = filtersModified ? string.Join(" ", processedQuery) : SearchQuery;
+        if (string.IsNullOrWhiteSpace(effectiveQuery)) effectiveQuery = SearchQuery; // Fallback if only tokens provided
+
         IsSearching = true;
         StatusText = "Searching...";
         _searchResults.Clear(); // Clear reactive list
@@ -237,7 +274,7 @@ public partial class SearchViewModel : ReactiveObject
 
         try
         {
-            // 1. Check Import Providers
+            // 1. Check Import Providers (using original query for URL detection)
             var provider = _importProviders.FirstOrDefault(p => p.CanHandle(SearchQuery));
             if (provider != null)
             {
@@ -248,8 +285,8 @@ public partial class SearchViewModel : ReactiveObject
                 return;
             }
 
-            // 2. Soulseek Streaming Search
-            StatusText = $"Searching Soulseek for: {SearchQuery}...";
+            // 2. Soulseek Streaming Search (Use Cleaned Query)
+            StatusText = $"Listening for vibes: {effectiveQuery}...";
             
             var cts = new CancellationTokenSource();
             

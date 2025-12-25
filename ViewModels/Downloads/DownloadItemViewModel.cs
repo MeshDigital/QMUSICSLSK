@@ -57,6 +57,14 @@ public class DownloadItemViewModel : INotifyPropertyChanged
     public string ScoreBreakdown => Score > 0 
         ? $"Brain Score: {Score:P0}\n\n• Token Match: +{(int)(Score * 80)}\n• Bitrate Bonus: +{(int)(Score * 10)}\n• Source Trust: +10" 
         : "Waiting for intelligence...";
+
+    // Skeleton Screen Support
+    private bool _isHydrated = true; // Default to hydrated for existing items
+    public bool IsHydrated
+    {
+        get => _isHydrated;
+        set { if (_isHydrated != value) { _isHydrated = value; OnPropertyChanged(); } }
+    }
     
     // Commands
     public ICommand PromoteToExpressCommand { get; set; }
