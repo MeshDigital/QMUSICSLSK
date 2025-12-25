@@ -443,6 +443,10 @@ public partial class App : Application
 
         // Rekordbox export service
         services.AddSingleton<RekordboxXmlExporter>();
+        services.AddSingleton<Services.Export.RekordboxService>();
+        
+        // Harmonic matching service (DJ feature)
+        services.AddSingleton<HarmonicMatchService>();
 
         // Phase 2.5: Path provider for safe folder structure
         services.AddSingleton<PathProviderService>();

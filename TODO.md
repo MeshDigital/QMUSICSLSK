@@ -187,6 +187,18 @@
   - [ ] **Pro Hardware Refinements**:
     - [ ] Camelot key display verification.
     - [ ] Bitrate color-coding (Green/Gold/Red).
+- [x] **Phase 8: Harmonic Matching ("Works Well Together")**
+  - [x] **HarmonicMatchService**: Camelot Wheel theory implementation.
+  - [x] **Key Compatibility**: Perfect, Compatible, Relative major/minor detection.
+  - [x] **BPM Matching**: ±6% beatmatching range.
+  - [x] **Scoring Algorithm**: 0-100 compatibility score (Key: 50pts, BPM: 30pts, Energy: 20pts).
+  - [ ] **UI Integration**:
+    - [ ] Library context menu: "Find Harmonic Matches".
+    - [ ] "Mix Helper" panel for seed track visualization.
+    - [ ] Smart Playlist Generator.
+  - [ ] **Advanced Features**:
+    - [ ] Spotify Energy/Valence integration.
+    - [ ] Caching for performance optimization.
 - [x] **Hardening**: Lazy Hydration (Waiting Room Pattern for 2k+ queues)`Services/DownloadHealthMonitor.cs`
 - [ ] Track health metrics per download:
   - Stall count
