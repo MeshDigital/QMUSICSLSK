@@ -37,6 +37,12 @@
   - **Real-time Waveforms**: GPU-accelerated rendering of `PWAV` data.
   - **VU Meters**: Exponential decay peak meters.
   - **Background Enrichment**: Batch-fetching (100 tracks) of Spotify Energy/Valence/Danceability.
+- **Phase 5C: Industrial Hardening (Completed Dec 2025)**
+  - **Security**: Windows DPAPI encryption for Spotify tokens (replacing Base64).
+  - **Resource Mgmt**: Explicit process killing for FFmpeg (Anti-Zombie).
+  - **Database**: `PRAGMA wal_checkpoint(FULL)` on shutdown to prevent corruption.
+  - **Concurrency**: Deadlock timeouts (10s) on Auth Semaphores.
+  - **UI Performance**: Throttled playback timers (4fps) to prevent dispatcher flooding.
 - **Atomic Tag Writes**: ACID-compliant metadata updates (`SafeWriteService`).
 - **Resilient Downloads**: Thread-safe heartbeat monitoring with stall detection.
 - **Automatic Recovery**: Self-healing on startup (checks journal, resumes operations, notifies user).

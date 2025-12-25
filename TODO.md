@@ -2053,7 +2053,12 @@ public QualityFlags Flags { get; set; }
 - [x] **Phase 5: Industrial Reliability (Hardening)**
   - [x] **Ghost File Prevention**: FileLockMonitor with Pre-Flight Retry & Deferral Persistence.
   - [x] **Spotify Quota**: Circuit Breaker & Cache-First Proxy for Inspector.
-  - [x] **Atomic Swaps**: Same-drive MFT vs Cross-drive Verify-Copy checks.view
+  - [x] **Atomic Swaps**: Same-drive MFT vs Cross-drive Verify-Copy checks.
+  - [x] **Phase 5C: Industrial Hardening**
+    - [x] **Security**: Implement DPAPI for token storage.
+    - [x] **Resources**: Implement Zombie Process killer for FFmpeg.
+    - [x] **Database**: Implement WAL Checkpoint on shutdown.
+    - [x] **Stability**: Implement UI Throttling and Semaphore Timeouts.view
 - [ ] Suggest higher quality replacements
 - [ ] Auto-replace option (with confirmation)
 
