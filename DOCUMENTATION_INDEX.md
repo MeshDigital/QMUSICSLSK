@@ -44,6 +44,25 @@
 - **[PHASE4_UI_IMPLEMENTATION.md](PHASE4_UI_IMPLEMENTATION.md)** - 450-line detailed guide
 - **[PHASE4_COMPLETION_SUMMARY.md](PHASE4_COMPLETION_SUMMARY.md)** - Completion report
 
+#### Phase 5A: Self-Healing Upgrade System ⭐ NEW (Wave 2)
+- **[DOCS/SELF_HEALING_UPGRADE_SYSTEM.md](DOCS/SELF_HEALING_UPGRADE_SYSTEM.md)** - Complete Phase 5A technical guide (Dec 25, 2025) 🚀
+  - 9-state machine architecture (Pending → Downloading → CloningMetadata → ReadyToSwap → BackingUp → Swapping → UpdatingDatabase → Completed/Failed)
+  - 8-step atomic swap process with crash safety
+  - File lock monitoring (dual-layer: ORBIT internal + OS exclusive lock)
+  - Metadata "soul transfer" with cross-format support
+  - Backup and restore strategies with 7-day retention
+  - Crash recovery integration with journal checkpoints
+  - Edge cases and troubleshooting guide
+
+#### Phase 5B: Rekordbox ANLZ File Format ⭐ NEW (Wave 2)
+- **[DOCS/ANLZ_FILE_FORMAT_GUIDE.md](DOCS/ANLZ_FILE_FORMAT_GUIDE.md)** - Complete binary format specification (Dec 25, 2025) 🚀
+  - ANLZ file structure and TLV parsing pattern
+  - Tag reference: PQTZ (beat grid), PCOB (cue points), PWAV (waveform), PSSI (song structure)
+  - XOR descrambling algorithm with 16-byte mask
+  - Companion file probing strategy
+  - Parsing implementation with error handling
+  - Troubleshooting guide for waveform and phrase issues
+
 #### Phase 6: Mission Control Dashboard ⭐ NEW (Wave 1)
 - **[DOCS/MISSION_CONTROL_DASHBOARD.md](DOCS/MISSION_CONTROL_DASHBOARD.md)** - Complete Phase 6 architecture and roadmap (Dec 25, 2025) 🚀
   - Three-tier system (Aggregator → Materialized Intelligence → Live Ops)
