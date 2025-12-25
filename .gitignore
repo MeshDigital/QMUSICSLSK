@@ -29,7 +29,11 @@ bld/
 # Local environment
 config.ini
 *.db
+*.db-shm
+*.db-wal
 /downloads/
+/music/
+/temp/
 
 # NuGet
 *.nupkg
@@ -57,3 +61,51 @@ Thumbs.db
 *.dll
 *.exe
 *.so
+
+# Log files (all patterns)
+*.log
+*.log.*
+*_log.txt
+*_errors.txt
+*_output.txt
+build*.log
+build*.txt
+run*.log
+run*.txt
+test*.log
+test*.txt
+error*.log
+error*.txt
+startup*.log
+msbuild*.log
+
+# Dev/Debug data
+crash_*.json
+debug_*.json
+temp_*.json
+
+# Obsolete documentation (keep only active docs)
+AVALONIA_MIGRATION_GUIDE.md
+BUGFIX_SPOTIFY_DECOUPLING.md
+BUILD_REFERENCE.md
+CHECKLIST.md
+COMMIT_MESSAGE.md
+COPY_PROGRESS_FIX.md
+DATABASE_UPDATE_INSTRUCTIONS.md
+IMPLEMENTATION_SUMMARY.md
+ISSUES_FOUND.md
+LIBRARY_IMPROVEMENT_PLAN.md
+ORCHESTRATION_ANIMATION.md
+PHASE1_SUMMARY.md
+RANKED_RESULTS_GUIDE.md
+RANKING_COMPLETION_SUMMARY.md
+RANKING_IMPLEMENTATION.md
+RANKING_INTEGRATION_SUMMARY.md
+RANKING_QUICK_REFERENCE.md
+RANKING_TECHNICAL_DEEPDIVE.md
+RATING_LIKES_PLAN.md
+SEARCH_RANKING_OPTIMIZATION.md
+SLSKDONET_LEARNINGS.md
+SPOTIFY_PKCE_FLOW_ANALYSIS.md
+COPY_TO_FOLDER_METHOD.txt
+
