@@ -1,11 +1,11 @@
 # ORBIT (formerly SLSKDONET): v1.0 Stabilization Roadmap
 
-**Last Updated**: December 24, 2025  
+**Last Updated**: December 25, 2024  
 **Repository**: https://github.com/MeshDigital/ORBIT  
-**Current Phase**: **Industrial Stabilization** (Transitioning from Resilience to Performance)
+**Current Phase**: **Phase 4 Complete** (Rekordbox Integration) → Preparing for Phase 5 (Self-Healing)
 
 > [!IMPORTANT]
-> **Status Update**: Phase 2A "Ironclad Recovery" is COMPLETE. The application now possesses a crash-proof foundation. Focus shifts to **Atomic Resumability** and **UI Scalability**.
+> **Status Update**: Phase 4 "Rekordbox Integration" is COMPLETE. ORBIT now features professional DJ export tools including playlist export and Monthly Drop functionality. Focus shifts to **Phase 5: Self-Healing Library**.
 
 ---
 
@@ -45,21 +45,22 @@
 - **Health Dashboard**: Backend recovery status visible on Home Screen.
 - **Schema Expansion**: "Dual-Truth" audio features (Spotify vs Manual) added to TrackEntity.
 
-## 🎯 Immediate Priority: Phase 3B - Download Health Monitor (Industrialization)
+## Phase 3B: Download Health Monitor - COMPLETE ✅
 **Phase Goal**: Automated self-healing for network instability.
+- **Stall Detection**: Adaptive timeout logic (60s standard, 120s for >90% progress)
+- **Auto-Retry**: Automatic peer switching for stalled transfers
+- **Peer Blacklisting**: Temporary blacklist for problematic peers
+- **Dual-Truth Schema**: IntegrityLevel enum (Pending → Bronze → Silver → Gold)
+- **Clear Dead-Letters**: UI feature for manual recovery
 
-### 1. The "Smart" Network Monitor
-- **Stall Detection**: Distinguish between "Queued" (normal) and "Stalled" (abnormal).
-- **Auto-Switching**: If download stalls > 30s, automatically try next best peer.
-- **Peer Scoring**: Blacklist slow/flaky peers for 1 hour.
-
-### 2. UI Ghosting
-- **Goal**: Perceived performance boost.
-- **Implementation**: Skeleton screens for TrackList and SearchGrid.
-
-### 3. Rekordbox Automation
-- **Goal**: Prep for v1.1 Export.
-- **Implementation**: Background service generates XML stubs for Gold Status tracks.
+## Phase 4: Rekordbox Integration - COMPLETE ✅
+**Phase Goal**: Professional DJ export functionality.
+- **RekordboxService**: Streaming XML generation using XmlWriter
+- **KeyConverter**: Musical key normalization (Standard → Camelot → OpenKey)
+- **XmlSanitizer**: Metadata safety for Rekordbox compatibility
+- **Playlist Export**: Context menu on playlist items
+- **Monthly Drop**: Tools menu feature for recent tracks (last 30 days)
+- **SaveFileDialog**: Integrated using Avalonia StorageProvider
 
 ---
 

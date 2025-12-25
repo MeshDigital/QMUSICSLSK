@@ -53,6 +53,13 @@ Where traditional P2P clients download the first available file, ORBIT analyzes 
 - **Custom Tags**: Spotify IDs embedded for library maintenance
 - **DJ Software Compatible**: Works with Rekordbox, Serato, Traktor
 
+### 📀 Rekordbox Integration (Phase 4)
+- **Playlist Export**: Right-click any playlist → Export to Rekordbox XML
+- **Monthly Drop**: One-click export of tracks added in the last 30 days
+- **Key Conversion**: Automatic translation to Camelot notation for harmonic mixing
+- **XML Sanitization**: Prevents metadata-related import failures
+- **Professional URIs**: `file://localhost/` format for cross-platform compatibility
+
 ### 🎨 Modern UI
 - **Dark Theme**: Clean, Spotify-inspired interface
 - **Real-Time Progress**: Live download tracking with queue management
@@ -169,7 +176,7 @@ ORBIT/
 - 10MB cache configuration
 - Auto-checkpoint at 1000 pages
 
-### ✅ Phase 2A: Crash Recovery (December 2024)
+### ✅ Phase 2A: Crash Recovery
 - Recovery journal with connection pooling
 - Monotonic heartbeat tracking
 - Download resume capability
@@ -178,6 +185,26 @@ ORBIT/
 - Dead-letter handling (3-strike limit)
 - Priority-based startup recovery
 - Non-intrusive UX notifications
+
+### ✅ Phase 3A: Atomic Downloads
+- Download Health Monitor
+- Adaptive timeout logic (60s standard, 120s for >90% progress)
+- Peer blacklisting for stalled transfers
+- Automatic retry orchestration
+
+### ✅ Phase 3B: Dual-Truth Schema
+- IntegrityLevel enum (Pending → Bronze → Silver → Gold)
+- Spotify metadata columns (BPM, Key, Duration)
+- Manual override fields (ManualBPM, ManualKey)
+- Clear Dead-Letters UI feature
+
+### ✅ Phase 4: Rekordbox Integration (December 2024)
+- RekordboxService with XmlWriter streaming
+- KeyConverter utility (Standard → Camelot → OpenKey)
+- XmlSanitizer for metadata safety
+- Playlist context menu export
+- Monthly Drop feature (Tools menu)
+- SaveFileDialog integration (Avalonia StorageProvider)
 
 ### 🚧 Phase 2B: Code Quality (In Progress)
 - Strategy Pattern for ranking modes
@@ -192,9 +219,9 @@ ORBIT/
 - Smart dependency validation
 
 ### 🔮 Future Phases
-- **Phase 3**: USB/Local import with duplicate detection
-- **Phase 4**: Performance optimization (multi-core, hardware acceleration)
 - **Phase 5**: Self-healing library (automatic quality upgrades)
+- **Phase 6**: Advanced UI polish and transparency
+- **Phase 8**: Sonic Integrity (spectral analysis, FFmpeg integration)
 
 ---
 
