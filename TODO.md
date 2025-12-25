@@ -143,7 +143,13 @@
   - [x] **Lazy Hydration**: Only hydrate 50 tracks to memory.
   - [x] **Threshold Trigger**: Start download if score > 92%.
   - [x] **Speculative Start**: Start silver match (>70%) after 5s timeout.
-  - [x] **Project Prioritization**: "VIP Pass" logic (P1-P10). [x] **Hardening**: Atomic Slot Allocator (Race Condition Fix)
+  - [x] **Project Prioritization**: "VIP Pass" logic (P1-P10).
+  - [ ] **Phase 3C.3: UI Integration (Air Traffic Control)**
+    - [ ] **Swimlanes**: Three-tier `ItemsRepeater` (Express, Standard, Background).
+    - [ ] **Badges**: Gold (92%+), Silver (70%+, Pulsing), Bronze (<70%).
+    - [ ] **VIP Pass**: Right-click context menu "Push to Express" (Max 10).
+    - [ ] **Radar**: "Searching..." pulsation animation.
+    - [ ] **Optimization**: Virtualization + 100ms Throttling.
   - [x] **Hardening**: Lazy Hydration (Waiting Room Pattern for 2k+ queues)`Services/DownloadHealthMonitor.cs`
 - [ ] Track health metrics per download:
   - Stall count

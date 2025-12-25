@@ -43,6 +43,10 @@
 - **Phase 3C.5: Speculative Start (Completed Dec 2025)**
   - **Silver Match Default**: If no Gold match in 5s, start best available (>70%).
   - **Time-to-Music**: Guarantees max 5s wait for available tracks.
+- **Phase 3C.3: Multi-Lane UI Integration (See TODO)**
+  - **Visual Swimlanes**: Express (Gold), Standard (Blue), Background (Dimmed).
+  - **Quality Badges**: Gold (>92%), Silver (Pulsing 70%), Bronze (<70%).
+  - **VIP Pass**: "God Mode" right-click override with Priority Debt limits.
 - **Phase 5C: Industrial Hardening (Completed Dec 2025)**
   - **Security**: Windows DPAPI encryption for Spotify tokens (replacing Base64).
   - **Resource Mgmt**: Explicit process killing for FFmpeg (Anti-Zombie).
