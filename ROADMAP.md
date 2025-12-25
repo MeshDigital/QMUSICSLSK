@@ -62,22 +62,27 @@
 - **Monthly Drop**: Tools menu feature for recent tracks (last 30 days)
 - **SaveFileDialog**: Integrated using Avalonia StorageProvider
 
-## 🎯 Phase 5A: Self-Healing Library (In Progress)
+## ✅ Phase 5A: Self-Healing Library - COMPLETE
 **Phase Goal**: Automatic quality upgrades for library tracks.
 
 ### Core Components
 - ✅ **LibraryScanner**: Batch processing with yield return (50 tracks/batch)
 - ✅ **MetadataCloner**: Cross-format metadata transfer (ID3 ↔ Vorbis ↔ APE)
-- 🚧 **UpgradeScout**: P2P search with ±2s duration matching
-- 🚧 **FileLockMonitor**: Playback conflict detection
-- 🚧 **UpgradeOrchestrator**: Atomic swap with SafeWriteService integration
+- ✅ **UpgradeScout**: P2P search with ±2s duration matching
+- ✅ **FileLockMonitor**: Dual-layer safety (PlayerViewModel + OS-level exclusive lock)
+- ✅ **UpgradeOrchestrator**: 8-step atomic swap with state machine
 
 ### Features
+- **8-Step Transactional Swap**: Lock check, P2P search, shadow download, metadata clone, journal checkpoint, backup, swap, database update
+- **State Machine**: 9 states with rollback logic (Pending → Downloading → CloningMetadata → ReadyToSwap → BackingUp → Swapping → UpdatingDatabase → Completed/Failed)
 - **FLAC-Only Mode**: Conservative upgrade strategy (128/192kbps MP3 → FLAC)
 - **7-Day Scan Cooldown**: Prevents redundant rescanning
+- **7-Day Backup Retention**: Timestamped folders for rollback safety
 - **Gold Status Exclusion**: Respects user-verified tracks
-- **Backup System**: 7-day retention before cleanup
+- **Quality Gain Tracking**: Bitrate delta + percent improvement for UI gamification
 - **Crash Recovery**: Journal integration for mid-swap safety
+- **Shadow Downloads**: Isolated `.orbit/tmp/upgrades` directory
+- **Cross-Volume Detection**: MFT atomic update vs verified copy+delete
 
 ## 🔮 Phase 5B: Stealth Integration (Planned)
 **Phase Goal**: Preserve Rekordbox analysis during file upgrades.
