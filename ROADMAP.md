@@ -39,12 +39,31 @@
 
 ---
 
-## Phase 3: Atomic Resumability - COMPLETE ✅
-- **Impact**: No redownloading files after a crash.
-- **Atomic Downloads**: Full `.part` file workflow integrated with Recovery Journal (Verified Phase 3A).
-- **Ghost File Protection**: Logic checks disk size before truncating (Verified Phase 3A).
+## Phase 3A: Atomic Resumability & UI Transparency - COMPLETE ✅
+- **Impact**: No redownloading files after a crash; "Value Gap" bridged.
+- **Atomic Downloads**: Full `.part` file workflow integrated with Recovery Journal.
+- **Health Dashboard**: Backend recovery status visible on Home Screen.
+- **Schema Expansion**: "Dual-Truth" audio features (Spotify vs Manual) added to TrackEntity.
 
-## 🎯 Immediate Priority: UI Placeholder Refactor (The "Show, Don't Tell" Phase)
+## 🎯 Immediate Priority: Phase 3B - Download Health Monitor (Industrialization)
+**Phase Goal**: Automated self-healing for network instability.
+
+### 1. The "Smart" Network Monitor
+- **Stall Detection**: Distinguish between "Queued" (normal) and "Stalled" (abnormal).
+- **Auto-Switching**: If download stalls > 30s, automatically try next best peer.
+- **Peer Scoring**: Blacklist slow/flaky peers for 1 hour.
+
+### 2. UI Ghosting
+- **Goal**: Perceived performance boost.
+- **Implementation**: Skeleton screens for TrackList and SearchGrid.
+
+### 3. Rekordbox Automation
+- **Goal**: Prep for v1.1 Export.
+- **Implementation**: Background service generates XML stubs for Gold Status tracks.
+
+---
+
+## 🎯 Archived Priority: UI Placeholder Refactor (Completed Phase 3A)
 
 With the backend hardened, we must align the frontend reality with user expectations.
 

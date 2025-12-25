@@ -262,10 +262,13 @@
 #### 2. Home Page Bento Grid
 - [x] Hook "Library Health" card to `CrashRecoveryJournal` queries.
 - [x] Show "Active Recoveries" count if startup recovery ran.
+- [ ] **Quick-Fix Action**: Add "Review/Clear Dead-Letters" button to Health Dashboard.
+  - Allows retrying stuck items after user fixes disk issues.
 
 #### 3. USB Export & Player Control
 - [x] Set `IsEnabled="False"` on "Upgrade Scout" and "Sonic Integrity" (Placeholder UI Hardening).
 - [ ] Disable Pitch Slider until `AudioPlayerService` supports stretching.
+- [ ] **Rekordbox Stubbing**: Background task to pre-calculate XML structure for Gold Status tracks.
 - [ ] Implement "Export to Rekordbox" UI (currently missing) before disabling it.
 
 ### 🏗️ Architectural Improvements & Advanced Features
@@ -286,6 +289,8 @@
   - Check frequency cutoff (< 16kHz indicates upscaled 128kbps→FLAC)
   - Add `FidelityStatus` field: `Genuine | Upscaled | Suspicious`
   - Visual indicator in UI for low-quality masquerading files
+- [ ] **Metadata Confidence Score**: Store `ConfidenceScore` (0.0-1.0) in `TrackEntity`.
+  - Used as tie-breaker for Gold Status logic (e.g. 124.01 vs 124.0 BPM).
 - [ ] **The Brain 2.0: Adaptive Intelligence**:
   - [ ] **Fuzzy Normalization**: Refactor `CalculateSimilarity` to handle Unicode dashes, curly quotes, and "feat." vs "ft." normalization.
   - [ ] **Relaxation Strategy**: Implement a "Match Relaxation" timer in `DownloadManager`. If no match found after 30s, retry with ±15s tolerance and lower bitrate threshold.
