@@ -1328,21 +1328,39 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
             }
             catch (OperationCanceledException)
             {
+                // Enhanced cancellation diagnostics
+                var cancellationReason = "Unknown";
+                
                 // Fix #3: Preemption-aware cancellation handling
-                // If this was a background (Priority 10+) download that was preempted,
-                // defer it back to Pending rather than marking as Cancelled
                 if (ctx.Model.Priority >= 10 && ctx.State == PlaylistTrackState.Downloading)
                 {
+                    cancellationReason = "Preempted for high-priority download";
                     _logger.LogInformation("⏸ Download preempted for high-priority work: {Title} - deferring to queue", ctx.Model.Title);
                     await UpdateStateAsync(ctx, PlaylistTrackState.Deferred, "Deferred for high-priority downloads");
                     return;
                 }
                 
-                // User-initiated pause or cancellation
-                if (ctx.State != PlaylistTrackState.Paused && ctx.State != PlaylistTrackState.Cancelled)
+                // Check if it was user-initiated pause
+                if (ctx.State == PlaylistTrackState.Paused)
                 {
-                    await UpdateStateAsync(ctx, PlaylistTrackState.Cancelled);
+                    cancellationReason = "User paused download";
+                    _logger.LogInformation("⏸ Download paused by user: {Title}", ctx.Model.Title);
+                    return;
                 }
+                
+                // Check if it was explicit cancellation
+                if (ctx.State == PlaylistTrackState.Cancelled)
+                {
+                    cancellationReason = "User cancelled download";
+                    _logger.LogInformation("❌ Download cancelled by user: {Title}", ctx.Model.Title);
+                    return;
+                }
+                
+                // Otherwise it's an unexpected cancellation (health monitor, timeout, etc.)
+                cancellationReason = "System/timeout cancellation";
+                _logger.LogWarning("⚠️ Unexpected cancellation for {Title} in state {State}. Marking as cancelled. Reason: {Reason}", 
+                    ctx.Model.Title, ctx.State, cancellationReason);
+                await UpdateStateAsync(ctx, PlaylistTrackState.Cancelled);
             }
             catch (Exception ex)
             {

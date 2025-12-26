@@ -148,23 +148,61 @@ namespace SLSKDONET.Services.IO
                         }
                     }
 
-                    // Step 4: Atomic replace/move
-                    if (File.Exists(targetPath))
+                    // Step 4: Atomic replace/move with AV resilience
+                    // PERFORMANCE FIX: Many failures are due to AV scanning the file for 50-200ms
+                    // Solution: Wait 100ms and retry once before giving up
+                    bool swapSucceeded = false;
+                    Exception? lastSwapError = null;
+                    
+                    for (int attempt = 1; attempt <= 2; attempt++)
                     {
-                        // Use File.Replace for atomic swap with backup
-                        var backupPath = $"{targetPath}.backup";
-                        File.Replace(tempPath, targetPath, backupPath, ignoreMetadataErrors: true);
-                        
-                        // Clean up backup after successful replace
-                        if (File.Exists(backupPath))
+                        try
                         {
-                            File.Delete(backupPath);
+                            if (File.Exists(targetPath))
+                            {
+                                // Use File.Replace for atomic swap with backup
+                                var backupPath = $"{targetPath}.backup";
+                                File.Replace(tempPath, targetPath, backupPath, ignoreMetadataErrors: true);
+                                
+                                // Clean up backup after successful replace
+                                if (File.Exists(backupPath))
+                                {
+                                    File.Delete(backupPath);
+                                }
+                            }
+                            else
+                            {
+                                // Simple move for new files
+                                File.Move(tempPath, targetPath, overwrite: false);
+                            }
+                            
+                            swapSucceeded = true;
+                            if (attempt == 2)
+                            {
+                                _logger.LogInformation("✅ Atomic swap succeeded on retry attempt {Attempt} for {Path}", attempt, targetPath);
+                            }
+                            break; // Success!
+                        }
+                        catch (IOException ioEx) when (attempt == 1)
+                        {
+                            _logger.LogWarning("Atomic swap attempt {Attempt} failed (likely AV/indexer interference), retrying after 100ms: {Error}", 
+                                attempt, ioEx.Message);
+                            lastSwapError = ioEx;
+                            await Task.Delay(100, cancellationToken); // Give AV time to release the file
+                        }
+                        catch (UnauthorizedAccessException uaEx) when (attempt == 1)
+                        {
+                            _logger.LogWarning("Atomic swap attempt {Attempt} failed (permissions), retrying after 100ms: {Error}", 
+                                attempt, uaEx.Message);
+                            lastSwapError = uaEx;
+                            await Task.Delay(100, cancellationToken);
                         }
                     }
-                    else
+                    
+                    // If both attempts failed, throw the last error
+                    if (!swapSucceeded && lastSwapError != null)
                     {
-                        // Simple move for new files
-                        File.Move(tempPath, targetPath, overwrite: false);
+                        throw lastSwapError;
                     }
 
                     // Step 5: Restore original timestamps (preserves "Date Added" in players)
