@@ -150,6 +150,13 @@
 - ✅ `PWAV` - Waveform Preview
 - ✅ `PSSI` - Song Structure (XOR-encrypted phrases)
 
+## ✅ Phase 12.6: Search & UX 2.0 - COMPLETE
+**Phase Goal**: "Curation Assistant" Search UI and transparent Downloads UX.
+- ✅ **Visual Hierarchy**: Gold/Silver/Bronze badges and heatmaps for search results
+- ✅ **Multi-Line Templates**: Dense metadata display (Artist - Title / Technical Details)
+- ✅ **Bi-Directional Sync**: Search tokens match Filter HUD state automatically
+- ✅ **Downloads Transparency**: Failure reasons visible in UI, Force Retry support
+
 ### High-Fidelity Infrastructure
 - **NAudio Backend**: Replaced LibVLC for better control over audio buffers and threading
 - **MeteringSampleProvider**: Real-time VU meter data (Left/Right peak)

@@ -52,6 +52,17 @@
   - ✅ **Upgrade Safety**: `MetadataCloner` now preserves musical intelligence during file swaps.
   - ✅ **Database Sync**: Synced Spotify features between `LibraryEntry` and `PlaylistTrack`.
 
+### Recent Updates (December 26, 2025)
+- ✅ **Search 2.0 (Phase 12.6) Complete**:
+  - ✅ **Visual Scalability**: Multi-line row templates for dense metadata display.
+  - ✅ **Smart Filters**: Bi-directional synchronization between Search Bar tokens and Filter HUD.
+  - ✅ **Visual Hierarchy**: Gold/Silver/Bronze badges and heatmap opacity for search results.
+- ✅ **Downloads UX**:
+  - ✅ **Failure Visibility**: Errors like "No matches found" or "Timeout" clearly displayed in red.
+  - ✅ **Force Retry**: Enabled "Retry" for stalled active downloads (Downloading/Queued states).
+  - ✅ **Improved Context Menu**: Added Retry/Cancel options to the Failed tab.
+- ✅ **Stability**: Fixed DI container crash (missing `AnlzFileParser`) and reset corrupt database.
+
 ---
 
 ## 🎯 ORBIT v1.0: 8-Week Stabilization Focus (STRATEGIC PRIORITY)
