@@ -231,8 +231,22 @@ public class SpotifyEnrichmentService
     /// <summary>
     /// Fetches personalized recommendations based on the user's top tracks.
     /// </summary>
+    /// <summary>
+    /// Fetches personalized recommendations based on the user's top tracks.
+    /// </summary>
     public async Task<System.Collections.Generic.List<SpotifyTrackViewModel>> GetRecommendationsAsync(int limit = 10)
     {
+        // 1. Circuit Breaker Check
+        if (_isServiceDegraded)
+        {
+            if (DateTime.UtcNow < _retryAfter)
+            {
+                _logger.LogWarning("Spotify API Circuit Breaker Active. Skipping recommendations.");
+                return new System.Collections.Generic.List<SpotifyTrackViewModel>();
+            }
+            _isServiceDegraded = false; // Reset if cooldown passed
+        }
+
         var result = new System.Collections.Generic.List<SpotifyTrackViewModel>();
         try
         {
@@ -274,6 +288,20 @@ public class SpotifyEnrichmentService
                     });
                 }
             }
+        }
+        catch (APIException apiEx)
+        {
+             // 2. Enhanced Error Diagnostics
+             _logger.LogError(apiEx, "Spotify API error in GetRecommendationsAsync. Status: {Status}, Response: {Response}", 
+                 apiEx.Response?.StatusCode ?? System.Net.HttpStatusCode.InternalServerError, 
+                 apiEx.Response?.Body ?? "No body");
+
+             if (apiEx.Response?.StatusCode == System.Net.HttpStatusCode.Forbidden)
+             {
+                 _logger.LogWarning("Spotify API 403 Forbidden in Recommendations. Disabling service.");
+                 _isServiceDegraded = true;
+                 _retryAfter = DateTime.UtcNow.AddMinutes(30);
+             }
         }
         catch (Exception ex)
         {
