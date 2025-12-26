@@ -291,17 +291,26 @@ public class SpotifyEnrichmentService
         }
         catch (APIException apiEx)
         {
-             // 2. Enhanced Error Diagnostics
-             _logger.LogError(apiEx, "Spotify API error in GetRecommendationsAsync. Status: {Status}, Response: {Response}", 
-                 apiEx.Response?.StatusCode ?? System.Net.HttpStatusCode.InternalServerError, 
-                 apiEx.Response?.Body ?? "No body");
+             // 404 NotFound is expected when user has no listening history (no top tracks to use as seeds)
+             if (apiEx.Response?.StatusCode == System.Net.HttpStatusCode.NotFound)
+             {
+                 _logger.LogDebug("Spotify Recommendations unavailable (404 NotFound). User likely has no listening history to generate seeds.");
+                 return result;
+             }
 
+             // 403 Forbidden = scope/permission issue
              if (apiEx.Response?.StatusCode == System.Net.HttpStatusCode.Forbidden)
              {
                  _logger.LogWarning("Spotify API 403 Forbidden in Recommendations. Disabling service.");
                  _isServiceDegraded = true;
                  _retryAfter = DateTime.UtcNow.AddMinutes(30);
+                 return result;
              }
+
+             // Other errors are unexpected - log as error
+             _logger.LogError(apiEx, "Spotify API error in GetRecommendationsAsync. Status: {Status}, Response: {Response}", 
+                 apiEx.Response?.StatusCode ?? System.Net.HttpStatusCode.InternalServerError, 
+                 apiEx.Response?.Body ?? "No body");
         }
         catch (Exception ex)
         {
