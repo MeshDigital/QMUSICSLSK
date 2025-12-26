@@ -231,6 +231,11 @@
                                     <CheckBox Content="High Reliability" 
                                               IsChecked="{Binding FilterViewModel.UseHighReliability, Mode=TwoWay}"
                                               ToolTip.Tip="Hide peers with long queues (>50)"/>
+                                    
+                                    <!-- Phase 12.6: Hide Suspects (Curation Quality) -->
+                                    <CheckBox Content="🚫 Hide Suspects" 
+                                              IsChecked="{Binding FilterViewModel.HideSuspects, Mode=TwoWay}"
+                                              ToolTip.Tip="Hide potential fakes/upscales (enabled by default)"/>
                                 </StackPanel>
                                 
                                 <!-- Hidden Count Badge -->
@@ -295,6 +300,12 @@
                             <Style Selector="DataGridRow:selected">
                                 <Setter Property="Background" Value="#2A0078D4"/>
                             </Style>
+                            <!-- Phase 12.6: Golden Match highlighting (top 5%) -->
+                            <Style Selector="DataGridRow.golden">
+                                <Setter Property="Background" Value="#1AFFD700"/>
+                                <Setter Property="BorderBrush" Value="#FFD700"/>
+                                <Setter Property="BorderThickness" Value="0,0,0,2"/>
+                            </Style>
                         </DataGrid.Styles>
                         
                         <!-- Context Menu -->
@@ -309,18 +320,38 @@
                         </DataGrid.ContextMenu>
 
                         <DataGrid.Columns>
+                            <!-- Phase 12.6: Integrity Badge Column -->
+                            <DataGridTemplateColumn Header="" Width="40">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding IntegrityBadge}" 
+                                                   HorizontalAlignment="Center" 
+                                                   VerticalAlignment="Center"
+                                                   FontSize="14"
+                                                   ToolTip.Tip="{Binding IntegrityTooltip}"/>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            
                             <!-- Status Column -->
                             <DataGridTextColumn Header="Status" Binding="{Binding StatusIcon}" Width="60"/>
                             
-                            <!-- Rank Column with Tooltip -->
-                            <DataGridTemplateColumn Header="Rank" Width="60">
+                            <!-- Phase 12.6: Rank Column with Percentile indicator -->
+                            <DataGridTemplateColumn Header="Rank" Width="70">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
-                                        <TextBlock Text="{Binding CurrentRank, StringFormat='{}{0:F1}'}" 
-                                                   HorizontalAlignment="Center" 
-                                                   VerticalAlignment="Center"
-                                                   ToolTip.Tip="{Binding ScoreBreakdown}"
-                                                   Background="Transparent"/>
+                                        <Border Background="{Binding RowBackground}" 
+                                                CornerRadius="4" 
+                                                Padding="4,2"
+                                                Opacity="{Binding HeatMapOpacity}">
+                                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                                <TextBlock Text="{Binding CurrentRank, StringFormat='{}{0:F1}'}" 
+                                                           HorizontalAlignment="Center" 
+                                                           VerticalAlignment="Center"
+                                                           ToolTip.Tip="{Binding ScoreBreakdown}"/>
+                                                <TextBlock Text="🔥" IsVisible="{Binding IsGoldenMatch}" FontSize="12" VerticalAlignment="Center"/>
+                                            </StackPanel>
+                                        </Border>
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellTemplate>
                             </DataGridTemplateColumn>
