@@ -31,6 +31,11 @@ public class SearchResult : INotifyPropertyChanged
     public double CurrentRank => Model.CurrentRank;
     public string ScoreBreakdown => Model.ScoreBreakdown ?? $"Rank: {CurrentRank:F1}";
 
+    // Phase 12.6: Multi-line row template properties
+    public string PrimaryDisplay => $"{Artist} - {Title}";
+    public string FileFormat => System.IO.Path.GetExtension(Model.Filename ?? "")?.TrimStart('.').ToUpperInvariant() ?? "MP3";
+    public string TechnicalMetadata => $"{Bitrate} kbps {FileFormat} • @{Username} • {Size / 1024.0 / 1024.0:F1} MB • Q:{QueueLength}";
+
     // Phase 12.6: Percentile-based scoring for visual hierarchy
     private double _percentile;
     public double Percentile

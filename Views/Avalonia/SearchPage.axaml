@@ -356,16 +356,30 @@
                                 </DataGridTemplateColumn.CellTemplate>
                             </DataGridTemplateColumn>
                             
-                            <DataGridTextColumn Header="Artist" Binding="{Binding Artist}" Width="2*"/>
-                            <DataGridTextColumn Header="Title" Binding="{Binding Title}" Width="3*"/>
-                            <DataGridTextColumn Header="Album" Binding="{Binding Album}" Width="2*"/>
-                            <DataGridTextColumn Header="Quality" Binding="{Binding Bitrate, StringFormat='{}{0} kbps'}" Width="100"/>
-                            <DataGridTextColumn Header="User" Binding="{Binding Username}" Width="120"/>
-                            <DataGridTextColumn Header="Size" Binding="{Binding Size, StringFormat='{}{0:N0} KB'}" Width="100"/>
-                            <DataGridTemplateColumn Header="🚀" Width="40">
+                            <!-- Phase 12.6: Two-Line Track Info Column -->
+                            <DataGridTemplateColumn Header="Track" Width="*">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
-                                        <TextBlock Text="✓" Foreground="#4CAF50" HorizontalAlignment="Center" FontWeight="Bold" IsVisible="{Binding HasFreeUploadSlot}"/>
+                                        <StackPanel Spacing="2" Margin="8,4" Opacity="{Binding HeatMapOpacity}">
+                                            <!-- Line 1: Artist - Title -->
+                                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                                <TextBlock Text="{Binding PrimaryDisplay}" 
+                                                           FontWeight="SemiBold" 
+                                                           FontSize="13"
+                                                           TextTrimming="CharacterEllipsis"/>
+                                                <TextBlock Text="✓" 
+                                                           Foreground="#4CAF50" 
+                                                           FontWeight="Bold" 
+                                                           IsVisible="{Binding HasFreeUploadSlot}"
+                                                           ToolTip.Tip="Free upload slot available"/>
+                                            </StackPanel>
+                                            <!-- Line 2: Technical Metadata -->
+                                            <TextBlock Text="{Binding TechnicalMetadata}" 
+                                                       FontSize="11" 
+                                                       Foreground="#808080" 
+                                                       FontFamily="Consolas, Courier New, monospace"
+                                                       TextTrimming="CharacterEllipsis"/>
+                                        </StackPanel>
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellTemplate>
                             </DataGridTemplateColumn>
