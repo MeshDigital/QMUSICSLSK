@@ -1392,6 +1392,7 @@ public class DatabaseService
                          existingJob.TotalTracks = Math.Max(existingJob.TotalTracks, job.TotalTracks);
                          existingJob.IsDeleted = false;
                          context.Projects.Update(existingJob);
+                         await context.SaveChangesAsync(); // CRITICAL: Save the UPDATE now
                          jobExists = true; 
                      }
                      else
