@@ -1385,15 +1385,26 @@ public class DatabaseService
                      // Detach the failed entity to clear context state
                      context.Entry(jobEntity).State = EntityState.Detached;
 
-                     // Re-fetch the phantom existing job
+                     // Re-fetch the phantom existing job (might be soft-deleted)
                      existingJob = await context.Projects.FirstOrDefaultAsync(j => j.Id == job.Id);
                      if (existingJob != null)
                      {
+                         // Un-delete if it was soft-deleted
                          existingJob.TotalTracks = Math.Max(existingJob.TotalTracks, job.TotalTracks);
                          existingJob.IsDeleted = false;
                          context.Projects.Update(existingJob);
-                         await context.SaveChangesAsync(); // CRITICAL: Save the UPDATE now
-                         jobExists = true; 
+                         await context.SaveChangesAsync(); // Save the UPDATE now
+                         jobExists = true;
+                         
+                         // CRITICAL: Ensure jobEntity is NOT tracked as Added
+                         // This prevents line 1525 from trying to INSERT it again
+                         var trackedEntity = context.ChangeTracker.Entries<PlaylistJobEntity>()
+                             .FirstOrDefault(e => e.Entity.Id == job.Id && e.State == EntityState.Added);
+                         if (trackedEntity != null)
+                         {
+                             trackedEntity.State = EntityState.Detached;
+                             _logger.LogDebug("Detached duplicate Added entity for JobId {Id}", job.Id);
+                         }
                      }
                      else
                      {
