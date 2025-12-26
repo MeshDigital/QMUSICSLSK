@@ -166,9 +166,24 @@ public class SpotifyEnrichmentService
             _isServiceDegraded = true;
             _retryAfter = DateTime.UtcNow.Add(ex.RetryAfter).AddSeconds(1);
         }
+        catch (APIException apiEx)
+        {
+            // Enhanced diagnostics: Log actual HTTP status and response
+            _logger.LogError(apiEx, "Spotify API error in GetAudioFeaturesBatchAsync. Status: {Status}, Response: {Response}", 
+                apiEx.Response?.StatusCode ?? System.Net.HttpStatusCode.InternalServerError, 
+                apiEx.Response?.Body ?? "No body");
+            
+            // If it's a 403, provide specific guidance
+            if (apiEx.Response?.StatusCode == System.Net.HttpStatusCode.Forbidden)
+            {
+                _logger.LogWarning("Spotify API 403 Forbidden - Possible causes: Developer Mode restrictions, missing scopes, or revoked permissions. Disabling Audio Features for this session.");
+                _isServiceDegraded = true;
+                _retryAfter = DateTime.UtcNow.AddMinutes(30); // Long cooldown for permission errors
+            }
+        }
         catch (Exception ex)
         {
-             _logger.LogError(ex, "Failed to batch fetch audio features");
+             _logger.LogError(ex, "Failed to batch fetch audio features (non-API exception)");
         }
         
         return result;
