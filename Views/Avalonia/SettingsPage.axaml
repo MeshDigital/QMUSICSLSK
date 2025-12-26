@@ -256,10 +256,10 @@
 
                     <Separator Background="#333" Height="1"/>
 
-                    <!-- Spotify Track Identification & Album Art Toggle -->
+                    <!-- Spotify Track Identification &amp; Album Art Toggle -->
                     <Grid ColumnDefinitions="*,Auto">
                         <StackPanel Grid.Column="0" Spacing="2">
-                            <TextBlock Text="Spotify Track & Album Art" FontWeight="SemiBold" Foreground="#DDD"/>
+                            <TextBlock Text="Spotify Track &amp; Album Art" FontWeight="SemiBold" Foreground="#DDD"/>
                             <TextBlock Text="Fetch track metadata (Title, Artist, Album Art, Duration, ISRC) from Spotify. Uses Search API - works even in Developer Mode." 
                                        Foreground="#666" FontSize="11" TextWrapping="Wrap"/>
                         </StackPanel>
