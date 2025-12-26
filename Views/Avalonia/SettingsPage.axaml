@@ -256,11 +256,11 @@
 
                     <Separator Background="#333" Height="1"/>
 
-                    <!-- Spotify Enrichment Toggle -->
+                    <!-- Spotify Track Identification & Album Art Toggle -->
                     <Grid ColumnDefinitions="*,Auto">
                         <StackPanel Grid.Column="0" Spacing="2">
-                            <TextBlock Text="Spotify Metadata Enrichment" FontWeight="SemiBold" Foreground="#DDD"/>
-                            <TextBlock Text="Fetch BPM, energy, and other audio features from Spotify. Disable to stop 403 errors if auth scopes are insufficient." 
+                            <TextBlock Text="Spotify Track & Album Art" FontWeight="SemiBold" Foreground="#DDD"/>
+                            <TextBlock Text="Fetch track metadata (Title, Artist, Album Art, Duration, ISRC) from Spotify. Uses Search API - works even in Developer Mode." 
                                        Foreground="#666" FontSize="11" TextWrapping="Wrap"/>
                         </StackPanel>
                         <ToggleSwitch Grid.Column="1" IsChecked="{Binding SpotifyUseApi}" OnContent="On" OffContent="Off"/>
