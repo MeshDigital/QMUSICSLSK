@@ -227,8 +227,8 @@ public class MetadataEnrichmentOrchestrator : IDisposable
                 var knownTracks = batch.Where(t => !string.IsNullOrEmpty(t.SpotifyTrackId)).ToList();
                 var unknownTracks = batch.Where(t => string.IsNullOrEmpty(t.SpotifyTrackId)).ToList();
 
-                // 1. Bulk Fetch Audio Features for Known Tracks
-                if (knownTracks.Any())
+                // 1. Bulk Fetch Audio Features for Known Tracks (Only if enabled)
+                if (knownTracks.Any() && _config.SpotifyEnableAudioFeatures)
                 {
                     try
                     {
@@ -257,6 +257,15 @@ public class MetadataEnrichmentOrchestrator : IDisposable
                         {
                             await FinalizeEnrichmentAsync(track, true); // Still finalize as "success" (we have the track metadata at least)
                         }
+                    }
+                }
+                else if (knownTracks.Any() && !_config.SpotifyEnableAudioFeatures)
+                {
+                    // Skip Audio Features fetch when disabled
+                    _logger.LogDebug("Audio Features disabled. Skipping batch enrichment for {Count} tracks", knownTracks.Count);
+                    foreach (var track in knownTracks)
+                    {
+                        await FinalizeEnrichmentAsync(track, true); // Still finalize with basic metadata
                     }
                 }
 
