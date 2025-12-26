@@ -253,8 +253,24 @@ public class SpotifyEnrichmentService
             var client = await _authService.GetAuthenticatedClientAsync();
             
             // Get user's top tracks to use as seeds
-            var topTracks = await client.Personalization.GetTopTracks(new PersonalizationTopRequest { Limit = 5 });
-            var seedTrackIds = topTracks.Items?.Select(t => t.Id).Take(5).ToList() ?? new System.Collections.Generic.List<string>();
+            System.Collections.Generic.List<string> seedTrackIds;
+            try
+            {
+                var topTracks = await client.Personalization.GetTopTracks(new PersonalizationTopRequest { Limit = 5 });
+                seedTrackIds = topTracks.Items?.Select(t => t.Id).Take(5).ToList() ?? new System.Collections.Generic.List<string>();
+            }
+            catch (APIException apiEx)
+            {
+                _logger.LogError(apiEx, "Failed to fetch top tracks for Recommendations. Status: {Status}, Response: {Response}",
+                    apiEx.Response?.StatusCode ?? System.Net.HttpStatusCode.InternalServerError,
+                    apiEx.Response?.Body ?? "No body");
+                return result;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Unexpected error fetching top tracks");
+                return result;
+            }
             
             if (!seedTrackIds.Any())
             {
