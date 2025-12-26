@@ -196,8 +196,8 @@ public class DatabaseService
                 #pragma warning restore EF1002
             }
             
-            // Check PlaylistJobs table
-            cmdSchema.CommandText = "PRAGMA table_info(PlaylistJobs)";
+            // Check Projects table (formerly PlaylistJobs)
+            cmdSchema.CommandText = "PRAGMA table_info(Projects)";
             existingColumns.Clear();
             
             using (var reader = await cmdSchema.ExecuteReaderAsync())
@@ -211,44 +211,44 @@ public class DatabaseService
             if (!existingColumns.Contains("IsDeleted"))
             {
                 _logger.LogWarning("Schema Patch: Adding missing column 'IsDeleted' to PlaylistJobs");
-                await context.Database.ExecuteSqlRawAsync("ALTER TABLE PlaylistJobs ADD COLUMN IsDeleted INTEGER DEFAULT 0");
+                await context.Database.ExecuteSqlRawAsync("ALTER TABLE Projects ADD COLUMN IsDeleted INTEGER DEFAULT 0");
             }
 
             if (!existingColumns.Contains("AlbumArtUrl"))
             {
                 _logger.LogWarning("Schema Patch: Adding missing column 'AlbumArtUrl' to PlaylistJobs");
-                await context.Database.ExecuteSqlRawAsync("ALTER TABLE PlaylistJobs ADD COLUMN AlbumArtUrl TEXT NULL");
+                await context.Database.ExecuteSqlRawAsync("ALTER TABLE Projects ADD COLUMN AlbumArtUrl TEXT NULL");
             }
 
             if (!existingColumns.Contains("SourceUrl"))
             {
                 _logger.LogWarning("Schema Patch: Adding missing column 'SourceUrl' to PlaylistJobs");
-                await context.Database.ExecuteSqlRawAsync("ALTER TABLE PlaylistJobs ADD COLUMN SourceUrl TEXT NULL");
+                await context.Database.ExecuteSqlRawAsync("ALTER TABLE Projects ADD COLUMN SourceUrl TEXT NULL");
             }
 
             if (!existingColumns.Contains("MissingCount"))
             {
                 _logger.LogWarning("Schema Patch: Adding missing column 'MissingCount' to PlaylistJobs");
-                await context.Database.ExecuteSqlRawAsync("ALTER TABLE PlaylistJobs ADD COLUMN MissingCount INTEGER DEFAULT 0");
+                await context.Database.ExecuteSqlRawAsync("ALTER TABLE Projects ADD COLUMN MissingCount INTEGER DEFAULT 0");
             }
 
             if (!existingColumns.Contains("IsUserPaused"))
             {
                 _logger.LogWarning("Schema Patch: Adding missing column 'IsUserPaused' to PlaylistJobs");
-                await context.Database.ExecuteSqlRawAsync("ALTER TABLE PlaylistJobs ADD COLUMN IsUserPaused INTEGER DEFAULT 0");
+                await context.Database.ExecuteSqlRawAsync("ALTER TABLE Projects ADD COLUMN IsUserPaused INTEGER DEFAULT 0");
             }
 
             if (!existingColumns.Contains("DateStarted"))
             {
                 _logger.LogWarning("Schema Patch: Adding missing column 'DateStarted' to PlaylistJobs");
-                await context.Database.ExecuteSqlRawAsync("ALTER TABLE PlaylistJobs ADD COLUMN DateStarted TEXT NULL");
+                await context.Database.ExecuteSqlRawAsync("ALTER TABLE Projects ADD COLUMN DateStarted TEXT NULL");
             }
 
             if (!existingColumns.Contains("DateUpdated"))
             {
                 _logger.LogWarning("Schema Patch: Adding missing column 'DateUpdated' to PlaylistJobs");
                 var now = DateTime.UtcNow.ToString("o");
-                await context.Database.ExecuteSqlAsync($"ALTER TABLE PlaylistJobs ADD COLUMN DateUpdated TEXT DEFAULT {now}");
+                await context.Database.ExecuteSqlAsync($"ALTER TABLE Projects ADD COLUMN DateUpdated TEXT DEFAULT {now}");
             }
 
             // Check LibraryEntries table
@@ -337,9 +337,9 @@ public class DatabaseService
                     CREATE INDEX IF NOT EXISTS idx_playlist_tracks_globalid 
                     ON PlaylistTracks(TrackUniqueHash);
                     
-                    -- PlaylistJobs index for Import History sorting
-                    CREATE INDEX IF NOT EXISTS idx_playlist_jobs_createdat 
-                    ON PlaylistJobs(CreatedAt);
+                    -- Projects index for Import History sorting
+                    CREATE INDEX IF NOT EXISTS IX_Project_CreatedAt
+                    ON Projects(CreatedAt);
                     
                     -- LibraryEntries index for duplicate detection
                     CREATE INDEX IF NOT EXISTS idx_library_entries_globalid 
@@ -376,7 +376,7 @@ public class DatabaseService
                         Action TEXT NOT NULL,
                         Details TEXT NOT NULL,
                         Timestamp TEXT NOT NULL,
-                        CONSTRAINT FK_ActivityLogs_PlaylistJobs_PlaylistId FOREIGN KEY (PlaylistId) REFERENCES PlaylistJobs (Id) ON DELETE CASCADE
+                        CONSTRAINT FK_ActivityLogs_Projects_PlaylistId FOREIGN KEY (PlaylistId) REFERENCES Projects (Id) ON DELETE CASCADE
                     );
                     CREATE INDEX IF NOT EXISTS IX_ActivityLogs_PlaylistId ON ActivityLogs (PlaylistId);
                  ";
@@ -1985,12 +1985,12 @@ public class DatabaseService
                 },
                 new()
                 {
-                    TableName = "PlaylistJobs",
+                    TableName = "Projects",
                     ColumnNames = new[] { "IsDeleted", "CreatedAt" },
                     Reason = "Filtered project listing (excludes deleted, sorted by date)",
                     EstimatedImpact = "Medium - Used in sidebar project list",
-                    CreateIndexSql = "CREATE INDEX IF NOT EXISTS IX_PlaylistJob_IsDeleted_CreatedAt ON PlaylistJobs(IsDeleted, CreatedAt);"
-                }
+                    CreateIndexSql = "CREATE INDEX IF NOT EXISTS IX_Project_IsDeleted_CreatedAt ON Projects(IsDeleted, CreatedAt);"
+                },
             };
 
             // STEP 3: Check which recommended indexes are missing
