@@ -2,9 +2,10 @@
 
 **Status**: Active  
 **Last Updated**: December 27, 2025  
+**Status**: Part 1 Completed ✅  
 **Strategic Shift**:
 1.  **Local Audio Analysis First**: Prioritize FFmpeg/Essentia for audio features (BPM/Key/Energy) to remove reliance on Spotify's locked API.
-2.  **Robust Metadata Enrichment**: Rebuild the Spotify Metadata pipeline using a clean, persistent task-based architecture.
+2.  **Robust Metadata Enrichment**: ✅ Rebuilt the Spotify Metadata pipeline using a clean, persistent task-based architecture (6-Layer).
 3.  **Formalized Import Flow**: Standardize "Paste & Import" for CSV/Text to Albums.
 
 ---
@@ -92,17 +93,18 @@ A background service that polls for work:
 ## 📅 Immediate Roadmap (Phase 1)
 
 **Step 1: Diagnostics**
-*   [ ] Identify WHICH layer is broken (Creation, Orchestration, Execution, Persistence, UI).
-*   [ ] Inspect `AppDbContext` for missing tables.
+*   [x] Identify WHICH layer is broken (Creation, Orchestration, Execution, Persistence, UI).
+*   [x] Inspect `AppDbContext` for missing tables.
 
 **Step 2: Foundation (Schema)**
-*   [ ] Create `EnrichmentTask` Entity & Migration.
-*   [ ] Create `TrackMetadata` Entity (or verify `PlaylistTrack` fields).
+*   [x] Create `EnrichmentTask` Entity & Migration.
+*   [x] Create `TrackMetadata` Entity (or verify `PlaylistTrack` fields).
 
 **Step 3: Pipeline Rebuild**
-*   [ ] Implement `EnrichmentTaskRepository`.
-*   [ ] Implement `EnrichmentOrchestrator` (Poll Loop).
-*   [ ] Wire up `TaskCreation` in `ImportOrchestrator`.
+*   [x] Implement `EnrichmentTaskRepository`.
+*   [x] Implement `EnrichmentOrchestrator` (Poll Loop).
+*   [x] Wire up `TaskCreation` in `ImportOrchestrator`/`DownloadManager`.
+*   [x] **Validation**: Verified with manual import tests.
 
 **Step 4: Import UI**
 *   [ ] Formalize "Paste & Import" Dialog.
